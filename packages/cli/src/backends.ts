@@ -3,14 +3,10 @@ import { dirname } from 'node:path';
 import { Kysely, PostgresDialect } from 'kysely';
 import pg from 'pg';
 import Database from 'better-sqlite3';
-import type { BlobStore, EventStore } from '@sprintster/engine';
-import { createSqliteEventStore, createSqliteBlobStore } from '@sprintster/storage-sqlite';
-import {
-  createPgEventStore,
-  createPgBlobStore,
-  type EventStoreDatabase,
-  type BlobStoreDatabase,
-} from '@sprintster/storage-postgres';
+import { InMemoryBlobStore, type BlobStore, type EventStore } from '@sprintster/engine';
+import { createSqliteEventStore } from '@sprintster/storage-sqlite';
+import { createPgEventStore, type EventStoreDatabase } from '@sprintster/storage-postgres';
+import { createFsBlobStore } from './fs-blob-store.js';
 import type { BackendConfig } from './project-config.js';
 
 export interface OpenedBackend {
@@ -19,16 +15,16 @@ export interface OpenedBackend {
   close(): Promise<void>;
 }
 
-type PgDatabase = EventStoreDatabase & BlobStoreDatabase;
-
-export async function openBackend(backend: BackendConfig): Promise<OpenedBackend> {
+// Blobs live on the filesystem (never in the DB) under the environment's configured dir: the on-ramp to an object store later.
+export async function openBackend(backend: BackendConfig, blobDir: string): Promise<OpenedBackend> {
   switch (backend.kind) {
     case 'sqlite': {
-      if (backend.path !== ':memory:') mkdirSync(dirname(backend.path), { recursive: true });
+      const memory = backend.path === ':memory:';
+      if (!memory) mkdirSync(dirname(backend.path), { recursive: true });
       const db = new Database(backend.path);
       return {
         store: createSqliteEventStore(db),
-        blobStore: createSqliteBlobStore(db),
+        blobStore: memory ? new InMemoryBlobStore() : createFsBlobStore(blobDir),
         close: async () => {
           db.close();
         },
@@ -36,11 +32,10 @@ export async function openBackend(backend: BackendConfig): Promise<OpenedBackend
     }
     case 'postgres': {
       const pool = new pg.Pool({ connectionString: backend.url });
-      // One Kysely over both tables and one connection; Kysely is invariant on its schema, so narrow per factory.
-      const db = new Kysely<PgDatabase>({ dialect: new PostgresDialect({ pool }) });
+      const db = new Kysely<EventStoreDatabase>({ dialect: new PostgresDialect({ pool }) });
       return {
-        store: createPgEventStore(db as unknown as Kysely<EventStoreDatabase>),
-        blobStore: createPgBlobStore(db as unknown as Kysely<BlobStoreDatabase>),
+        store: createPgEventStore(db),
+        blobStore: createFsBlobStore(blobDir),
         close: async () => {
           await db.destroy();
         },

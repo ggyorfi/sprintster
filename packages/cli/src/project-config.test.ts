@@ -24,6 +24,16 @@ describe('parseProjectConfig', () => {
     expect(cfg.environments.prod?.server.host).toBe('127.0.0.1');
   });
 
+  it('defaults the blob dir to .sprintster/binary-data and honours an override', () => {
+    const cfg = parseProjectConfig(raw);
+    expect(cfg.environments.dev?.blobs.dir).toBe('.sprintster/binary-data');
+    const custom = parseProjectConfig({
+      ...raw,
+      environments: { dev: { backend: { kind: 'sqlite', path: 'x.db' }, blobs: { dir: '/var/data/blobs' } } },
+    });
+    expect(custom.environments.dev?.blobs.dir).toBe('/var/data/blobs');
+  });
+
   it('rejects an unknown configVersion', () => {
     expect(() => parseProjectConfig({ ...raw, configVersion: '2' })).toThrow();
   });

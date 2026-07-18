@@ -16,10 +16,13 @@ const ServerConfig = z
   })
   .strict();
 
+const BlobsConfig = z.object({ dir: z.string().default('.sprintster/binary-data') }).strict();
+
 const EnvironmentConfig = z
   .object({
     backend: BackendConfig,
     server: ServerConfig.default(() => ServerConfig.parse({})),
+    blobs: BlobsConfig.default(() => BlobsConfig.parse({})),
   })
   .strict();
 export type EnvironmentConfig = z.infer<typeof EnvironmentConfig>;

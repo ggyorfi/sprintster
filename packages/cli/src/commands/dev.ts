@@ -15,7 +15,7 @@ export const devCommand = defineCommand({
     try {
       const project = loadProjectConfig(projectConfigPath());
       const environment = selectEnvironment(project, args.env);
-      const backend = await openBackend(environment.backend);
+      const backend = await openBackend(environment.backend, environment.blobs.dir);
       const webRoot = webRootFrom();
       let daemon: DaemonHandle;
       try {
