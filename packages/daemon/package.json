@@ -1,0 +1,29 @@
+{
+  "name": "@sprintster/daemon",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "source": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.8.0",
+    "@sprintster/engine": "workspace:*",
+    "hono": "^4.12.22"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.7"
+  }
+}
