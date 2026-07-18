@@ -14,3 +14,9 @@
   padding: var(--field-y) 0;
   white-space: pre-wrap;
 }
+
+.loading {
+  color: var(--muted);
+  font-size: 12px;
+  padding: var(--field-y) 0;
+}
