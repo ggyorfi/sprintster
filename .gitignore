@@ -1,0 +1,10 @@
+node_modules/
+.dev/
+dist/
+*.tsbuildinfo
+.vite/
+coverage/
+.DS_Store
+*.log
+.claude/
+.aider*

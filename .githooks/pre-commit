@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+set -e
+
+echo "pre-commit: typecheck"
+pnpm -r run typecheck
+
+echo "pre-commit: test"
+pnpm -r run test
+
+echo "pre-commit: ok"
