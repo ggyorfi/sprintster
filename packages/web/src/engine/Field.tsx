@@ -1,5 +1,5 @@
 import type { PropertyConfig, ViewFieldSpec } from '@sprintster/engine';
-import { TextField, Select, RefPicker, type SelectOption } from '../ui/index.js';
+import { TextField, Select, RefPicker, CodeEditor, type SelectOption } from '../ui/index.js';
 import styles from './Field.module.css';
 
 const MISSING = String.fromCharCode(0x2014);
@@ -55,6 +55,8 @@ export function Field({ spec, value, onChange, refOptions, display }: FieldProps
       return <TextField label={label} value={value} onChange={onChange} inputMode="numeric" placeholder={placeholder} />;
     case 'date':
       return <TextField label={label} value={value} onChange={onChange} type="date" placeholder={placeholder} />;
+    case 'code':
+      return <CodeEditor label={label} value={value} onChange={onChange} language={property.language} placeholder={placeholder} />;
     default:
       return (
         <TextField

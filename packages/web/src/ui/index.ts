@@ -2,6 +2,7 @@ export { Button, type ButtonProps, type ButtonVariant } from './Button.js';
 export { TextField, type TextFieldProps } from './TextField.js';
 export { Select, type SelectProps, type SelectOption } from './Select.js';
 export { RefPicker, parseRefIds, type RefPickerProps } from './RefPicker.js';
+export { CodeEditor, codeExtensions, type CodeEditorProps } from './CodeEditor.js';
 export { Table, type Column, type TableProps } from './Table.js';
 export { Pill, type PillProps, type PillTone } from './Pill.js';
 export { Modal, type ModalProps } from './Modal.js';
