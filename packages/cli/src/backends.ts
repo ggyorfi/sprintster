@@ -3,15 +3,23 @@ import { dirname } from 'node:path';
 import { Kysely, PostgresDialect } from 'kysely';
 import pg from 'pg';
 import Database from 'better-sqlite3';
-import type { EventStore } from '@sprintster/engine';
-import { createSqliteEventStore } from '@sprintster/storage-sqlite';
-import { createPgEventStore, type EventStoreDatabase } from '@sprintster/storage-postgres';
+import type { BlobStore, EventStore } from '@sprintster/engine';
+import { createSqliteEventStore, createSqliteBlobStore } from '@sprintster/storage-sqlite';
+import {
+  createPgEventStore,
+  createPgBlobStore,
+  type EventStoreDatabase,
+  type BlobStoreDatabase,
+} from '@sprintster/storage-postgres';
 import type { BackendConfig } from './project-config.js';
 
 export interface OpenedBackend {
   store: EventStore;
+  blobStore: BlobStore;
   close(): Promise<void>;
 }
+
+type PgDatabase = EventStoreDatabase & BlobStoreDatabase;
 
 export async function openBackend(backend: BackendConfig): Promise<OpenedBackend> {
   switch (backend.kind) {
@@ -20,6 +28,7 @@ export async function openBackend(backend: BackendConfig): Promise<OpenedBackend
       const db = new Database(backend.path);
       return {
         store: createSqliteEventStore(db),
+        blobStore: createSqliteBlobStore(db),
         close: async () => {
           db.close();
         },
@@ -27,9 +36,11 @@ export async function openBackend(backend: BackendConfig): Promise<OpenedBackend
     }
     case 'postgres': {
       const pool = new pg.Pool({ connectionString: backend.url });
-      const db = new Kysely<EventStoreDatabase>({ dialect: new PostgresDialect({ pool }) });
+      // One Kysely over both tables and one connection; Kysely is invariant on its schema, so narrow per factory.
+      const db = new Kysely<PgDatabase>({ dialect: new PostgresDialect({ pool }) });
       return {
-        store: createPgEventStore(db),
+        store: createPgEventStore(db as unknown as Kysely<EventStoreDatabase>),
+        blobStore: createPgBlobStore(db as unknown as Kysely<BlobStoreDatabase>),
         close: async () => {
           await db.destroy();
         },

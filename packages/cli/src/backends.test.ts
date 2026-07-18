@@ -20,4 +20,13 @@ describe('openBackend', () => {
     expect(await backend.store.streamHead(0, 't', 's')).toBe(1);
     await backend.close();
   });
+
+  it('opens a working blob store on the same sqlite db', async () => {
+    const backend = await openBackend({ kind: 'sqlite', path: ':memory:' });
+    const ref = await backend.blobStore.putBlob(new TextEncoder().encode('hi'), 'text/plain');
+    const got = await backend.blobStore.getBlob(ref.hash);
+    expect(new TextDecoder().decode(got!.bytes)).toBe('hi');
+    expect(await backend.blobStore.hasBlob(ref.hash)).toBe(true);
+    await backend.close();
+  });
 });
