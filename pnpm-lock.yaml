@@ -24,7 +24,27 @@ importers:
         specifier: ^4.1.7
         version: 4.1.10(@types/node@25.9.5)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(tsx@4.23.1))
 
+  packages/engine:
+    dependencies:
+      '@dinero.js/currencies':
+        specifier: ^2.0.0-alpha.15
+        version: 2.0.0-alpha.15
+      dinero.js:
+        specifier: ^2.0.0-alpha.15
+        version: 2.0.2
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      vitest:
+        specifier: ^4.1.7
+        version: 4.1.10(@types/node@25.9.5)(vite@8.1.5(@types/node@25.9.5)(esbuild@0.28.1)(tsx@4.23.1))
+
 packages:
+
+  '@dinero.js/currencies@2.0.0-alpha.15':
+    resolution: {integrity: sha512-c3tjaIZ7kWeX5gZ8aQuQpK+LoRjR4MnxRCj0lRySai4EOPW+Fur2WDqhNN6SsqWjuk11dU2X0pPcRG7iugsbBg==}
+    deprecated: This package has been consolidated into dinero.js. See https://v2.dinerojs.com/getting-started/upgrade-guide
 
   '@emnapi/core@1.11.1':
     resolution: {integrity: sha512-RSvbQmHzdKzNsLYa/wHrbc3KN4sYLKAdPZxqiM2HATqv/SBk2/ENSHpvXGaLOMcsAyz0poEGqkmmKYG3OWiJEQ==}
@@ -357,6 +377,10 @@ packages:
     resolution: {integrity: sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ==}
     engines: {node: '>=8'}
 
+  dinero.js@2.0.2:
+    resolution: {integrity: sha512-d+4egJTvNinkb66KSed11Daqz6MWaOHzyalLu6h3p+BLrsmwKFjHjvOKivOWeM7WyoX89te+xx4cKI6zrDtCfQ==}
+    engines: {node: '>=20.0.0'}
+
   es-module-lexer@2.3.1:
     resolution: {integrity: sha512-shc1dbU90Yl/xq1QrC7QRtfcwURZuVRfPhZbDoldJ1cn1gzDvBaBWlv0eFolj5+0znnPJz5TXLxsN77X/12KTA==}
 
@@ -620,7 +644,12 @@ packages:
     engines: {node: '>=8'}
     hasBin: true
 
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+
 snapshots:
+
+  '@dinero.js/currencies@2.0.0-alpha.15': {}
 
   '@emnapi/core@1.11.1':
     dependencies:
@@ -847,6 +876,8 @@ snapshots:
 
   detect-libc@2.1.2: {}
 
+  dinero.js@2.0.2: {}
+
   es-module-lexer@2.3.1: {}
 
   esbuild@0.28.1:
@@ -1057,3 +1088,5 @@ snapshots:
     dependencies:
       siginfo: 2.0.0
       stackback: 0.0.2
+
+  zod@4.4.3: {}
