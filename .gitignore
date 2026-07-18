@@ -2,6 +2,7 @@ node_modules/
 .dev/
 .sprintster/
 dist/
+build/
 *.tsbuildinfo
 .vite/
 coverage/
