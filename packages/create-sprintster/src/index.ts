@@ -1,45 +1,9 @@
 #!/usr/bin/env node
 import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
-import { join, dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join, dirname } from 'node:path';
 import * as p from '@clack/prompts';
 import { buildFiles, type ScaffoldOptions } from './template.js';
-
-interface Args {
-  name?: string;
-  backend?: string;
-  local?: boolean;
-  localPath?: string;
-}
-
-function parseArgs(argv: ReadonlyArray<string>): Args {
-  const out: Args = {};
-  for (let i = 2; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === undefined) continue;
-    if (a === '--backend') {
-      const v = argv[i + 1];
-      if (v !== undefined) out.backend = v;
-      i++;
-    } else if (a === '--local') {
-      out.local = true;
-      const v = argv[i + 1];
-      if (v !== undefined && !v.startsWith('-')) {
-        out.localPath = v;
-        i++;
-      }
-    } else if (!a.startsWith('-') && out.name === undefined) {
-      out.name = a;
-    }
-  }
-  return out;
-}
-
-function linkCliPathFrom(explicit: string | undefined): string {
-  const here = dirname(fileURLToPath(import.meta.url));
-  const repoRoot = explicit !== undefined ? resolve(explicit) : resolve(here, '../../..');
-  return join(repoRoot, 'packages', 'cli');
-}
+import { parseArgs, linkCliPathFrom } from './args.js';
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv);

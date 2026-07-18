@@ -16,6 +16,7 @@
     "clean": "pnpm -r exec rm -rf dist .tsbuildinfo node_modules/.cache",
     "install-s8r": "pnpm -r run build && node scripts/install-s8r.mjs",
     "remove-s8r": "node scripts/remove-s8r.mjs",
+    "test:e2e": "pnpm -r run build && bash tests/e2e/smoke.sh",
     "postinstall": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
   "devDependencies": {
