@@ -43,4 +43,6 @@ code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "http://127.0.0.1:$PORT/us
   -H 'content-type: application/json' -d '{"id":"22222222-2222-4222-8222-222222222222","name":""}')
 [ "$code" = "400" ] || fail "expected 400 for empty name, got $code"
 
-echo "E2E OK: scaffold -> s8r daemon -> user create/list + validation (sqlite)"
+curl -sf "http://127.0.0.1:$PORT/" | grep -q 'id="root"' || fail "web GUI not served at /"
+
+echo "E2E OK: scaffold -> s8r daemon -> user CRUD + validation + web GUI served (sqlite)"

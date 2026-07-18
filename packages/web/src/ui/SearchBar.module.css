@@ -1,0 +1,35 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--field);
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius);
+  padding: 0 10px;
+}
+
+.bar:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.input {
+  flex: 1;
+  font: inherit;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  padding: var(--field-y) 0;
+}
+.input:focus {
+  outline: none;
+}
+.input::placeholder {
+  color: var(--placeholder);
+}
+
+.count {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}

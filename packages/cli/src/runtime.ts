@@ -28,9 +28,11 @@ export async function startDaemon(opts: {
   store: EventStore;
   host: string;
   port: number;
+  webRoot?: string;
 }): Promise<DaemonHandle> {
   setAppConfig(opts.config);
-  const app = createApp({ apis: buildApis(opts.config, opts.store) });
+  const apis = buildApis(opts.config, opts.store);
+  const app = createApp(opts.webRoot !== undefined ? { apis, webRoot: opts.webRoot } : { apis });
   const server = await new Promise<ReturnType<typeof serve>>((resolve, reject) => {
     const s = serve({ fetch: app.fetch, hostname: opts.host, port: opts.port }, () => resolve(s));
     s.on('error', (err: NodeJS.ErrnoException) => {

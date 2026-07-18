@@ -1,0 +1,79 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+}
+
+.count {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 14px;
+}
+
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.muted {
+  color: var(--muted);
+  padding: 24px 4px;
+}
+
+.error {
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red-bd);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+}
+
+.tableWrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.tableWrap:hover,
+.tableWrap:focus-within {
+  scrollbar-color: var(--border-2) transparent;
+}
+
+.tableWrap::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+.tableWrap::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border: 3px solid transparent;
+  border-radius: 8px;
+  background-clip: padding-box;
+  transition: background-color 0.2s ease;
+}
+
+.tableWrap:hover::-webkit-scrollbar-thumb,
+.tableWrap:focus-within::-webkit-scrollbar-thumb {
+  background-color: var(--border-2);
+}

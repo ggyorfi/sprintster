@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   createObjectApi,
   InMemoryEventStore,
@@ -407,5 +410,43 @@ describe('externally-backed object: status / sync / refresh routes', () => {
   it('refresh route is absent when the api does not implement it', async () => {
     const { app } = buildThings({ withRefresh: false });
     expect((await app.request(`/things/${ID_A}/_refresh`, { method: 'POST' })).status).toBe(404);
+  });
+});
+
+describe('static web hosting (webRoot)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'sprintster-web-'));
+  writeFileSync(join(dir, 'index.html'), '<!doctype html><title>App</title><div id="root"></div>');
+  writeFileSync(join(dir, 'app.js'), 'console.log("bundle")');
+
+  function withWeb() {
+    const store = new InMemoryEventStore();
+    const clientApi = createObjectApi<{ id: string }>(store, fixtureClientConfig);
+    return createApp({ apis: [{ obj: fixtureClientConfig, api: clientApi }], webRoot: dir });
+  }
+
+  it('serves index.html at /', async () => {
+    const res = await withWeb().request('/');
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('id="root"');
+  });
+
+  it('serves static assets', async () => {
+    const res = await withWeb().request('/app.js');
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('bundle');
+  });
+
+  it('falls back to index.html for client-side routes (SPA)', async () => {
+    const res = await withWeb().request('/anything/deep');
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('id="root"');
+  });
+
+  it('does not let the web catch-all shadow the API', async () => {
+    const app = withWeb();
+    expect((await app.request('/health')).status).toBe(200);
+    const cfg = await app.request('/config');
+    expect(((await cfg.json()) as { objects: unknown[] }).objects.length).toBe(1);
+    expect((await app.request('/clients')).status).toBe(200);
   });
 });

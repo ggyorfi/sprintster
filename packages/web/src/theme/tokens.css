@@ -1,0 +1,85 @@
+/*
+ * Design tokens for the web client.
+ * Base values lifted from the Claude Design system export; the engine re-skins
+ * these at runtime from appConfig.theme via applyConfigTheme (config carries the
+ * override, this file carries the web-tuned default). Derived shades use
+ * color-mix so a single --accent change cascades through hover/press/ring/bg.
+ */
+:root {
+  --accent: #1f6feb;
+  --on-accent: #fff;
+  --accent-bg: color-mix(in srgb, var(--accent) 11%, #fff);
+  --accent-bg-2: color-mix(in srgb, var(--accent) 20%, #fff);
+  --accent-hover: color-mix(in srgb, var(--accent) 88%, #000);
+  --accent-press: color-mix(in srgb, var(--accent) 76%, #000);
+  --ring: color-mix(in srgb, var(--accent) 36%, transparent);
+
+  --bg: #eef0f3;
+  --surface: #ffffff;
+  --surface-2: #fafbfc;
+
+  --text: #1a1d21;
+  --text-2: #5c6470;
+  --muted: #8a909a;
+  --placeholder: #abb1ba;
+
+  --border: #e4e7eb;
+  --border-2: #cdd2d8;
+
+  --field: #f2f4f6;
+  --field-border: #d7dbe0;
+
+  /* additive / create */
+  --green: #1f9d57;
+  --green-bg: #e7f4ed;
+  --green-bd: #c2e3cf;
+  /* edit / mutating */
+  --amber: #9a6a00;
+  --amber-bg: #fbf1d4;
+  --amber-bd: #ebd69b;
+  /* destructive */
+  --red: #cf322d;
+  --red-bg: #fbe9e7;
+  --red-bd: #f0c2bf;
+  /* info */
+  --cyan: #0a7f9c;
+  --cyan-bg: #e0f2f7;
+  --cyan-bd: #bce1ea;
+
+  --highlight: #fff1a8;
+
+  --radius: 3px;
+  --fs: 13px;
+  --field-y: 7px;
+  --row-y: 9px;
+}
+
+[data-theme='dark'] {
+  --bg: #15171a;
+  --surface: #1c1f23;
+  --surface-2: #191c20;
+  --text: #e6e8eb;
+  --text-2: #9aa1ab;
+  --muted: #6b7280;
+  --placeholder: #6b7280;
+  --border: #2a2e34;
+  --border-2: #3a3f47;
+  --field: #23272c;
+  --field-border: #33383f;
+  --green-bg: color-mix(in srgb, var(--green) 18%, #1c1f23);
+  --amber-bg: color-mix(in srgb, var(--amber) 18%, #1c1f23);
+  --red-bg: color-mix(in srgb, var(--red) 18%, #1c1f23);
+  --cyan-bg: color-mix(in srgb, var(--cyan) 18%, #1c1f23);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-size: var(--fs);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}

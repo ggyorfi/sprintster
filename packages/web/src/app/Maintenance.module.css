@@ -1,0 +1,58 @@
+.screen {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  max-width: 420px;
+}
+
+.cardTitle {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.kv dt {
+  color: var(--text-2);
+}
+
+.kv dd {
+  margin: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.bad {
+  color: var(--red);
+}
+
+.note {
+  color: var(--muted);
+  font-size: 13px;
+  max-width: 520px;
+}

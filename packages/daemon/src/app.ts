@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { serveStatic } from '@hono/node-server/serve-static';
 import { appConfig, type ObjectConfig, type PluginObjectApi } from '@sprintster/engine';
 import { healthRoute } from './routes/health.js';
 import { createObjectRoute } from './routes/object.js';
@@ -10,6 +11,7 @@ export interface MountedObject {
 
 export interface AppDeps {
   apis: ReadonlyArray<MountedObject>;
+  webRoot?: string;
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -24,6 +26,11 @@ export function createApp(deps: AppDeps): Hono {
   );
   for (const { api, obj } of deps.apis) {
     app.route(`/${obj.titlePlural.toLowerCase()}`, createObjectRoute(api, obj));
+  }
+  if (deps.webRoot !== undefined) {
+    const root = deps.webRoot;
+    app.use('/*', serveStatic({ root }));
+    app.get('*', serveStatic({ path: 'index.html', root }));
   }
   return app;
 }
