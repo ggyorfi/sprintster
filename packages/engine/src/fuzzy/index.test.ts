@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fuzzyFilter, fuzzyMatch } from './fuzzy.js';
+import { fuzzyFilter, fuzzyMatch } from './index.js';
 
 describe('fuzzyMatch', () => {
   it('returns empty matches for an empty query (everything matches with no highlights)', () => {

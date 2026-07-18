@@ -19,3 +19,4 @@ export * from './api/client.js';
 export * from './config/index.js';
 export * from './plugin/types.js';
 export * from './plugin/loader.js';
+export * from './fuzzy/index.js';

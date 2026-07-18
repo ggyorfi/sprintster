@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text, useInput } from 'ink';
 import { stepSelection } from '../editor.js';
-import { fuzzyFilter } from '../fuzzy.js';
+import { fuzzyFilter } from '@sprintster/engine';
 import { THEME } from '../theme.js';
 
 export interface PickerOption {

@@ -4,7 +4,7 @@ import TextInput from 'ink-text-input';
 import { arrayItemCount, penceToPounds, toInput, type PropertyConfig, type ViewFieldSpec, type ViewMode } from '@sprintster/engine';
 import { THEME } from '../theme.js';
 import { wrapLines } from '../editor.js';
-import { fuzzyFilter } from '../fuzzy.js';
+import { fuzzyFilter } from '@sprintster/engine';
 import { pickerWindow } from '../picker-window.js';
 import { MultilineInput } from './MultilineInput.js';
 import { Picker, PickerOverlay, type PickerOption } from './Picker.js';
