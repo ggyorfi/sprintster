@@ -1,0 +1,30 @@
+{
+  "name": "@sprintster/storage-postgres",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "source": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@sprintster/engine": "workspace:*",
+    "kysely": "^0.29.2",
+    "pg": "^8.21.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.0",
+    "vitest": "^4.1.7"
+  }
+}
