@@ -1,0 +1,110 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.control {
+  position: relative;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  background: var(--field);
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius);
+  padding: 4px 6px;
+}
+
+.chips:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  border: 1px solid var(--border-2);
+  border-radius: 999px;
+  padding: 1px 3px 1px 9px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.remove {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 3px;
+}
+
+.remove:hover {
+  color: var(--text);
+}
+
+.input {
+  flex: 1;
+  min-width: 90px;
+  font: inherit;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  padding: var(--field-y) 0;
+}
+
+.input:focus {
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--placeholder);
+}
+
+.list {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  right: 0;
+  top: calc(100% + 2px);
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.option {
+  padding: var(--row-y) 9px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--text);
+}
+
+.active {
+  background: var(--accent-bg);
+}
+
+.hl {
+  background: transparent;
+  color: var(--highlight);
+  font-weight: 600;
+}

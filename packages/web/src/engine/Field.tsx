@@ -1,5 +1,5 @@
 import type { PropertyConfig, ViewFieldSpec } from '@sprintster/engine';
-import { TextField, Select, type SelectOption } from '../ui/index.js';
+import { TextField, Select, RefPicker, type SelectOption } from '../ui/index.js';
 import styles from './Field.module.css';
 
 const MISSING = String.fromCharCode(0x2014);
@@ -44,9 +44,9 @@ export function Field({ spec, value, onChange, refOptions, display }: FieldProps
         />
       );
     case 'ref':
-      return (
-        <Select label={label} value={value} onChange={onChange} options={refOptions ?? []} placeholder="Select..." />
-      );
+      return <RefPicker label={label} value={value} onChange={onChange} options={refOptions ?? []} placeholder="Search..." />;
+    case 'refs':
+      return <RefPicker label={label} value={value} onChange={onChange} options={refOptions ?? []} multiple placeholder="Search..." />;
     case 'money':
       return (
         <TextField label={label} value={value} onChange={onChange} prefix="£" inputMode="decimal" placeholder={placeholder} />

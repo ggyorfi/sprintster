@@ -10,7 +10,7 @@ import {
   type ViewFieldSpec,
   type ViewMode,
 } from '@sprintster/engine';
-import { Modal, Button, ConfirmDialog, type ButtonVariant, type SelectOption } from '../ui/index.js';
+import { Modal, Button, ConfirmDialog, parseRefIds, type ButtonVariant, type SelectOption } from '../ui/index.js';
 import { Field } from './Field.js';
 import { RepeatingGroup } from './RepeatingGroup.js';
 import {
@@ -74,7 +74,7 @@ export function ObjectPanel({ api, obj, resolveObject, initialMode, row, onClose
     async function load() {
       const next: Record<string, RefData> = {};
       for (const s of specs) {
-        if (s.property.type !== 'ref' || s.derivedFromRef !== null) continue;
+        if ((s.property.type !== 'ref' && s.property.type !== 'refs') || s.derivedFromRef !== null) continue;
         const list = await api.object<Row>(s.property.target).list();
         const target = resolveObject(s.property.target);
         const labelField = s.property.display ?? (target ? firstLabelField(target) : 'id');
@@ -114,6 +114,12 @@ export function ObjectPanel({ api, obj, resolveObject, initialMode, row, onClose
     if (spec.property.type === 'ref') {
       const rd = refData[spec.path];
       return rd?.options.find((o) => o.value === inputs[spec.path])?.label ?? inputs[spec.path] ?? '';
+    }
+    if (spec.property.type === 'refs') {
+      const rd = refData[spec.path];
+      return parseRefIds(inputs[spec.path] ?? '', true)
+        .map((id) => rd?.options.find((o) => o.value === id)?.label ?? id)
+        .join(', ');
     }
     if (spec.property.type === 'array') {
       const arr = row !== null ? readPath(row, spec.path) : undefined;
