@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MarkdownEditor } from './MarkdownEditor.js';
 
 describe('MarkdownEditor', () => {
@@ -12,8 +13,17 @@ describe('MarkdownEditor', () => {
     expect(container.querySelector('strong')?.textContent).toContain('world');
   });
 
-  it('is not editable in read-only mode (preview reuse)', () => {
+  it('shows a formatting toolbar whose buttons reflect the active mark', async () => {
+    render(<MarkdownEditor label="Body" value={'hello'} onChange={() => {}} />);
+    const bold = screen.getByRole('button', { name: 'Bold' });
+    expect(bold).toHaveAttribute('aria-pressed', 'false');
+    await userEvent.click(bold);
+    await waitFor(() => expect(bold).toHaveAttribute('aria-pressed', 'true'));
+  });
+
+  it('is not editable in read-only mode and hides the toolbar (preview reuse)', () => {
     const { container } = render(<MarkdownEditor value={'plain text'} onChange={() => {}} readOnly />);
     expect(container.querySelector('.ProseMirror')?.getAttribute('contenteditable')).toBe('false');
+    expect(screen.queryByRole('button', { name: 'Bold' })).toBeNull();
   });
 });

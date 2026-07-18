@@ -21,6 +21,50 @@
   box-shadow: 0 0 0 3px var(--ring);
 }
 
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--field-border);
+}
+
+.tbtn {
+  min-width: 26px;
+  height: 24px;
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 1;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.tbtn:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.tbtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tactive {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 3px 4px;
+  background: var(--border-2);
+}
+
 .editor :global(.ProseMirror) {
   padding: var(--field-y) 9px;
   color: var(--text);
