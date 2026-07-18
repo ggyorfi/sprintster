@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import type { PropertyConfig, ViewFieldSpec } from '@sprintster/engine';
-import { TextField, Select, RefPicker, type SelectOption } from '../ui/index.js';
+import { TextField, Select, RefPicker, ImageField, type SelectOption } from '../ui/index.js';
+import { uploadAsset, assetUrl } from '../api/assets.js';
 import styles from './Field.module.css';
 
 // Lazy so the heavy editor dependencies (CodeMirror, TipTap) only load when a code/markdown field is actually rendered.
@@ -42,6 +43,9 @@ export function Field({ spec, value, onChange, refOptions, display }: FieldProps
         </Suspense>
       );
     }
+    if (property.type === 'image') {
+      return <ImageField label={label} value={value} onChange={() => {}} upload={uploadAsset} assetUrl={assetUrl} readOnly />;
+    }
     return <ReadOnlyField label={label} value={display ?? value} />;
   }
 
@@ -56,6 +60,8 @@ export function Field({ spec, value, onChange, refOptions, display }: FieldProps
           placeholder={property.nullable === true ? 'none' : undefined}
         />
       );
+    case 'image':
+      return <ImageField label={label} value={value} onChange={onChange} upload={uploadAsset} assetUrl={assetUrl} />;
     case 'ref':
       return <RefPicker label={label} value={value} onChange={onChange} options={refOptions ?? []} placeholder="Search..." />;
     case 'refs':
