@@ -1,0 +1,35 @@
+{
+  "name": "@sprintster/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "s8r": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx --conditions=source src/index.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.3",
+    "@sprintster/daemon": "workspace:*",
+    "@sprintster/engine": "workspace:*",
+    "@sprintster/storage-postgres": "workspace:*",
+    "@sprintster/storage-sqlite": "workspace:*",
+    "@sprintster/tui": "workspace:*",
+    "better-sqlite3": "^12.11.1",
+    "citty": "^0.2.2",
+    "kysely": "^0.29.2",
+    "pg": "^8.21.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/pg": "^8.20.0",
+    "vitest": "^4.1.7"
+  }
+}
