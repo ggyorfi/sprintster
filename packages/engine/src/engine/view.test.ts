@@ -104,6 +104,41 @@ describe('refs web-boundary encoding', () => {
   });
 });
 
+const imageProp = { name: 'hero', type: 'image' } satisfies PropertyConfig;
+const withImage: ObjectConfig = {
+  name: 'page',
+  title: 'Page',
+  titlePlural: 'Pages',
+  lifecycle: { softDelete: 'removed' },
+  properties: [
+    { name: 'id', type: 'id', strategy: 'uuid', system: true },
+    imageProp,
+    { name: 'removed', type: 'boolean', system: true },
+  ],
+  lists: [{ name: 'default', title: 'Pages', columns: [{ property: 'id' }] }],
+  views: [{ name: 'default', title: 'Page', fields: [{ property: 'hero' }] }],
+};
+
+describe('image web-boundary encoding', () => {
+  const img = { hash: 'd4244a', filename: 'hero.png', contentType: 'image/png', size: 123 };
+
+  it('toInput JSON-encodes the object; toStorage parses it back', () => {
+    expect(toInput(imageProp, img)).toBe(JSON.stringify(img));
+    expect(toStorage(imageProp, JSON.stringify(img))).toEqual(img);
+  });
+
+  it('toInput blanks a null value; toStorage treats blank as null', () => {
+    expect(toInput(imageProp, null)).toBe('');
+    expect(toStorage(imageProp, '')).toBeNull();
+    expect(toStorage(imageProp, '   ')).toBeNull();
+  });
+
+  it('assembleValues reassembles the JSON input into an image object', () => {
+    expect(assembleValues(withImage, 'default', { hero: JSON.stringify(img) }, 'create')['hero']).toEqual(img);
+    expect(assembleValues(withImage, 'default', {}, 'create')['hero']).toBeNull();
+  });
+});
+
 const withView: ObjectConfig = {
   name: 'thing',
   title: 'Thing',

@@ -42,6 +42,12 @@ describe('formatCell', () => {
     expect(formatCell(refs, ['a', 'b', 'c'])).toBe('a, b, c');
     expect(formatCell(refs, [])).toBe('');
   });
+
+  it('shows the filename for an image value', () => {
+    const image: PropertyConfig = { name: 'hero', type: 'image' };
+    expect(formatCell(image, { hash: 'x', filename: 'hero.png', contentType: 'image/png', size: 1 })).toBe('hero.png');
+    expect(formatCell(image, null)).toBe('');
+  });
 });
 
 describe('listColumns', () => {

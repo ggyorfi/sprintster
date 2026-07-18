@@ -146,7 +146,7 @@ function checkCommands(obj: ObjectConfig): void {
 }
 
 // `unique` is enforced per-object over live records via a reserved stream, so it only applies to top-level scalar fields.
-const UNIQUE_INCAPABLE_TYPES = new Set(['id', 'sequence', 'object', 'array', 'refs']);
+const UNIQUE_INCAPABLE_TYPES = new Set(['id', 'sequence', 'object', 'array', 'refs', 'image']);
 
 function checkProperties(scope: string, properties: PropertyConfig[], knownObjects: Set<string>, nested = false): void {
   assertUnique(

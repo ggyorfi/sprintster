@@ -49,6 +49,18 @@ function baseSchema(prop: PropertyConfig): z.ZodTypeAny {
     }
     case 'boolean':
       return z.boolean();
+    case 'image':
+      return z
+        .object({
+          hash: z.string().min(1),
+          filename: z.string(),
+          contentType: z.string(),
+          size: z.number().int().nonnegative(),
+          width: z.number().int().positive().optional(),
+          height: z.number().int().positive().optional(),
+          alt: z.string().optional(),
+        })
+        .strict();
     case 'sequence':
       return z.number().int();
     case 'object':

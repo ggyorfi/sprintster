@@ -117,6 +117,32 @@ describe('compileProperty: ref and boolean', () => {
   });
 });
 
+describe('compileProperty: image', () => {
+  const valid = { hash: 'd4244a', filename: 'hero.png', contentType: 'image/png', size: 12345 };
+
+  it('accepts a valid image reference and rejects non-objects or missing fields', () => {
+    const schema = compileProperty({ name: 'hero', type: 'image', validation: { required: true } });
+    expect(schema.parse(valid)).toMatchObject(valid);
+    expect(() => schema.parse('nope')).toThrow();
+    expect(() => schema.parse({ hash: 'd4244a' })).toThrow();
+  });
+
+  it('accepts optional width, height, and alt', () => {
+    const schema = compileProperty({ name: 'hero', type: 'image', validation: { required: true } });
+    expect(schema.parse({ ...valid, width: 1600, height: 900, alt: 'Sunset' })).toMatchObject({ width: 1600, alt: 'Sunset' });
+  });
+
+  it('rejects unknown keys (strict)', () => {
+    const schema = compileProperty({ name: 'hero', type: 'image', validation: { required: true } });
+    expect(() => schema.parse({ ...valid, bogus: 1 })).toThrow();
+  });
+
+  it('is nullable and optional when configured', () => {
+    expect(compileProperty({ name: 'hero', type: 'image', nullable: true }).parse(null)).toBeNull();
+    expect(compileProperty({ name: 'hero', type: 'image' }).parse(undefined)).toBeUndefined();
+  });
+});
+
 describe('compileProperty: code and markdown', () => {
   it('code compiles to a string honoring maxLength', () => {
     const schema = compileProperty({ name: 'snippet', type: 'code', language: 'json', validation: { maxLength: 3 } });

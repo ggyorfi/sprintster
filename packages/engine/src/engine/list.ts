@@ -21,6 +21,9 @@ export function formatCell(property: PropertyConfig, value: unknown, suffix = ''
     case 'refs':
       base = Array.isArray(value) ? value.map(String).join(', ') : '';
       break;
+    case 'image':
+      base = (value as { filename?: unknown }).filename === undefined ? '' : String((value as { filename: unknown }).filename);
+      break;
     case 'object':
       base = '';
       break;

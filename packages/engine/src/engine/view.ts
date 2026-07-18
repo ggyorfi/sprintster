@@ -59,6 +59,7 @@ export function toInput(property: PropertyConfig, value: unknown): string {
   if (value === null || value === undefined) return '';
   if (property.type === 'money') return penceToPounds(String(value));
   if (property.type === 'refs') return JSON.stringify(Array.isArray(value) ? value : []);
+  if (property.type === 'image') return JSON.stringify(value);
   return String(value);
 }
 
@@ -137,6 +138,14 @@ export function toStorage(property: PropertyConfig, input: string): unknown {
         return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === 'string') : [];
       } catch {
         return [];
+      }
+    }
+    case 'image': {
+      if (s === '') return null;
+      try {
+        return JSON.parse(s);
+      } catch {
+        return null;
       }
     }
     default:
@@ -302,7 +311,7 @@ export function assembleValues(
       continue;
     }
 
-    if (root.type === 'ref' || root.type === 'refs') {
+    if (root.type === 'ref' || root.type === 'refs' || root.type === 'image') {
       const direct = info.items.find((i) => i.property === rootName);
       if (direct === undefined) continue;
       if (!resolveEditable(root, mode, direct.readOnly)) continue;

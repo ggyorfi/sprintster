@@ -42,6 +42,7 @@ export type PropertyConfig =
   | (PropertyBase & { type: 'refs'; target: string; display?: string | undefined })
   | (PropertyBase & { type: 'boolean' })
   | (PropertyBase & { type: 'sequence' })
+  | (PropertyBase & { type: 'image' })
   | (PropertyBase & { type: 'object'; properties: PropertyConfig[] })
   | (PropertyBase & { type: 'array'; item: { properties: PropertyConfig[] } });
 
@@ -73,6 +74,7 @@ const RefsProperty = z
   .object({ ...baseProperty, type: z.literal('refs'), target: z.string().min(1), display: z.string().min(1).optional() })
   .strict();
 const BooleanProperty = z.object({ ...baseProperty, type: z.literal('boolean') }).strict();
+const ImageProperty = z.object({ ...baseProperty, type: z.literal('image') }).strict();
 const SequenceProperty = z.object({ ...baseProperty, type: z.literal('sequence') }).strict();
 const ObjectProperty = z
   .object({ ...baseProperty, type: z.literal('object'), properties: z.array(z.lazy(() => PropertyConfigSchema)) })
@@ -99,6 +101,7 @@ export const PropertyConfigSchema: z.ZodType<PropertyConfig> = z.lazy(() =>
     RefProperty,
     RefsProperty,
     BooleanProperty,
+    ImageProperty,
     SequenceProperty,
     ObjectProperty,
     ArrayProperty,
