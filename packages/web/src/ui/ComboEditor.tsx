@@ -1,7 +1,9 @@
-import { useState } from 'react';
-import { CodeEditor } from './CodeEditor.js';
-import { MarkdownEditor } from './MarkdownEditor.js';
+import { lazy, Suspense, useState } from 'react';
 import styles from './ComboEditor.module.css';
+
+// Lazy so the source editor's CodeMirror chunk only loads when the author toggles to Source (combo opens in WYSIWYG).
+const CodeEditor = lazy(() => import('./CodeEditor.js').then((m) => ({ default: m.CodeEditor })));
+const MarkdownEditor = lazy(() => import('./MarkdownEditor.js').then((m) => ({ default: m.MarkdownEditor })));
 
 export type ComboMode = 'wysiwyg' | 'source';
 
@@ -40,11 +42,13 @@ export function ComboEditor({ label, value, onChange, defaultMode = 'wysiwyg' }:
           </button>
         </div>
       </div>
-      {mode === 'wysiwyg' ? (
-        <MarkdownEditor value={value} onChange={onChange} />
-      ) : (
-        <CodeEditor value={value} onChange={onChange} language="markdown" />
-      )}
+      <Suspense fallback={<div className={styles.loading}>Loading…</div>}>
+        {mode === 'wysiwyg' ? (
+          <MarkdownEditor value={value} onChange={onChange} />
+        ) : (
+          <CodeEditor value={value} onChange={onChange} language="markdown" />
+        )}
+      </Suspense>
     </div>
   );
 }

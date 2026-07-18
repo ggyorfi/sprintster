@@ -45,3 +45,9 @@
   background: var(--field);
   color: var(--text);
 }
+
+.loading {
+  color: var(--muted);
+  font-size: 12px;
+  padding: var(--field-y) 0;
+}
