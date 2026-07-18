@@ -7,6 +7,7 @@ export * from './events/registry.js';
 export * from './events/store.js';
 export * from './entity-api/factory.js';
 export * from './engine/diff.js';
+export * from './engine/backlinks.js';
 export * from './engine/list.js';
 export * from './engine/view.js';
 export * from './engine/lifecycle.js';
