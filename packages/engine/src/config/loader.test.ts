@@ -98,6 +98,58 @@ describe('loadConfig: structural validation', () => {
   });
 });
 
+describe('loadConfig: unique validation guard', () => {
+  function rawWith(prop: unknown): unknown {
+    return {
+      version: '1',
+      objects: [
+        {
+          name: 'page',
+          title: 'Page',
+          titlePlural: 'Pages',
+          lifecycle: { softDelete: 'removed' },
+          properties: [
+            { name: 'id', type: 'id', strategy: 'uuid', system: true },
+            prop,
+            { name: 'removed', type: 'boolean', system: true },
+          ],
+          lists: [],
+        },
+      ],
+    };
+  }
+
+  it('accepts unique on a top-level scalar field', () => {
+    expect(() => loadConfig(rawWith({ name: 'slug', type: 'text', validation: { required: true, unique: true } }))).not.toThrow();
+  });
+
+  it('rejects unique on an object field', () => {
+    expect(() =>
+      loadConfig(rawWith({ name: 'addr', type: 'object', properties: [{ name: 'x', type: 'text' }], validation: { unique: true } })),
+    ).toThrow(/unique/);
+  });
+
+  it('rejects unique on an array field', () => {
+    expect(() =>
+      loadConfig(
+        rawWith({ name: 'tags', type: 'array', item: { properties: [{ name: 'v', type: 'text' }] }, validation: { unique: true } }),
+      ),
+    ).toThrow(/unique/);
+  });
+
+  it('rejects unique on a nested property', () => {
+    expect(() =>
+      loadConfig(
+        rawWith({ name: 'addr', type: 'object', properties: [{ name: 'x', type: 'text', validation: { unique: true } }] }),
+      ),
+    ).toThrow(/unique/);
+  });
+
+  it('rejects unique on a sequence field', () => {
+    expect(() => loadConfig(rawWith({ name: 'seq', type: 'sequence', validation: { unique: true } }))).toThrow(/unique/);
+  });
+});
+
 describe('loadConfig: semantic validation', () => {
   it('rejects duplicate object names', () => {
     const bad = clone();

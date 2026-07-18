@@ -11,8 +11,10 @@ import {
   AlreadyExistsError,
   InvalidStateError,
   NotFoundError,
+  UniqueFieldError,
   isApiError,
 } from '../errors/api-error.js';
+import type { ObjectConfig } from '../config/schema.js';
 
 const ID_A = '11111111-1111-4111-8111-111111111111';
 const ID_B = '22222222-2222-4222-8222-222222222222';
@@ -355,5 +357,109 @@ describe('createObjectApi: ref field existence check', () => {
     const store = new InMemoryEventStore();
     const memoApi = createObjectApi<Record<string, unknown> & { id: string }>(store, fixtureMemoObject);
     await expect(memoApi.add({ id: MEMO_ID, client: ID_A, text: 'x' })).rejects.toBeInstanceOf(InvalidStateError);
+  });
+});
+
+describe('createObjectApi: field-level unique validation', () => {
+  const pageObject: ObjectConfig = {
+    name: 'page',
+    title: 'Page',
+    titlePlural: 'Pages',
+    lifecycle: { softDelete: 'removed' },
+    properties: [
+      { name: 'id', type: 'id', strategy: 'uuid', system: true },
+      { name: 'slug', type: 'text', validation: { required: true, unique: true } },
+      { name: 'code', type: 'text', nullable: true, validation: { unique: true } },
+      { name: 'title', type: 'text', nullable: true },
+      { name: 'removed', type: 'boolean', system: true },
+    ],
+    lists: [],
+  };
+
+  function buildPages() {
+    const store = new InMemoryEventStore();
+    const api = createObjectApi<Record<string, unknown> & { id: string }>(store, pageObject);
+    return { store, api };
+  }
+
+  it('accepts distinct values for a unique field', async () => {
+    const { api } = buildPages();
+    await api.add({ id: ID_A, slug: 'home', code: null, title: 'Home' });
+    await api.add({ id: ID_B, slug: 'about', code: null, title: 'About' });
+    expect((await api.list()).map((p) => p['slug']).sort()).toEqual(['about', 'home']);
+  });
+
+  it('rejects a second record with a duplicate unique value', async () => {
+    const { api } = buildPages();
+    await api.add({ id: ID_A, slug: 'home', code: null, title: 'Home' });
+    await expect(api.add({ id: ID_B, slug: 'home', code: null, title: 'Dup' })).rejects.toBeInstanceOf(UniqueFieldError);
+    expect((await api.list()).length).toBe(1);
+  });
+
+  it('surfaces a clear 409 field error', async () => {
+    const { api } = buildPages();
+    await api.add({ id: ID_A, slug: 'home', code: null });
+    try {
+      await api.add({ id: ID_B, slug: 'home', code: null });
+      throw new Error('expected UniqueFieldError');
+    } catch (err) {
+      expect(err).toBeInstanceOf(UniqueFieldError);
+      expect(isApiError(err)).toBe(true);
+      expect((err as UniqueFieldError).statusCode).toBe(409);
+      expect((err as UniqueFieldError).field).toBe('slug');
+    }
+  });
+
+  it('does not constrain null/absent unique values', async () => {
+    const { api } = buildPages();
+    await api.add({ id: ID_A, slug: 'home', code: null });
+    await api.add({ id: ID_B, slug: 'about', code: null });
+    expect((await api.list()).length).toBe(2);
+  });
+
+  it('allows reusing a value after the holder is soft-deleted', async () => {
+    const { api } = buildPages();
+    await api.add({ id: ID_A, slug: 'home', code: null });
+    await api.remove!(ID_A);
+    await api.add({ id: ID_B, slug: 'home', code: null });
+    expect((await api.get(ID_B))?.['slug']).toBe('home');
+  });
+
+  it('frees the old value and claims the new on update', async () => {
+    const { api } = buildPages();
+    await api.add({ id: ID_A, slug: 'home', code: null });
+    await api.update(ID_A, { slug: 'about' });
+    // 'home' is now free to reuse
+    await api.add({ id: ID_B, slug: 'home', code: null });
+    // but 'about' is now held by A
+    await expect(api.update(ID_B, { slug: 'about' })).rejects.toBeInstanceOf(UniqueFieldError);
+  });
+
+  it("rejects updating one record to another live record's value, leaving it unchanged", async () => {
+    const { api } = buildPages();
+    await api.add({ id: ID_A, slug: 'home', code: null });
+    await api.add({ id: ID_B, slug: 'about', code: null });
+    await expect(api.update(ID_B, { slug: 'home' })).rejects.toBeInstanceOf(UniqueFieldError);
+    expect((await api.get(ID_B))?.['slug']).toBe('about');
+  });
+
+  it('permits a no-op update of a unique field to its own value', async () => {
+    const { api } = buildPages();
+    await api.add({ id: ID_A, slug: 'home', code: null });
+    const out = await api.update(ID_A, { slug: 'home' });
+    expect(out['slug']).toBe('home');
+  });
+
+  it('enforces a second independent unique field', async () => {
+    const { api } = buildPages();
+    await api.add({ id: ID_A, slug: 'home', code: 'X1' });
+    await expect(api.add({ id: ID_B, slug: 'about', code: 'X1' })).rejects.toBeInstanceOf(UniqueFieldError);
+  });
+
+  it('does not claim uniqueness when the object has no unique fields (fixture parity)', async () => {
+    const { api } = buildApi();
+    await api.add(validInput({ id: ID_A }));
+    await api.add(validInput({ id: ID_B, name: 'Alfie Granger-Howell' }));
+    expect((await api.list()).length).toBe(2);
   });
 });

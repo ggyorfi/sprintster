@@ -5,6 +5,7 @@ import {
   AlreadyExistsError,
   InvalidStateError,
   ConcurrencyError,
+  UniqueFieldError,
   isApiError,
 } from './api-error.js';
 
@@ -53,6 +54,18 @@ describe('ConcurrencyError', () => {
     const e = new ConcurrencyError('too many retries');
     expect(e.statusCode).toBe(503);
     expect(e.code).toBe('concurrency_conflict');
+  });
+});
+
+describe('UniqueFieldError', () => {
+  it('sets 409, a unique code, and carries the field name', () => {
+    const e = new UniqueFieldError('page', 'slug');
+    expect(e.statusCode).toBe(409);
+    expect(e.code).toBe('unique_violation');
+    expect(e.field).toBe('slug');
+    expect(e.message).toContain('page');
+    expect(e.message).toContain('slug');
+    expect(isApiError(e)).toBe(true);
   });
 });
 

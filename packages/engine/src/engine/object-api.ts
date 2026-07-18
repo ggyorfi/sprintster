@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import { AlreadyExistsError, InvalidStateError, NotFoundError } from '../errors/api-error.js';
+import { AlreadyExistsError, InvalidStateError, NotFoundError, UniqueFieldError } from '../errors/api-error.js';
 import { createEntityApi, type EntityApi } from '../entity-api/factory.js';
 import { applyUpdate } from './diff.js';
 import { UniqueViolationError, type EventStore } from '../events/store.js';
@@ -13,6 +13,9 @@ import { nowAsIso } from '../time/index.js';
 
 // Internal stream type backing daemon-allocated `sequence` fields; one stream per object.field (+ scope later).
 const SEQUENCE_STREAM_TYPE = '__seq';
+
+// Internal stream backing field-level `unique`: one stream per (object, field, value), claimed at an odd head, free at an even head (case-sensitive, pending client confirm).
+const UNIQUE_STREAM_TYPE = '__unique';
 
 export interface ObjectApi<State extends { id: string }> {
   base: EntityApi<State>;
@@ -53,6 +56,7 @@ export function createObjectApi<State extends { id: string }>(
   const refFields = obj.properties
     .filter((p): p is Extract<PropertyConfig, { type: 'ref' }> => p.type === 'ref')
     .map((p) => ({ name: p.name, target: p.target }));
+  const uniqueFields = obj.properties.filter((p) => p.validation?.unique === true).map((p) => p.name);
   const commandByName = new Map(commandEventInfos(obj).map((ce) => [ce.command.name, ce] as const));
 
   const base = createEntityApi<State>(store, {
@@ -87,6 +91,88 @@ export function createObjectApi<State extends { id: string }>(
     }
   }
 
+  interface Claim {
+    field: string;
+    value: unknown;
+  }
+
+  function uniqueStreamId(field: string, value: unknown): string {
+    return JSON.stringify([obj.name, field, value]);
+  }
+
+  // Reserve a value for a field; throws UniqueFieldError if a live record already holds it. Mirrors allocate()'s OCC loop.
+  async function claim(field: string, value: unknown, actor: string): Promise<void> {
+    const streamId = uniqueStreamId(field, value);
+    for (;;) {
+      const head = await store.streamHead(partitionId, UNIQUE_STREAM_TYPE, streamId);
+      if (head % 2 === 1) throw new UniqueFieldError(obj.name, field);
+      try {
+        await store.append({
+          partitionId,
+          streamType: UNIQUE_STREAM_TYPE,
+          streamId,
+          streamVersion: head + 1,
+          eventType: 'UniqueClaimed',
+          eventVersion: 1,
+          payload: { field, value },
+          occurredAt: nowAsIso(),
+          actor,
+          correlationId: null,
+        });
+        return;
+      } catch (err) {
+        if (err instanceof UniqueViolationError) continue;
+        throw err;
+      }
+    }
+  }
+
+  async function release(field: string, value: unknown, actor: string): Promise<void> {
+    const streamId = uniqueStreamId(field, value);
+    for (;;) {
+      const head = await store.streamHead(partitionId, UNIQUE_STREAM_TYPE, streamId);
+      if (head % 2 === 0) return;
+      try {
+        await store.append({
+          partitionId,
+          streamType: UNIQUE_STREAM_TYPE,
+          streamId,
+          streamVersion: head + 1,
+          eventType: 'UniqueReleased',
+          eventVersion: 1,
+          payload: { field, value },
+          occurredAt: nowAsIso(),
+          actor,
+          correlationId: null,
+        });
+        return;
+      } catch (err) {
+        if (err instanceof UniqueViolationError) continue;
+        throw err;
+      }
+    }
+  }
+
+  // Claim each value, rolling back already-made claims if any single one clashes, so a rejected write leaves no reservations.
+  async function claimAll(claims: Claim[], actor: string): Promise<void> {
+    const done: Claim[] = [];
+    for (const c of claims) {
+      try {
+        await claim(c.field, c.value, actor);
+        done.push(c);
+      } catch (err) {
+        for (const d of done) await release(d.field, d.value, actor);
+        throw err;
+      }
+    }
+  }
+
+  async function releaseAll(claims: Claim[], actor: string): Promise<void> {
+    for (const c of claims) await release(c.field, c.value, actor);
+  }
+
+  const isClaimable = (value: unknown): boolean => value !== undefined && value !== null;
+
   // Referential integrity gate: every non-null ref value must resolve to a live target object.
   async function checkRefs(data: Record<string, unknown>): Promise<void> {
     for (const rf of refFields) {
@@ -114,27 +200,71 @@ export function createObjectApi<State extends { id: string }>(
     const id = parsed['id'] as string;
     const { id: _id, ...data } = parsed;
     void _id;
-    for (const field of sequenceFields) {
-      data[field] = await allocate(field, actor);
+    const claims: Claim[] = uniqueFields
+      .filter((f) => isClaimable(data[f]))
+      .map((f) => ({ field: f, value: data[f] }));
+    await claimAll(claims, actor);
+    try {
+      for (const field of sequenceFields) {
+        data[field] = await allocate(field, actor);
+      }
+      return await base.createEvent(id, (state) => {
+        if (state !== null) throw new AlreadyExistsError(obj.name, id);
+        return { eventType: names.added, eventVersion: 1, payload: { [idKey]: id, ...data }, actor };
+      });
+    } catch (err) {
+      await releaseAll(claims, actor);
+      throw err;
     }
-    return base.createEvent(id, (state) => {
-      if (state !== null) throw new AlreadyExistsError(obj.name, id);
-      return { eventType: names.added, eventVersion: 1, payload: { [idKey]: id, ...data }, actor };
-    });
   }
 
   async function update(id: string, input: unknown, actor: string = defaultActor): Promise<State> {
     const patch = updateSchema.parse(input) as Partial<State>;
-    await checkRefs(patch as Record<string, unknown>);
-    return applyUpdate(base, id, patch, {
-      actor,
-      assertWritable: assertLive,
-      build: (entityId, field, value) => ({
-        eventType: names.fieldChanged,
-        eventVersion: 1,
-        payload: { [idKey]: entityId, field, value },
-      }),
-    });
+    const patchRec = patch as Record<string, unknown>;
+    await checkRefs(patchRec);
+
+    const claimed: Claim[] = [];
+    const toFree: Claim[] = [];
+    if (uniqueFields.length > 0) {
+      const current = await base.findOneById(id);
+      const live = current !== null && !(kind === 'softDelete' && (current as Record<string, unknown>)[lifecycleField] === true);
+      if (live) {
+        const cur = current as Record<string, unknown>;
+        for (const f of uniqueFields) {
+          if (!(f in patchRec)) continue;
+          const next = patchRec[f];
+          const prev = cur[f];
+          if (next === prev) continue;
+          if (isClaimable(next)) {
+            try {
+              await claim(f, next, actor);
+              claimed.push({ field: f, value: next });
+            } catch (err) {
+              await releaseAll(claimed, actor);
+              throw err;
+            }
+          }
+          if (isClaimable(prev)) toFree.push({ field: f, value: prev });
+        }
+      }
+    }
+
+    try {
+      const result = await applyUpdate(base, id, patch, {
+        actor,
+        assertWritable: assertLive,
+        build: (entityId, field, value) => ({
+          eventType: names.fieldChanged,
+          eventVersion: 1,
+          payload: { [idKey]: entityId, field, value },
+        }),
+      });
+      await releaseAll(toFree, actor);
+      return result;
+    } catch (err) {
+      await releaseAll(claimed, actor);
+      throw err;
+    }
   }
 
   async function get(id: string): Promise<State | null> {
@@ -184,11 +314,17 @@ export function createObjectApi<State extends { id: string }>(
   };
 
   if (kind === 'softDelete') {
-    api.remove = (id: string, actor: string = defaultActor): Promise<State> =>
-      base.createEvent(id, (state) => {
-        assertLive(state, id);
+    api.remove = async (id: string, actor: string = defaultActor): Promise<State> => {
+      const state = await base.createEvent(id, (s) => {
+        assertLive(s, id);
         return { eventType: names.removed, eventVersion: 1, payload: { [idKey]: id }, actor };
       });
+      const rec = state as Record<string, unknown>;
+      for (const f of uniqueFields) {
+        if (isClaimable(rec[f])) await release(f, rec[f], actor);
+      }
+      return state;
+    };
   }
 
   return api;

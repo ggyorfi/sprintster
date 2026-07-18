@@ -145,7 +145,10 @@ function checkCommands(obj: ObjectConfig): void {
   }
 }
 
-function checkProperties(scope: string, properties: PropertyConfig[], knownObjects: Set<string>): void {
+// `unique` is enforced per-object over live records via a reserved stream, so it only applies to top-level scalar fields.
+const UNIQUE_INCAPABLE_TYPES = new Set(['id', 'sequence', 'object', 'array']);
+
+function checkProperties(scope: string, properties: PropertyConfig[], knownObjects: Set<string>, nested = false): void {
   assertUnique(
     properties.map((p) => p.name),
     `property name in '${scope}'`,
@@ -159,8 +162,16 @@ function checkProperties(scope: string, properties: PropertyConfig[], knownObjec
     if (prop.type === 'ref' && !knownObjects.has(prop.target)) {
       throw new Error(`ref property '${scope}.${prop.name}' has target '${prop.target}', not a known object`);
     }
+    if (prop.validation?.unique === true) {
+      if (nested) {
+        throw new Error(`unique property '${scope}.${prop.name}' is nested; unique is only supported on top-level scalar fields`);
+      }
+      if (UNIQUE_INCAPABLE_TYPES.has(prop.type)) {
+        throw new Error(`unique property '${scope}.${prop.name}' has type '${prop.type}'; unique is only supported on scalar fields`);
+      }
+    }
     if (prop.type === 'object') {
-      checkProperties(`${scope}.${prop.name}`, prop.properties, knownObjects);
+      checkProperties(`${scope}.${prop.name}`, prop.properties, knownObjects, true);
     }
   }
 }

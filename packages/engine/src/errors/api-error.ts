@@ -38,6 +38,16 @@ export class ConcurrencyError extends ApiError {
   }
 }
 
+export class UniqueFieldError extends ApiError {
+  public readonly field: string;
+
+  constructor(objectName: string, field: string) {
+    super('unique_violation', `${objectName}.${field} must be unique`, 409);
+    this.name = 'UniqueFieldError';
+    this.field = field;
+  }
+}
+
 export function isApiError(value: unknown): value is ApiError {
   return value instanceof ApiError;
 }
