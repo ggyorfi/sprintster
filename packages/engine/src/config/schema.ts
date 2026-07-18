@@ -31,6 +31,8 @@ interface PropertyBase {
 export type PropertyConfig =
   | (PropertyBase & { type: 'id'; strategy: 'uuid' | 'sequence' })
   | (PropertyBase & { type: 'text' })
+  | (PropertyBase & { type: 'code'; language?: string | undefined })
+  | (PropertyBase & { type: 'markdown'; editor?: 'wysiwyg' | 'source' | 'combo' | undefined })
   | (PropertyBase & { type: 'enum'; values: string[] })
   | (PropertyBase & { type: 'money'; currency: string })
   | (PropertyBase & { type: 'integer' })
@@ -55,6 +57,10 @@ const baseProperty = {
 
 const IdProperty = z.object({ ...baseProperty, type: z.literal('id'), strategy: z.enum(['uuid', 'sequence']) }).strict();
 const TextProperty = z.object({ ...baseProperty, type: z.literal('text') }).strict();
+const CodeProperty = z.object({ ...baseProperty, type: z.literal('code'), language: z.string().min(1).optional() }).strict();
+const MarkdownProperty = z
+  .object({ ...baseProperty, type: z.literal('markdown'), editor: z.enum(['wysiwyg', 'source', 'combo']).optional() })
+  .strict();
 const EnumProperty = z.object({ ...baseProperty, type: z.literal('enum'), values: z.array(z.string()).min(1) }).strict();
 const MoneyProperty = z.object({ ...baseProperty, type: z.literal('money'), currency: z.string().min(1) }).strict();
 const IntegerProperty = z.object({ ...baseProperty, type: z.literal('integer') }).strict();
@@ -83,6 +89,8 @@ export const PropertyConfigSchema: z.ZodType<PropertyConfig> = z.lazy(() =>
   z.discriminatedUnion('type', [
     IdProperty,
     TextProperty,
+    CodeProperty,
+    MarkdownProperty,
     EnumProperty,
     MoneyProperty,
     IntegerProperty,

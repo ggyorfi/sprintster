@@ -154,6 +154,35 @@ describe('loadConfig: unique validation guard', () => {
   });
 });
 
+describe('loadConfig: code and markdown property options', () => {
+  function rawWith(props: unknown[]): unknown {
+    return {
+      version: '1',
+      objects: [
+        {
+          name: 'page',
+          title: 'Page',
+          titlePlural: 'Pages',
+          lifecycle: { softDelete: 'removed' },
+          properties: [{ name: 'id', type: 'id', strategy: 'uuid', system: true }, ...props, { name: 'removed', type: 'boolean', system: true }],
+          lists: [],
+        },
+      ],
+    };
+  }
+
+  it('accepts a code language and a markdown editor mode', () => {
+    const c = loadConfig(rawWith([{ name: 'snippet', type: 'code', language: 'json' }, { name: 'body', type: 'markdown', editor: 'combo' }]));
+    const props = c.objects[0]!.properties;
+    expect(props.find((p) => p.name === 'snippet')).toMatchObject({ type: 'code', language: 'json' });
+    expect(props.find((p) => p.name === 'body')).toMatchObject({ type: 'markdown', editor: 'combo' });
+  });
+
+  it('rejects an unknown markdown editor mode', () => {
+    expect(() => loadConfig(rawWith([{ name: 'body', type: 'markdown', editor: 'fancy' }]))).toThrow();
+  });
+});
+
 describe('loadConfig: refs target validation', () => {
   function rawWithRefs(target: string): unknown {
     return {

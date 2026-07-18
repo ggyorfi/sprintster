@@ -117,6 +117,25 @@ describe('compileProperty: ref and boolean', () => {
   });
 });
 
+describe('compileProperty: code and markdown', () => {
+  it('code compiles to a string honoring maxLength', () => {
+    const schema = compileProperty({ name: 'snippet', type: 'code', language: 'json', validation: { maxLength: 3 } });
+    expect(schema.parse('abc')).toBe('abc');
+    expect(() => schema.parse('abcd')).toThrow();
+  });
+
+  it('markdown compiles to a string honoring minLength', () => {
+    const schema = compileProperty({ name: 'body', type: 'markdown', validation: { required: true, minLength: 1 } });
+    expect(schema.parse('# Hi')).toBe('# Hi');
+    expect(() => schema.parse('')).toThrow();
+  });
+
+  it('both are optional when not required', () => {
+    expect(compileProperty({ name: 'snippet', type: 'code' }).parse(undefined)).toBeUndefined();
+    expect(compileProperty({ name: 'body', type: 'markdown' }).parse(undefined)).toBeUndefined();
+  });
+});
+
 describe('compileProperty: refs', () => {
   it('accepts an array of id strings and rejects a non-array or empty-string element', () => {
     const schema = compileProperty({ name: 'tags', type: 'refs', target: 'tag' });

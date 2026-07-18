@@ -15,6 +15,14 @@ function baseSchema(prop: PropertyConfig): z.ZodTypeAny {
       if (v?.format === 'email') s = s.email();
       return s;
     }
+    case 'code':
+    case 'markdown': {
+      let s = z.string();
+      const v = prop.validation;
+      if (v?.minLength !== undefined) s = s.min(v.minLength);
+      if (v?.maxLength !== undefined) s = s.max(v.maxLength);
+      return s;
+    }
     case 'enum':
       return z.enum(prop.values as [string, ...string[]]);
     case 'money':
