@@ -18,6 +18,9 @@ export function formatCell(property: PropertyConfig, value: unknown, suffix = ''
     case 'datetime':
       base = formatIsoMinute(String(value));
       break;
+    case 'refs':
+      base = Array.isArray(value) ? value.map(String).join(', ') : '';
+      break;
     case 'object':
       base = '';
       break;

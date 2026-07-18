@@ -360,6 +360,87 @@ describe('createObjectApi: ref field existence check', () => {
   });
 });
 
+describe('createObjectApi: refs (multi-value) existence check', () => {
+  const T1 = '44444444-4444-4444-8444-444444444444';
+  const T2 = '55555555-5555-4555-8555-555555555555';
+  const POST_ID = '66666666-6666-4666-8666-666666666666';
+
+  const tagObject: ObjectConfig = {
+    name: 'tag',
+    title: 'Tag',
+    titlePlural: 'Tags',
+    lifecycle: { softDelete: 'removed' },
+    properties: [
+      { name: 'id', type: 'id', strategy: 'uuid', system: true },
+      { name: 'label', type: 'text' },
+      { name: 'removed', type: 'boolean', system: true },
+    ],
+    lists: [],
+  };
+  const postObject: ObjectConfig = {
+    name: 'post',
+    title: 'Post',
+    titlePlural: 'Posts',
+    lifecycle: { softDelete: 'removed' },
+    properties: [
+      { name: 'id', type: 'id', strategy: 'uuid', system: true },
+      { name: 'tags', type: 'refs', target: 'tag' },
+      { name: 'title', type: 'text', nullable: true },
+      { name: 'removed', type: 'boolean', system: true },
+    ],
+    lists: [],
+  };
+
+  function buildRefApis() {
+    const store = new InMemoryEventStore();
+    const tagApi = createObjectApi<Record<string, unknown> & { id: string }>(store, tagObject);
+    const postApi = createObjectApi<Record<string, unknown> & { id: string }>(store, postObject, {
+      resolveTarget: (name) => (name === 'tag' ? tagApi : undefined),
+    });
+    return { store, tagApi, postApi };
+  }
+
+  async function addTags(tagApi: ReturnType<typeof buildRefApis>['tagApi']) {
+    await tagApi.add({ id: T1, label: 'one' });
+    await tagApi.add({ id: T2, label: 'two' });
+  }
+
+  it('accepts a multi-ref pointing at live targets', async () => {
+    const { tagApi, postApi } = buildRefApis();
+    await addTags(tagApi);
+    const p = await postApi.add({ id: POST_ID, tags: [T1, T2], title: 'x' });
+    expect(p['tags']).toEqual([T1, T2]);
+  });
+
+  it('defaults an omitted multi-ref to an empty array and needs no lookups', async () => {
+    const { postApi } = buildRefApis();
+    const p = await postApi.add({ id: POST_ID, title: 'x' });
+    expect(p['tags']).toEqual([]);
+  });
+
+  it('rejects when any element points at a non-existent target', async () => {
+    const { tagApi, postApi } = buildRefApis();
+    await addTags(tagApi);
+    await expect(postApi.add({ id: POST_ID, tags: [T1, ID_UNKNOWN] })).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('rejects when any element points at a removed target', async () => {
+    const { tagApi, postApi } = buildRefApis();
+    await addTags(tagApi);
+    await tagApi.remove!(T2);
+    await expect(postApi.add({ id: POST_ID, tags: [T1, T2] })).rejects.toBeInstanceOf(InvalidStateError);
+  });
+
+  it('re-checks every element on update', async () => {
+    const { tagApi, postApi } = buildRefApis();
+    await addTags(tagApi);
+    await postApi.add({ id: POST_ID, tags: [T1] });
+    const out = await postApi.update(POST_ID, { tags: [T1, T2] });
+    expect(out['tags']).toEqual([T1, T2]);
+    await expect(postApi.update(POST_ID, { tags: [ID_UNKNOWN] })).rejects.toBeInstanceOf(NotFoundError);
+  });
+});
+
 describe('createObjectApi: field-level unique validation', () => {
   const pageObject: ObjectConfig = {
     name: 'page',

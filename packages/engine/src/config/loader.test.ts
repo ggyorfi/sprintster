@@ -148,6 +148,40 @@ describe('loadConfig: unique validation guard', () => {
   it('rejects unique on a sequence field', () => {
     expect(() => loadConfig(rawWith({ name: 'seq', type: 'sequence', validation: { unique: true } }))).toThrow(/unique/);
   });
+
+  it('rejects unique on a refs field', () => {
+    expect(() => loadConfig(rawWith({ name: 'tags', type: 'refs', target: 'page', validation: { unique: true } }))).toThrow(/unique/);
+  });
+});
+
+describe('loadConfig: refs target validation', () => {
+  function rawWithRefs(target: string): unknown {
+    return {
+      version: '1',
+      objects: [
+        {
+          name: 'post',
+          title: 'Post',
+          titlePlural: 'Posts',
+          lifecycle: { softDelete: 'removed' },
+          properties: [
+            { name: 'id', type: 'id', strategy: 'uuid', system: true },
+            { name: 'tags', type: 'refs', target },
+            { name: 'removed', type: 'boolean', system: true },
+          ],
+          lists: [],
+        },
+      ],
+    };
+  }
+
+  it('accepts a refs field whose target is a self-reference', () => {
+    expect(() => loadConfig(rawWithRefs('post'))).not.toThrow();
+  });
+
+  it('rejects a refs field whose target is not a known object', () => {
+    expect(() => loadConfig(rawWithRefs('nope'))).toThrow(/target/);
+  });
 });
 
 describe('loadConfig: semantic validation', () => {

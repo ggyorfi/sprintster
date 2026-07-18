@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { loadConfig } from '../config/loader.js';
-import { assembleValues, hasView, viewFields, arrayInitialValues, arrayItemCount, regroupArray } from './view.js';
+import { assembleValues, hasView, viewFields, arrayInitialValues, arrayItemCount, regroupArray, toInput, toStorage } from './view.js';
 import type { ObjectConfig, PropertyConfig } from '../config/schema.js';
 
 const emailsProp = {
@@ -66,6 +66,41 @@ describe('assembleValues with an array field', () => {
   });
   it('yields an empty array when there are no item keys', () => {
     expect(assembleValues(withArray, 'default', {}, 'create')['emails']).toEqual([]);
+  });
+});
+
+const refsProp = { name: 'tags', type: 'refs', target: 'tag' } satisfies PropertyConfig;
+
+const withRefs: ObjectConfig = {
+  name: 'post',
+  title: 'Post',
+  titlePlural: 'Posts',
+  lifecycle: { softDelete: 'removed' },
+  properties: [
+    { name: 'id', type: 'id', strategy: 'uuid', system: true },
+    refsProp,
+    { name: 'removed', type: 'boolean', system: true },
+  ],
+  lists: [{ name: 'default', title: 'Posts', columns: [{ property: 'id' }] }],
+  views: [{ name: 'default', title: 'Post', fields: [{ property: 'tags' }] }],
+};
+
+describe('refs web-boundary encoding', () => {
+  it('toInput JSON-encodes an id array; toStorage parses it back (round-trip)', () => {
+    expect(toInput(refsProp, ['a', 'b'])).toBe('["a","b"]');
+    expect(toStorage(refsProp, '["a","b"]')).toEqual(['a', 'b']);
+    expect(toStorage(refsProp, toInput(refsProp, ['a', 'b']))).toEqual(['a', 'b']);
+  });
+
+  it('toInput blanks a null value; toStorage treats blank as an empty array', () => {
+    expect(toInput(refsProp, null)).toBe('');
+    expect(toStorage(refsProp, '')).toEqual([]);
+    expect(toStorage(refsProp, '   ')).toEqual([]);
+  });
+
+  it('assembleValues reassembles the JSON input into an array', () => {
+    expect(assembleValues(withRefs, 'default', { tags: '["a","b"]' }, 'create')['tags']).toEqual(['a', 'b']);
+    expect(assembleValues(withRefs, 'default', {}, 'create')['tags']).toEqual([]);
   });
 });
 

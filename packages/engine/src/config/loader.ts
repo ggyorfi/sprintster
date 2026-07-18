@@ -146,7 +146,7 @@ function checkCommands(obj: ObjectConfig): void {
 }
 
 // `unique` is enforced per-object over live records via a reserved stream, so it only applies to top-level scalar fields.
-const UNIQUE_INCAPABLE_TYPES = new Set(['id', 'sequence', 'object', 'array']);
+const UNIQUE_INCAPABLE_TYPES = new Set(['id', 'sequence', 'object', 'array', 'refs']);
 
 function checkProperties(scope: string, properties: PropertyConfig[], knownObjects: Set<string>, nested = false): void {
   assertUnique(
@@ -159,8 +159,8 @@ function checkProperties(scope: string, properties: PropertyConfig[], knownObjec
         `enum property '${scope}.${prop.name}' has default '${String(prop.default)}', not one of its values`,
       );
     }
-    if (prop.type === 'ref' && !knownObjects.has(prop.target)) {
-      throw new Error(`ref property '${scope}.${prop.name}' has target '${prop.target}', not a known object`);
+    if ((prop.type === 'ref' || prop.type === 'refs') && !knownObjects.has(prop.target)) {
+      throw new Error(`${prop.type} property '${scope}.${prop.name}' has target '${prop.target}', not a known object`);
     }
     if (prop.validation?.unique === true) {
       if (nested) {

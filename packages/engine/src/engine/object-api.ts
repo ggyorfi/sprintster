@@ -54,8 +54,8 @@ export function createObjectApi<State extends { id: string }>(
   const updateSchema = compileUpdateSchema(obj);
   const sequenceFields = obj.properties.filter((p) => p.type === 'sequence').map((p) => p.name);
   const refFields = obj.properties
-    .filter((p): p is Extract<PropertyConfig, { type: 'ref' }> => p.type === 'ref')
-    .map((p) => ({ name: p.name, target: p.target }));
+    .filter((p): p is Extract<PropertyConfig, { type: 'ref' | 'refs' }> => p.type === 'ref' || p.type === 'refs')
+    .map((p) => ({ name: p.name, target: p.target, multi: p.type === 'refs' }));
   const uniqueFields = obj.properties.filter((p) => p.validation?.unique === true).map((p) => p.name);
   const commandByName = new Map(commandEventInfos(obj).map((ce) => [ce.command.name, ce] as const));
 
@@ -173,16 +173,21 @@ export function createObjectApi<State extends { id: string }>(
 
   const isClaimable = (value: unknown): boolean => value !== undefined && value !== null;
 
-  // Referential integrity gate: every non-null ref value must resolve to a live target object.
+  // Referential integrity gate: every non-null ref (or refs element) value must resolve to a live target object.
   async function checkRefs(data: Record<string, unknown>): Promise<void> {
     for (const rf of refFields) {
       const value = data[rf.name];
       if (value === undefined || value === null) continue;
+      const ids = rf.multi ? (Array.isArray(value) ? value : []) : [value];
+      if (ids.length === 0) continue;
       const target = options.resolveTarget?.(rf.target);
       if (target === undefined) {
         throw new InvalidStateError(`ref '${rf.name}': no resolver for target '${rf.target}'`);
       }
-      await target.requireGet(String(value));
+      for (const id of ids) {
+        if (id === undefined || id === null) continue;
+        await target.requireGet(String(id));
+      }
     }
   }
 

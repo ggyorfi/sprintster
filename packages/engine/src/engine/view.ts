@@ -58,6 +58,7 @@ export function toInput(property: PropertyConfig, value: unknown): string {
   if (property.type === 'array') return '';
   if (value === null || value === undefined) return '';
   if (property.type === 'money') return penceToPounds(String(value));
+  if (property.type === 'refs') return JSON.stringify(Array.isArray(value) ? value : []);
   return String(value);
 }
 
@@ -128,6 +129,15 @@ export function toStorage(property: PropertyConfig, input: string): unknown {
       if (s === '') return undefined;
       const n = Number(s);
       return Number.isInteger(n) ? n : s;
+    }
+    case 'refs': {
+      if (s === '') return [];
+      try {
+        const arr: unknown = JSON.parse(s);
+        return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === 'string') : [];
+      } catch {
+        return [];
+      }
     }
     default:
       return s === '' ? (property.nullable ? null : '') : s;
@@ -292,7 +302,7 @@ export function assembleValues(
       continue;
     }
 
-    if (root.type === 'ref') {
+    if (root.type === 'ref' || root.type === 'refs') {
       const direct = info.items.find((i) => i.property === rootName);
       if (direct === undefined) continue;
       if (!resolveEditable(root, mode, direct.readOnly)) continue;

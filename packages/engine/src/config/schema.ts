@@ -37,6 +37,7 @@ export type PropertyConfig =
   | (PropertyBase & { type: 'date' })
   | (PropertyBase & { type: 'datetime' })
   | (PropertyBase & { type: 'ref'; target: string; display?: string | undefined })
+  | (PropertyBase & { type: 'refs'; target: string; display?: string | undefined })
   | (PropertyBase & { type: 'boolean' })
   | (PropertyBase & { type: 'sequence' })
   | (PropertyBase & { type: 'object'; properties: PropertyConfig[] })
@@ -62,6 +63,9 @@ const DatetimeProperty = z.object({ ...baseProperty, type: z.literal('datetime')
 const RefProperty = z
   .object({ ...baseProperty, type: z.literal('ref'), target: z.string().min(1), display: z.string().min(1).optional() })
   .strict();
+const RefsProperty = z
+  .object({ ...baseProperty, type: z.literal('refs'), target: z.string().min(1), display: z.string().min(1).optional() })
+  .strict();
 const BooleanProperty = z.object({ ...baseProperty, type: z.literal('boolean') }).strict();
 const SequenceProperty = z.object({ ...baseProperty, type: z.literal('sequence') }).strict();
 const ObjectProperty = z
@@ -85,6 +89,7 @@ export const PropertyConfigSchema: z.ZodType<PropertyConfig> = z.lazy(() =>
     DateProperty,
     DatetimeProperty,
     RefProperty,
+    RefsProperty,
     BooleanProperty,
     SequenceProperty,
     ObjectProperty,

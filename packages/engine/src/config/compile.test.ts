@@ -117,6 +117,26 @@ describe('compileProperty: ref and boolean', () => {
   });
 });
 
+describe('compileProperty: refs', () => {
+  it('accepts an array of id strings and rejects a non-array or empty-string element', () => {
+    const schema = compileProperty({ name: 'tags', type: 'refs', target: 'tag' });
+    expect(schema.parse([ID_A])).toEqual([ID_A]);
+    expect(() => schema.parse(ID_A)).toThrow();
+    expect(() => schema.parse([''])).toThrow();
+  });
+
+  it('defaults to an empty array when omitted', () => {
+    const schema = compileProperty({ name: 'tags', type: 'refs', target: 'tag' });
+    expect(schema.parse(undefined)).toEqual([]);
+  });
+
+  it('enforces minItems and maxItems', () => {
+    const schema = compileProperty({ name: 'tags', type: 'refs', target: 'tag', validation: { minItems: 1, maxItems: 2 } });
+    expect(() => schema.parse([])).toThrow();
+    expect(() => schema.parse([ID_A, ID_A, ID_A])).toThrow();
+  });
+});
+
 describe('compileProperty: nullable / default / optionality', () => {
   it('nullable accepts null', () => {
     const schema = compileProperty({ name: 'notes', type: 'text', nullable: true });

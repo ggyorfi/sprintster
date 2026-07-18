@@ -32,6 +32,13 @@ function baseSchema(prop: PropertyConfig): z.ZodTypeAny {
       return IsoInstant;
     case 'ref':
       return z.string().min(1);
+    case 'refs': {
+      let s = z.array(z.string().min(1));
+      const v = prop.validation;
+      if (v?.minItems !== undefined) s = s.min(v.minItems);
+      if (v?.maxItems !== undefined) s = s.max(v.maxItems);
+      return s;
+    }
     case 'boolean':
       return z.boolean();
     case 'sequence':
@@ -59,7 +66,7 @@ export function compileProperty(prop: PropertyConfig): z.ZodTypeAny {
   let schema = valueSchema(prop);
   if (prop.default !== undefined) {
     schema = schema.default(prop.default);
-  } else if (prop.type === 'array') {
+  } else if (prop.type === 'array' || prop.type === 'refs') {
     schema = schema.default([]);
   } else if (prop.validation?.required) {
     return schema;
