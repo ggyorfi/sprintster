@@ -10,11 +10,15 @@ export function createAssetRoute(blobApi: BlobApi): Hono {
 
   route.post('/', async (c) => {
     try {
-      const bytes = new Uint8Array(await c.req.arrayBuffer());
+      const field = (await c.req.parseBody())['file'];
+      if (!(field instanceof File)) {
+        return c.json({ code: 'bad_request', message: 'expected a multipart field named "file"' }, 400);
+      }
+      const bytes = new Uint8Array(await field.arrayBuffer());
       if (bytes.byteLength === 0) return c.json({ code: 'bad_request', message: 'empty upload' }, 400);
-      const contentType = c.req.header('content-type') ?? null;
+      const contentType = field.type === '' ? null : field.type;
       const ref = await blobApi.upload(bytes, contentType);
-      return c.json({ hash: ref.hash, size: ref.size, contentType }, 201);
+      return c.json({ hash: ref.hash, size: ref.size, contentType, filename: field.name }, 201);
     } catch (err) {
       return apiErrorResponse(c, err);
     }

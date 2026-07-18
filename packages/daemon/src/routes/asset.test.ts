@@ -14,8 +14,10 @@ function buildApp() {
   return { events, app };
 }
 
-function upload(bytes: Uint8Array, contentType: string): RequestInit {
-  return { method: 'POST', headers: { 'content-type': contentType }, body: bytes as BodyInit };
+function upload(bytes: Uint8Array, contentType: string, filename = 'hero.png'): RequestInit {
+  const form = new FormData();
+  form.append('file', new Blob([bytes as BlobPart], { type: contentType }), filename);
+  return { method: 'POST', body: form };
 }
 
 async function hashOf(res: Response): Promise<string> {
@@ -23,13 +25,14 @@ async function hashOf(res: Response): Promise<string> {
 }
 
 describe('POST /assets', () => {
-  it('uploads bytes, returns 201 with hash/size/contentType, and records a BlobUploaded fact', async () => {
+  it('uploads bytes, returns 201 with hash/size/contentType/filename, and records a BlobUploaded fact', async () => {
     const { app, events } = buildApp();
     const res = await app.request('/assets', upload(png, 'image/png'));
     expect(res.status).toBe(201);
-    const body = (await res.json()) as { hash: string; size: number; contentType: string };
+    const body = (await res.json()) as { hash: string; size: number; contentType: string; filename: string };
     expect(body.size).toBe(png.byteLength);
     expect(body.contentType).toBe('image/png');
+    expect(body.filename).toBe('hero.png');
     expect(body.hash).toMatch(/^[0-9a-f]{64}$/);
     const rows = await events.findByStream(0, '__blob', body.hash);
     expect(rows[0]?.eventType).toBe('BlobUploaded');
@@ -44,8 +47,14 @@ describe('POST /assets', () => {
 
   it('rejects an empty upload with 400', async () => {
     const { app } = buildApp();
-    const res = await app.request('/assets', { method: 'POST', headers: { 'content-type': 'image/png' }, body: new Uint8Array(0) as BodyInit });
-    expect(res.status).toBe(400);
+    expect((await app.request('/assets', upload(new Uint8Array(0), 'image/png'))).status).toBe(400);
+  });
+
+  it('rejects a request without a "file" field with 400', async () => {
+    const { app } = buildApp();
+    const form = new FormData();
+    form.append('notfile', 'oops');
+    expect((await app.request('/assets', { method: 'POST', body: form })).status).toBe(400);
   });
 });
 
