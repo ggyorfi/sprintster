@@ -62,6 +62,15 @@ export function RefPicker({ label, value, onChange, options, multiple = false, p
     commit(selectedIds.filter((x) => x !== id));
   }
 
+  function move(index: number, delta: number) {
+    const to = index + delta;
+    if (to < 0 || to >= selectedIds.length) return;
+    const next = [...selectedIds];
+    const [item] = next.splice(index, 1);
+    next.splice(to, 0, item!);
+    commit(next);
+  }
+
   function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -86,11 +95,21 @@ export function RefPicker({ label, value, onChange, options, multiple = false, p
       {label !== undefined && <span className={styles.label}>{label}</span>}
       <div className={styles.control}>
         <div className={styles.chips}>
-          {selectedIds.map((id) => {
+          {selectedIds.map((id, i) => {
             const text = labelById.get(id) ?? id;
             return (
               <span key={id} className={styles.chip}>
+                {multiple && i > 0 && (
+                  <button type="button" className={styles.move} aria-label={`Move ${text} left`} onClick={() => move(i, -1)}>
+                    {'‹'}
+                  </button>
+                )}
                 <span className={styles.chipLabel}>{text}</span>
+                {multiple && i < selectedIds.length - 1 && (
+                  <button type="button" className={styles.move} aria-label={`Move ${text} right`} onClick={() => move(i, 1)}>
+                    {'›'}
+                  </button>
+                )}
                 <button type="button" className={styles.remove} aria-label={`Remove ${text}`} onClick={() => remove(id)}>
                   {'×'}
                 </button>

@@ -75,3 +75,30 @@ describe('RefPicker (multiple)', () => {
     expect(onChange).toHaveBeenCalledWith('["t2"]');
   });
 });
+
+describe('RefPicker reordering (multiple)', () => {
+  it('moves a chip right, emitting reordered JSON', async () => {
+    const onChange = vi.fn();
+    render(<RefPicker label="Tags" multiple value='["t1","t2","t3"]' options={options} onChange={onChange} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Move Alfie Granger right' }));
+    expect(onChange).toHaveBeenCalledWith('["t2","t1","t3"]');
+  });
+
+  it('moves a chip left, emitting reordered JSON', async () => {
+    const onChange = vi.fn();
+    render(<RefPicker label="Tags" multiple value='["t1","t2","t3"]' options={options} onChange={onChange} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Move Mira Chen left' }));
+    expect(onChange).toHaveBeenCalledWith('["t1","t3","t2"]');
+  });
+
+  it('omits the left control on the first chip and the right control on the last', () => {
+    render(<RefPicker label="Tags" multiple value='["t1","t2","t3"]' options={options} onChange={() => {}} />);
+    expect(screen.queryByRole('button', { name: 'Move Alfie Granger left' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Move Mira Chen right' })).toBeNull();
+  });
+
+  it('shows no reorder controls in single mode', () => {
+    render(<RefPicker label="Client" value="t2" options={options} onChange={() => {}} />);
+    expect(screen.queryByRole('button', { name: /^Move / })).toBeNull();
+  });
+});

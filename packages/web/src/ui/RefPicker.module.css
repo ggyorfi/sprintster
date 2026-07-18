@@ -38,9 +38,27 @@
   color: var(--text-2);
   border: 1px solid var(--border-2);
   border-radius: 999px;
-  padding: 1px 3px 1px 9px;
+  padding: 1px 3px;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.chipLabel {
+  padding: 0 2px;
+}
+
+.move {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.move:hover {
+  color: var(--text);
 }
 
 .remove {
