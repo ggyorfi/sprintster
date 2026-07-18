@@ -1,7 +1,9 @@
 import { serve } from '@hono/node-server';
 import {
   createObjectApi,
+  createBlobApi,
   setAppConfig,
+  type BlobStore,
   type Config,
   type EventStore,
   type PluginObjectApi,
@@ -26,13 +28,17 @@ export interface DaemonHandle {
 export async function startDaemon(opts: {
   config: Config;
   store: EventStore;
+  blobStore: BlobStore;
   host: string;
   port: number;
   webRoot?: string;
 }): Promise<DaemonHandle> {
   setAppConfig(opts.config);
   const apis = buildApis(opts.config, opts.store);
-  const app = createApp(opts.webRoot !== undefined ? { apis, webRoot: opts.webRoot } : { apis });
+  const blobApi = createBlobApi(opts.store, opts.blobStore);
+  const app = createApp(
+    opts.webRoot !== undefined ? { apis, blobApi, webRoot: opts.webRoot } : { apis, blobApi },
+  );
   const server = await new Promise<ReturnType<typeof serve>>((resolve, reject) => {
     const s = serve({ fetch: app.fetch, hostname: opts.host, port: opts.port }, () => resolve(s));
     s.on('error', (err: NodeJS.ErrnoException) => {

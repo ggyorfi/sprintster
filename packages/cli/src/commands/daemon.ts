@@ -20,6 +20,7 @@ export const daemonCommand = defineCommand({
         await startDaemon({
           config: project.app,
           store: backend.store,
+          blobStore: backend.blobStore,
           host: environment.server.host,
           port: environment.server.port,
           ...(webRoot !== undefined ? { webRoot } : {}),
