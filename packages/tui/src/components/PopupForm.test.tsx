@@ -68,6 +68,28 @@ describe('PopupForm layout (create mode)', () => {
     expect(frame.indexOf('Save')).toBeLessThan(frame.indexOf('Tab next'));
   });
 
+  it('edits a markdown field in the multiline text editor (long content wraps, not clipped)', () => {
+    const markdownField: ViewFieldSpec = {
+      path: 'body',
+      property: { name: 'body', title: 'Body', type: 'markdown' },
+      label: 'Body',
+      placeholder: '',
+      rows: 1,
+      group: null,
+      editable: true,
+      derivedFromRef: null,
+      defaultInput: '',
+    };
+    const long =
+      'alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november oscar papa quebec';
+    const frame = renderPopup(
+      <PopupForm title="New" mode="create" fields={[markdownField]} initial={{ body: long }} onSubmit={() => {}} onCancel={() => {}} />,
+    );
+    expect(frame).toContain('alpha');
+    expect(frame).toContain('quebec');
+    expect(frame.indexOf('alpha')).toBeLessThan(frame.indexOf('quebec'));
+  });
+
   it('encloses an object group in a titled frame', () => {
     const frame = renderPopup(
       <PopupForm title="New" mode="create" fields={FIELDS} initial={{ name: 'Thomas Lam', notes: '' }} onSubmit={() => {}} onCancel={() => {}} />,

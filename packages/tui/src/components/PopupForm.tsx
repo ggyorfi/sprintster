@@ -56,8 +56,12 @@ function computeSizing(fields: ViewFieldSpec[], fieldWidthInput: number): PanelS
   };
 }
 
+// text, code, and markdown all edit a raw string in the same multiline text editor.
+const MULTILINE_TEXT_TYPES: ReadonlySet<PropertyConfig['type']> = new Set(['text', 'code', 'markdown']);
+const isMultilineText = (type: PropertyConfig['type']): boolean => MULTILINE_TEXT_TYPES.has(type);
+
 function controlHeight(field: ViewFieldSpec, value: string, width: number): number {
-  if (field.property.type === 'text' && field.editable) {
+  if (isMultilineText(field.property.type) && field.editable) {
     return Math.max(field.rows, wrapLines(value, width).length);
   }
   return 1;
@@ -614,7 +618,7 @@ function FieldControl({ field, fieldWidth, value, setValue, active, options, fil
       />
     );
   }
-  if (property.type === 'text') {
+  if (isMultilineText(property.type)) {
     return (
       <MultilineInput
         value={value}
