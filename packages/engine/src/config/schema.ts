@@ -34,6 +34,7 @@ export type PropertyConfig =
   | (PropertyBase & { type: 'money'; currency: string })
   | (PropertyBase & { type: 'integer' })
   | (PropertyBase & { type: 'date' })
+  | (PropertyBase & { type: 'datetime' })
   | (PropertyBase & { type: 'ref'; target: string; display?: string | undefined })
   | (PropertyBase & { type: 'boolean' })
   | (PropertyBase & { type: 'sequence' })
@@ -56,6 +57,7 @@ const EnumProperty = z.object({ ...baseProperty, type: z.literal('enum'), values
 const MoneyProperty = z.object({ ...baseProperty, type: z.literal('money'), currency: z.string().min(1) }).strict();
 const IntegerProperty = z.object({ ...baseProperty, type: z.literal('integer') }).strict();
 const DateProperty = z.object({ ...baseProperty, type: z.literal('date') }).strict();
+const DatetimeProperty = z.object({ ...baseProperty, type: z.literal('datetime') }).strict();
 const RefProperty = z
   .object({ ...baseProperty, type: z.literal('ref'), target: z.string().min(1), display: z.string().min(1).optional() })
   .strict();
@@ -80,6 +82,7 @@ export const PropertyConfigSchema: z.ZodType<PropertyConfig> = z.lazy(() =>
     MoneyProperty,
     IntegerProperty,
     DateProperty,
+    DatetimeProperty,
     RefProperty,
     BooleanProperty,
     SequenceProperty,

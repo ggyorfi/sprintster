@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { nowAsIso, parseIso, IsoInstant, IsoInstantToDate } from './index.js';
+import { nowAsIso, parseIso, IsoInstant, IsoInstantToDate, formatIsoMinute } from './index.js';
 
 describe('nowAsIso', () => {
   it('returns a string that parses back to a valid Date close to "now"', () => {
@@ -56,5 +56,23 @@ describe('IsoInstantToDate Zod schema', () => {
     const d = IsoInstantToDate.parse('2026-05-21T20:49:52.425Z');
     expect(d).toBeInstanceOf(Date);
     expect(d.getUTCFullYear()).toBe(2026);
+  });
+});
+
+describe('formatIsoMinute', () => {
+  it('renders a compact UTC date and time to the minute', () => {
+    expect(formatIsoMinute('2026-07-18T14:30:52.425Z')).toBe('2026-07-18 14:30');
+  });
+
+  it('normalises an offset to UTC', () => {
+    expect(formatIsoMinute('2026-07-18T16:30:00+02:00')).toBe('2026-07-18 14:30');
+  });
+
+  it('zero-pads month, day, hour, and minute', () => {
+    expect(formatIsoMinute('2026-01-05T04:07:00Z')).toBe('2026-01-05 04:07');
+  });
+
+  it('throws on garbage input', () => {
+    expect(() => formatIsoMinute('not a date')).toThrow(/invalid ISO date/);
   });
 });

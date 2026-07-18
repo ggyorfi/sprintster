@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PenceString } from '../money/index.js';
+import { IsoInstant } from '../time/index.js';
 import type { ObjectConfig, PropertyConfig } from './schema.js';
 
 function baseSchema(prop: PropertyConfig): z.ZodTypeAny {
@@ -27,6 +28,8 @@ function baseSchema(prop: PropertyConfig): z.ZodTypeAny {
     }
     case 'date':
       return z.iso.date();
+    case 'datetime':
+      return IsoInstant;
     case 'ref':
       return z.string().min(1);
     case 'boolean':

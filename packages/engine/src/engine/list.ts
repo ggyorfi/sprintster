@@ -1,4 +1,5 @@
 import { formatGBP, fromPence } from '../money/index.js';
+import { formatIsoMinute } from '../time/index.js';
 import type { ObjectConfig, PropertyConfig } from '../config/schema.js';
 
 export function formatCell(property: PropertyConfig, value: unknown, suffix = ''): string {
@@ -13,6 +14,9 @@ export function formatCell(property: PropertyConfig, value: unknown, suffix = ''
       break;
     case 'sequence':
       base = `#${String(value)}`;
+      break;
+    case 'datetime':
+      base = formatIsoMinute(String(value));
       break;
     case 'object':
       base = '';

@@ -88,6 +88,21 @@ describe('compileProperty: date', () => {
   });
 });
 
+describe('compileProperty: datetime', () => {
+  it('accepts an ISO instant to the second and rejects a date-only or garbage value', () => {
+    const schema = compileProperty({ name: 'publishedAt', type: 'datetime', validation: { required: true } });
+    expect(schema.parse('2026-07-18T14:30:00Z')).toBe('2026-07-18T14:30:00Z');
+    expect(schema.parse('2026-07-18T16:30:00.500+02:00')).toBe('2026-07-18T16:30:00.500+02:00');
+    expect(() => schema.parse('2026-07-18')).toThrow();
+    expect(() => schema.parse('18/07/2026 14:30')).toThrow();
+  });
+
+  it('is optional when not required', () => {
+    const schema = compileProperty({ name: 'publishedAt', type: 'datetime' });
+    expect(schema.parse(undefined)).toBeUndefined();
+  });
+});
+
 describe('compileProperty: ref and boolean', () => {
   it('ref compiles to a non-empty id string', () => {
     const schema = compileProperty({ name: 'client', type: 'ref', target: 'client', validation: { required: true } });

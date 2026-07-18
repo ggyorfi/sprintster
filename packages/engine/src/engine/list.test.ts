@@ -10,6 +10,7 @@ const integer: PropertyConfig = { name: 'paymentTermsDays', type: 'integer' };
 const id: PropertyConfig = { name: 'id', type: 'id', strategy: 'uuid' };
 const enumProp: PropertyConfig = { name: 'service', type: 'enum', values: ['student', 'other'] };
 const objectProp: PropertyConfig = { name: 'address', type: 'object', properties: [] };
+const datetime: PropertyConfig = { name: 'publishedAt', type: 'datetime' };
 
 describe('formatCell', () => {
   it('formats money pence as pounds', () => {
@@ -29,6 +30,11 @@ describe('formatCell', () => {
     expect(formatCell(enumProp, 'student')).toBe('student');
     expect(formatCell(objectProp, { line1: 'x' })).toBe('');
     expect(formatCell(money, null)).toBe('');
+  });
+
+  it('formats a datetime as a compact UTC minute string, sortable lexically', () => {
+    expect(formatCell(datetime, '2026-07-18T14:30:00Z')).toBe('2026-07-18 14:30');
+    expect(formatCell(datetime, '2026-07-18T16:30:00+02:00')).toBe('2026-07-18 14:30');
   });
 });
 
