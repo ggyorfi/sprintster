@@ -29,4 +29,7 @@ async function main(): Promise<void> {
   await runMain(root);
 }
 
-void main();
+void main().catch((err: unknown) => {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+});

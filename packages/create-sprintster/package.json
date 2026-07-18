@@ -1,0 +1,25 @@
+{
+  "name": "create-sprintster",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "create-sprintster": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.4.0"
+  },
+  "devDependencies": {
+    "@sprintster/engine": "workspace:*",
+    "@types/node": "^25.9.1",
+    "vitest": "^4.1.7"
+  }
+}

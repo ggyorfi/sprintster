@@ -31,8 +31,19 @@ export async function startDaemon(opts: {
 }): Promise<DaemonHandle> {
   setAppConfig(opts.config);
   const app = createApp({ apis: buildApis(opts.config, opts.store) });
-  const server = await new Promise<ReturnType<typeof serve>>((resolve) => {
+  const server = await new Promise<ReturnType<typeof serve>>((resolve, reject) => {
     const s = serve({ fetch: app.fetch, hostname: opts.host, port: opts.port }, () => resolve(s));
+    s.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        reject(
+          new Error(
+            `port ${opts.port} on ${opts.host} is already in use; change server.port in sprintster.config.json or stop the process using it`,
+          ),
+        );
+      } else {
+        reject(err);
+      }
+    });
   });
   return {
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),

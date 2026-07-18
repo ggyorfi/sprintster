@@ -14,6 +14,8 @@
     "test": "pnpm -r run test",
     "dev": "pnpm -r --parallel run dev",
     "clean": "pnpm -r exec rm -rf dist .tsbuildinfo node_modules/.cache",
+    "install-s8r": "pnpm -r run build && node scripts/install-s8r.mjs",
+    "remove-s8r": "node scripts/remove-s8r.mjs",
     "postinstall": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
   "devDependencies": {
