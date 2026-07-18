@@ -3,8 +3,9 @@ import type { PropertyConfig, ViewFieldSpec } from '@sprintster/engine';
 import { TextField, Select, RefPicker, type SelectOption } from '../ui/index.js';
 import styles from './Field.module.css';
 
-// Lazy so CodeMirror (a large dependency) only loads when a code/markdown field is actually rendered.
+// Lazy so the heavy editor dependencies (CodeMirror, TipTap) only load when a code/markdown field is actually rendered.
 const CodeEditor = lazy(() => import('../ui/CodeEditor.js').then((m) => ({ default: m.CodeEditor })));
+const MarkdownEditor = lazy(() => import('../ui/MarkdownEditor.js').then((m) => ({ default: m.MarkdownEditor })));
 
 const MISSING = String.fromCharCode(0x2014);
 
@@ -63,6 +64,16 @@ export function Field({ spec, value, onChange, refOptions, display }: FieldProps
       return (
         <Suspense fallback={<div className={styles.loading}>Loading editor…</div>}>
           <CodeEditor label={label} value={value} onChange={onChange} language={property.language} placeholder={placeholder} />
+        </Suspense>
+      );
+    case 'markdown':
+      return (
+        <Suspense fallback={<div className={styles.loading}>Loading editor…</div>}>
+          {(property.editor ?? 'wysiwyg') === 'source' ? (
+            <CodeEditor label={label} value={value} onChange={onChange} language="markdown" placeholder={placeholder} />
+          ) : (
+            <MarkdownEditor label={label} value={value} onChange={onChange} />
+          )}
         </Suspense>
       );
     default:
