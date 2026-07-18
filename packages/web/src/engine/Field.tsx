@@ -6,6 +6,7 @@ import styles from './Field.module.css';
 // Lazy so the heavy editor dependencies (CodeMirror, TipTap) only load when a code/markdown field is actually rendered.
 const CodeEditor = lazy(() => import('../ui/CodeEditor.js').then((m) => ({ default: m.CodeEditor })));
 const MarkdownEditor = lazy(() => import('../ui/MarkdownEditor.js').then((m) => ({ default: m.MarkdownEditor })));
+const ComboEditor = lazy(() => import('../ui/ComboEditor.js').then((m) => ({ default: m.ComboEditor })));
 
 const MISSING = String.fromCharCode(0x2014);
 
@@ -34,6 +35,13 @@ export function Field({ spec, value, onChange, refOptions, display }: FieldProps
   const { property, label, placeholder } = spec;
 
   if (!spec.editable) {
+    if (property.type === 'markdown') {
+      return (
+        <Suspense fallback={<div className={styles.loading}>Loading…</div>}>
+          <MarkdownEditor label={label} value={value} onChange={() => {}} readOnly />
+        </Suspense>
+      );
+    }
     return <ReadOnlyField label={label} value={display ?? value} />;
   }
 
@@ -66,16 +74,20 @@ export function Field({ spec, value, onChange, refOptions, display }: FieldProps
           <CodeEditor label={label} value={value} onChange={onChange} language={property.language} placeholder={placeholder} />
         </Suspense>
       );
-    case 'markdown':
+    case 'markdown': {
+      const mode = property.editor ?? 'combo';
       return (
         <Suspense fallback={<div className={styles.loading}>Loading editor…</div>}>
-          {(property.editor ?? 'wysiwyg') === 'source' ? (
+          {mode === 'source' ? (
             <CodeEditor label={label} value={value} onChange={onChange} language="markdown" placeholder={placeholder} />
-          ) : (
+          ) : mode === 'wysiwyg' ? (
             <MarkdownEditor label={label} value={value} onChange={onChange} />
+          ) : (
+            <ComboEditor label={label} value={value} onChange={onChange} />
           )}
         </Suspense>
       );
+    }
     default:
       return (
         <TextField
