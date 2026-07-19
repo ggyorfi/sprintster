@@ -66,8 +66,8 @@ function environments(backend: 'sqlite' | 'postgres'): Record<string, unknown> {
   return envs;
 }
 
-function projectPackageJson(name: string, localSprintsterPath?: string): unknown {
-  const base = {
+function projectPackageJson(name: string): unknown {
+  return {
     name,
     version: '0.0.0',
     private: true,
@@ -75,8 +75,11 @@ function projectPackageJson(name: string, localSprintsterPath?: string): unknown
     scripts: { dev: 's8r dev', daemon: 's8r daemon', start: 's8r' },
     dependencies: { sprintster: SPRINTSTER_VERSION },
   };
-  if (localSprintsterPath === undefined) return base;
-  return { ...base, pnpm: { overrides: { sprintster: `link:${localSprintsterPath}` } } };
+}
+
+// pnpm 10+ reads overrides from pnpm-workspace.yaml, not the package.json "pnpm" field.
+function pnpmWorkspaceYaml(localSprintsterPath: string): string {
+  return `overrides:\n  sprintster: 'link:${localSprintsterPath}'\n`;
 }
 
 function readme(name: string): string {
@@ -103,10 +106,14 @@ export function buildFiles(opts: ScaffoldOptions): Record<string, string> {
     environments: environments(opts.backend),
     app: { version: '1', objects: [userObject] },
   };
-  return {
+  const files: Record<string, string> = {
     'sprintster.config.json': `${JSON.stringify(config, null, 2)}\n`,
-    'package.json': `${JSON.stringify(projectPackageJson(opts.name, opts.localSprintsterPath), null, 2)}\n`,
+    'package.json': `${JSON.stringify(projectPackageJson(opts.name), null, 2)}\n`,
     '.gitignore': ['.sprintster/', 'node_modules/', ''].join('\n'),
     'README.md': readme(opts.name),
   };
+  if (opts.localSprintsterPath !== undefined) {
+    files['pnpm-workspace.yaml'] = pnpmWorkspaceYaml(opts.localSprintsterPath);
+  }
+  return files;
 }
