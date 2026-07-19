@@ -1,16 +1,16 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve, join } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
-export function webDistPath(): string {
+// Candidate locations for the built web bundle: vendored next to the bundled entry (published `sprintster`), then the monorepo path (dev).
+export function webDistCandidates(): string[] {
   const here = dirname(fileURLToPath(import.meta.url));
-  return resolve(here, '../../..', 'packages', 'web', 'dist');
+  return [resolve(here, 'web'), resolve(here, '../../..', 'packages', 'web', 'dist')];
 }
 
 export function webRootFrom(): string | undefined {
-  const dist = webDistPath();
-  return existsSync(dist) ? dist : undefined;
+  return webDistCandidates().find((dir) => existsSync(dir));
 }
 
 export interface OpenSpec {

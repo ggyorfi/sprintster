@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { openCommand, webDistPath } from './web.js';
+import { openCommand, webDistCandidates } from './web.js';
 
 describe('openCommand', () => {
   it('uses open on macOS', () => {
@@ -15,8 +15,10 @@ describe('openCommand', () => {
   });
 });
 
-describe('webDistPath', () => {
-  it('points at the web package dist directory', () => {
-    expect(webDistPath().endsWith(['packages', 'web', 'dist'].join('/'))).toBe(true);
+describe('webDistCandidates', () => {
+  it('includes a vendored dir and the monorepo web dist', () => {
+    const candidates = webDistCandidates();
+    expect(candidates.some((p) => p.endsWith('/web'))).toBe(true);
+    expect(candidates.some((p) => p.endsWith(['packages', 'web', 'dist'].join('/')))).toBe(true);
   });
 });

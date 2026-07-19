@@ -1,0 +1,48 @@
+{
+  "name": "sprintster",
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "s8r": "./dist/s8r.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup && tsc -p tsconfig.build.json && api-extractor run --local && node scripts/vendor-web.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.0.3",
+    "@hono/zod-validator": "^0.8.0",
+    "better-sqlite3": "^12.11.1",
+    "citty": "^0.2.2",
+    "hono": "^4.12.22",
+    "ink": "^7.0.3",
+    "ink-select-input": "^6.2.0",
+    "ink-text-input": "^6.0.0",
+    "kysely": "^0.29.2",
+    "pg": "^8.21.0",
+    "react": "^19.2.6",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@microsoft/api-extractor": "^7.58.11",
+    "@sprintster/cli": "workspace:*",
+    "@sprintster/engine": "workspace:*",
+    "@sprintster/storage-postgres": "workspace:*",
+    "@sprintster/storage-sqlite": "workspace:*",
+    "@sprintster/web": "workspace:*",
+    "tsup": "^8.5.0",
+    "typescript": "^6.0.3"
+  }
+}
