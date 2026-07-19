@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import * as p from '@clack/prompts';
 import { buildFiles, type ScaffoldOptions } from './template.js';
-import { parseArgs, linkCliPathFrom } from './args.js';
+import { parseArgs, localSprintsterPathFrom } from './args.js';
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv);
@@ -50,7 +50,7 @@ async function main(): Promise<void> {
   }
 
   const options: ScaffoldOptions = { name, backend };
-  if (args.local === true) options.linkCliPath = linkCliPathFrom(args.localPath);
+  if (args.local === true) options.localSprintsterPath = localSprintsterPathFrom(args.localPath);
   for (const [rel, content] of Object.entries(buildFiles(options))) {
     const full = join(dir, rel);
     mkdirSync(dirname(full), { recursive: true });

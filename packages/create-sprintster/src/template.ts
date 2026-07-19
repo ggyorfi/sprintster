@@ -1,8 +1,10 @@
 export interface ScaffoldOptions {
   name: string;
   backend: 'sqlite' | 'postgres';
-  linkCliPath?: string;
+  localSprintsterPath?: string;
 }
+
+const SPRINTSTER_VERSION = 'latest';
 
 const userObject = {
   name: 'user',
@@ -64,16 +66,17 @@ function environments(backend: 'sqlite' | 'postgres'): Record<string, unknown> {
   return envs;
 }
 
-function projectPackageJson(name: string, linkCliPath?: string): unknown {
+function projectPackageJson(name: string, localSprintsterPath?: string): unknown {
   const base = {
     name,
     version: '0.0.0',
     private: true,
     type: 'module',
     scripts: { dev: 's8r dev', daemon: 's8r daemon', start: 's8r' },
+    dependencies: { sprintster: SPRINTSTER_VERSION },
   };
-  if (linkCliPath === undefined) return base;
-  return { ...base, dependencies: { '@sprintster/cli': `link:${linkCliPath}` } };
+  if (localSprintsterPath === undefined) return base;
+  return { ...base, pnpm: { overrides: { sprintster: `link:${localSprintsterPath}` } } };
 }
 
 function readme(name: string): string {
@@ -102,7 +105,7 @@ export function buildFiles(opts: ScaffoldOptions): Record<string, string> {
   };
   return {
     'sprintster.config.json': `${JSON.stringify(config, null, 2)}\n`,
-    'package.json': `${JSON.stringify(projectPackageJson(opts.name, opts.linkCliPath), null, 2)}\n`,
+    'package.json': `${JSON.stringify(projectPackageJson(opts.name, opts.localSprintsterPath), null, 2)}\n`,
     '.gitignore': ['.sprintster/', 'node_modules/', ''].join('\n'),
     'README.md': readme(opts.name),
   };

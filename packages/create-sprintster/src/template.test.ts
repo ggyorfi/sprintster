@@ -28,21 +28,27 @@ describe('buildFiles', () => {
     expect(cfg.environments['dev']?.server.port).not.toBe(cfg.environments['prod']?.server.port);
   });
 
-  it('generates a package.json wired to s8r with no dependencies by default', () => {
+  it('generates a package.json wired to s8r that depends on sprintster with no overrides by default', () => {
     const files = buildFiles({ name: 'my-app', backend: 'sqlite' });
     const pkg = JSON.parse(files['package.json']!) as {
       name: string;
       scripts: Record<string, string>;
       dependencies?: Record<string, string>;
+      pnpm?: unknown;
     };
     expect(pkg.name).toBe('my-app');
     expect(pkg.scripts['dev']).toBe('s8r dev');
-    expect(pkg.dependencies).toBeUndefined();
+    expect(pkg.dependencies?.['sprintster']).toBe('latest');
+    expect(pkg.pnpm).toBeUndefined();
   });
 
-  it('adds a link: dependency on @sprintster/cli when linkCliPath is set', () => {
-    const files = buildFiles({ name: 'my-app', backend: 'sqlite', linkCliPath: '/abs/repo/packages/cli' });
-    const pkg = JSON.parse(files['package.json']!) as { dependencies?: Record<string, string> };
-    expect(pkg.dependencies?.['@sprintster/cli']).toBe('link:/abs/repo/packages/cli');
+  it('redirects sprintster to a local path via pnpm.overrides when localSprintsterPath is set', () => {
+    const files = buildFiles({ name: 'my-app', backend: 'sqlite', localSprintsterPath: '/abs/repo/packages/sprintster' });
+    const pkg = JSON.parse(files['package.json']!) as {
+      dependencies?: Record<string, string>;
+      pnpm?: { overrides?: Record<string, string> };
+    };
+    expect(pkg.dependencies?.['sprintster']).toBe('latest');
+    expect(pkg.pnpm?.overrides?.['sprintster']).toBe('link:/abs/repo/packages/sprintster');
   });
 });

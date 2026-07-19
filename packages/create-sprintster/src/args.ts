@@ -31,8 +31,8 @@ export function parseArgs(argv: ReadonlyArray<string>): Args {
   return out;
 }
 
-export function linkCliPathFrom(explicit: string | undefined): string {
+export function localSprintsterPathFrom(explicit: string | undefined): string {
   const here = dirname(fileURLToPath(import.meta.url));
   const repoRoot = explicit !== undefined ? resolve(explicit) : resolve(here, '../../..');
-  return join(repoRoot, 'packages', 'cli');
+  return join(repoRoot, 'packages', 'sprintster');
 }

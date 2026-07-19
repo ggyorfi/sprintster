@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseArgs, linkCliPathFrom } from './args.js';
+import { parseArgs, localSprintsterPathFrom } from './args.js';
 
 describe('parseArgs', () => {
   it('takes the first positional as the name', () => {
@@ -34,14 +34,14 @@ describe('parseArgs', () => {
   });
 });
 
-describe('linkCliPathFrom', () => {
-  it('appends packages/cli to an explicit repo path', () => {
-    expect(linkCliPathFrom('/some/repo')).toBe('/some/repo/packages/cli');
+describe('localSprintsterPathFrom', () => {
+  it('appends packages/sprintster to an explicit repo path', () => {
+    expect(localSprintsterPathFrom('/some/repo')).toBe('/some/repo/packages/sprintster');
   });
 
-  it('derives an absolute packages/cli path when none is given', () => {
-    const path = linkCliPathFrom(undefined);
+  it('derives an absolute packages/sprintster path when none is given', () => {
+    const path = localSprintsterPathFrom(undefined);
     expect(path.startsWith('/')).toBe(true);
-    expect(path.endsWith('/packages/cli')).toBe(true);
+    expect(path.endsWith('/packages/sprintster')).toBe(true);
   });
 });
