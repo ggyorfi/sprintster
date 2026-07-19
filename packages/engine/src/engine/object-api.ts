@@ -2,7 +2,7 @@ import type { z } from 'zod';
 import { AlreadyExistsError, InvalidStateError, NotFoundError, UniqueFieldError } from '../errors/api-error.js';
 import { createEntityApi, type EntityApi } from '../entity-api/factory.js';
 import { applyUpdate } from './diff.js';
-import { UniqueViolationError, type EventStore } from '../events/store.js';
+import { SYSTEM_ACTOR, UniqueViolationError, type EventStore } from '../events/store.js';
 import { compileCreateSchema, compileUpdateSchema } from '../config/compile.js';
 import type { CommandConfig, ObjectConfig } from '../config/schema.js';
 import type { PropertyConfig } from '../config/schema.js';
@@ -46,7 +46,7 @@ export function createObjectApi<State extends { id: string }>(
   options: CreateObjectApiOptions = {},
 ): ObjectApi<State> {
   const partitionId = options.partitionId ?? 0;
-  const defaultActor = options.actor ?? 'mihaly';
+  const defaultActor = options.actor ?? SYSTEM_ACTOR;
   const names = eventTypeNames(obj.name);
   const idKey = objectIdKey(obj.name);
   const { field: lifecycleField, kind } = lifecycleInfo(obj);

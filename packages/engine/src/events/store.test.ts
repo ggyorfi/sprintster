@@ -11,7 +11,7 @@ function makeInput(overrides: Partial<EventInput> = {}): EventInput {
     eventVersion: 1,
     payload: { foo: 'bar' },
     occurredAt: '2026-05-22T10:00:00.000Z',
-    actor: 'mihaly',
+    actor: 'tester',
     correlationId: null,
     ...overrides,
   };

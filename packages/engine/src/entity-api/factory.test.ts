@@ -50,7 +50,7 @@ describe('createEntityApi', () => {
       eventType: 'Created',
       eventVersion: 1,
       payload: { id: 'a' },
-      actor: 'mihaly',
+      actor: 'tester',
     }));
     expect(state).toEqual({ id: 'a', value: 0, removed: false });
   });
@@ -61,13 +61,13 @@ describe('createEntityApi', () => {
       eventType: 'Created',
       eventVersion: 1,
       payload: { id: 'a' },
-      actor: 'mihaly',
+      actor: 'tester',
     }));
     await api.createEvent('a', () => ({
       eventType: 'Incremented',
       eventVersion: 1,
       payload: { by: 5 },
-      actor: 'mihaly',
+      actor: 'tester',
     }));
     const events = await store.findByStream(0, 'counter', 'a');
     expect(events.map((e) => e.streamVersion)).toEqual([1, 2]);
@@ -79,13 +79,13 @@ describe('createEntityApi', () => {
       eventType: 'Created',
       eventVersion: 1,
       payload: { id: 'a' },
-      actor: 'mihaly',
+      actor: 'tester',
     }));
     const next = await api.createEvent('a', () => ({
       eventType: 'Incremented',
       eventVersion: 1,
       payload: { by: 7 },
-      actor: 'mihaly',
+      actor: 'tester',
     }));
     expect(next).toEqual({ id: 'a', value: 7, removed: false });
   });
@@ -96,7 +96,7 @@ describe('createEntityApi', () => {
       eventType: 'Created',
       eventVersion: 1,
       payload: { id: 'a' },
-      actor: 'mihaly',
+      actor: 'tester',
     }));
     await expect(
       api.createEvent('a', (state) => {
@@ -105,7 +105,7 @@ describe('createEntityApi', () => {
           eventType: 'Created',
           eventVersion: 1,
           payload: { id: 'a' },
-          actor: 'mihaly',
+          actor: 'tester',
         };
       }),
     ).rejects.toThrow(/already exists/);
@@ -117,19 +117,19 @@ describe('createEntityApi', () => {
       eventType: 'Created',
       eventVersion: 1,
       payload: { id: 'a' },
-      actor: 'mihaly',
+      actor: 'tester',
     }));
     await api.createEvent('b', () => ({
       eventType: 'Created',
       eventVersion: 1,
       payload: { id: 'b' },
-      actor: 'mihaly',
+      actor: 'tester',
     }));
     await api.createEvent('a', () => ({
       eventType: 'Incremented',
       eventVersion: 1,
       payload: { by: 3 },
-      actor: 'mihaly',
+      actor: 'tester',
     }));
     const all = await api.findMany();
     expect(all).toHaveLength(2);
@@ -158,7 +158,7 @@ describe('createEntityApi', () => {
       eventType: 'Created',
       eventVersion: 1,
       payload: { id: 'a' },
-      actor: 'mihaly',
+      actor: 'tester',
     }));
     expect((await api.findMany()).length).toBe(1);
     await store.append({
@@ -170,7 +170,7 @@ describe('createEntityApi', () => {
       eventVersion: 1,
       payload: {},
       occurredAt: new Date().toISOString(),
-      actor: 'mihaly',
+      actor: 'tester',
       correlationId: null,
     });
     expect((await api.findMany()).length).toBe(0);

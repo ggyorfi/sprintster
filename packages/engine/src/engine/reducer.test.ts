@@ -23,7 +23,7 @@ function eventRow(
     payload,
     occurredAt: '2026-05-22T10:00:00.000Z',
     recordedAt: '2026-05-22T10:00:00.000Z',
-    actor: 'mihaly',
+    actor: 'tester',
     correlationId: null,
   };
 }

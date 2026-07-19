@@ -1,4 +1,4 @@
-import { UniqueViolationError, type EventStore } from '../events/store.js';
+import { SYSTEM_ACTOR, UniqueViolationError, type EventStore } from '../events/store.js';
 import { nowAsIso } from '../time/index.js';
 import type { BlobData, BlobRef, BlobStore } from './store.js';
 
@@ -18,7 +18,7 @@ export interface CreateBlobApiOptions {
 
 export function createBlobApi(events: EventStore, blobs: BlobStore, options: CreateBlobApiOptions = {}): BlobApi {
   const partitionId = options.partitionId ?? 0;
-  const defaultActor = options.actor ?? 'mihaly';
+  const defaultActor = options.actor ?? SYSTEM_ACTOR;
 
   async function upload(
     bytes: Uint8Array,

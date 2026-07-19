@@ -1,3 +1,6 @@
+// Default actor for events with no authenticated user (there is no auth yet, so every daemon write falls back to this).
+export const SYSTEM_ACTOR = 'system';
+
 export interface EventInput {
   partitionId: number;
   streamType: string;

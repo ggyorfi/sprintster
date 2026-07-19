@@ -91,6 +91,12 @@ describe('createObjectApi over the client config: add', () => {
     expect(events[0]?.actor).toBe('somebody-else');
   });
 
+  it('defaults the actor to the system marker when none is configured', async () => {
+    const { store, api } = buildApi();
+    await api.add(validInput());
+    expect((await store.findByStream(0, 'client', ID_A))[0]?.actor).toBe('system');
+  });
+
   it('respects a non-zero partition', async () => {
     const store = new InMemoryEventStore();
     const api = createObjectApi(store, fixtureClientConfig, { partitionId: 7 });

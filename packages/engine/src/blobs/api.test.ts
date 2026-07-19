@@ -70,4 +70,11 @@ describe('createBlobApi', () => {
     const { hash } = await api.upload(enc('x'), null, 'someone');
     expect((await events.findByStream(0, '__blob', hash))[0]?.actor).toBe('someone');
   });
+
+  it('defaults the actor to the system marker when none is configured', async () => {
+    const events = new InMemoryEventStore();
+    const api = createBlobApi(events, new InMemoryBlobStore());
+    const { hash } = await api.upload(enc('x'));
+    expect((await events.findByStream(0, '__blob', hash))[0]?.actor).toBe('system');
+  });
 });
