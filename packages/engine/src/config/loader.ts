@@ -170,6 +170,9 @@ function checkProperties(scope: string, properties: PropertyConfig[], knownObjec
         throw new Error(`unique property '${scope}.${prop.name}' has type '${prop.type}'; unique is only supported on scalar fields`);
       }
     }
+    if (prop.validation?.caseInsensitive === true && prop.validation?.unique !== true) {
+      throw new Error(`property '${scope}.${prop.name}' sets caseInsensitive without unique; it only applies to unique fields`);
+    }
     if (prop.type === 'object') {
       checkProperties(`${scope}.${prop.name}`, prop.properties, knownObjects, true);
     }

@@ -152,6 +152,16 @@ describe('loadConfig: unique validation guard', () => {
   it('rejects unique on a refs field', () => {
     expect(() => loadConfig(rawWith({ name: 'tags', type: 'refs', target: 'page', validation: { unique: true } }))).toThrow(/unique/);
   });
+
+  it('accepts caseInsensitive alongside unique', () => {
+    expect(() =>
+      loadConfig(rawWith({ name: 'slug', type: 'text', validation: { unique: true, caseInsensitive: true } })),
+    ).not.toThrow();
+  });
+
+  it('rejects caseInsensitive without unique', () => {
+    expect(() => loadConfig(rawWith({ name: 'slug', type: 'text', validation: { caseInsensitive: true } }))).toThrow(/caseInsensitive/);
+  });
 });
 
 describe('loadConfig: code and markdown property options', () => {

@@ -543,4 +543,61 @@ describe('createObjectApi: field-level unique validation', () => {
     await api.add(validInput({ id: ID_B, name: 'Alfie Granger-Howell' }));
     expect((await api.list()).length).toBe(2);
   });
+
+  it('treats Foo and foo as distinct by default (case-sensitive)', async () => {
+    const { api } = buildPages();
+    await api.add({ id: ID_A, slug: 'Foo', code: null });
+    await api.add({ id: ID_B, slug: 'foo', code: null });
+    expect((await api.list()).length).toBe(2);
+  });
+});
+
+describe('createObjectApi: case-insensitive unique', () => {
+  const pageObject: ObjectConfig = {
+    name: 'page',
+    title: 'Page',
+    titlePlural: 'Pages',
+    lifecycle: { softDelete: 'removed' },
+    properties: [
+      { name: 'id', type: 'id', strategy: 'uuid', system: true },
+      { name: 'slug', type: 'text', validation: { required: true, unique: true, caseInsensitive: true } },
+      { name: 'removed', type: 'boolean', system: true },
+    ],
+    lists: [],
+  };
+
+  function buildPages() {
+    const store = new InMemoryEventStore();
+    const api = createObjectApi<Record<string, unknown> & { id: string }>(store, pageObject);
+    return { store, api };
+  }
+
+  it('collides on values differing only by case', async () => {
+    const { api } = buildPages();
+    await api.add({ id: ID_A, slug: 'Foo' });
+    await expect(api.add({ id: ID_B, slug: 'foo' })).rejects.toBeInstanceOf(UniqueFieldError);
+  });
+
+  it('still allows genuinely distinct values', async () => {
+    const { api } = buildPages();
+    await api.add({ id: ID_A, slug: 'Foo' });
+    await api.add({ id: ID_B, slug: 'Bar' });
+    expect((await api.list()).length).toBe(2);
+  });
+
+  it('permits a case-only change on the same record (no self-collision)', async () => {
+    const { api } = buildPages();
+    await api.add({ id: ID_A, slug: 'Foo' });
+    const out = await api.update(ID_A, { slug: 'FOO' });
+    expect(out['slug']).toBe('FOO');
+    await expect(api.add({ id: ID_B, slug: 'foo' })).rejects.toBeInstanceOf(UniqueFieldError);
+  });
+
+  it('frees the value on soft-delete regardless of case', async () => {
+    const { api } = buildPages();
+    await api.add({ id: ID_A, slug: 'Foo' });
+    await api.remove!(ID_A);
+    await api.add({ id: ID_B, slug: 'FOO' });
+    expect((await api.get(ID_B))?.['slug']).toBe('FOO');
+  });
 });

@@ -14,6 +14,7 @@ export const ValidationRules = z
     maxItems: z.number().int().nonnegative().optional(),
     format: z.enum(['email']).optional(),
     unique: z.boolean().optional(),
+    caseInsensitive: z.boolean().optional(),
   })
   .strict();
 export type ValidationRules = z.infer<typeof ValidationRules>;

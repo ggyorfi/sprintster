@@ -56,7 +56,10 @@ export function createObjectApi<State extends { id: string }>(
   const refFields = obj.properties
     .filter((p): p is Extract<PropertyConfig, { type: 'ref' | 'refs' }> => p.type === 'ref' || p.type === 'refs')
     .map((p) => ({ name: p.name, target: p.target, multi: p.type === 'refs' }));
-  const uniqueFields = obj.properties.filter((p) => p.validation?.unique === true).map((p) => p.name);
+  const uniqueFields = obj.properties
+    .filter((p) => p.validation?.unique === true)
+    .map((p) => ({ name: p.name, caseInsensitive: p.validation?.caseInsensitive === true }));
+  const uniqueByName = new Map(uniqueFields.map((u) => [u.name, u] as const));
   const commandByName = new Map(commandEventInfos(obj).map((ce) => [ce.command.name, ce] as const));
 
   const base = createEntityApi<State>(store, {
@@ -96,8 +99,13 @@ export function createObjectApi<State extends { id: string }>(
     value: unknown;
   }
 
+  // Case-insensitive unique fields key their reservation stream by the lowercased value, so `Foo` and `foo` collide.
+  function normalizeUnique(field: string, value: unknown): unknown {
+    return uniqueByName.get(field)?.caseInsensitive === true && typeof value === 'string' ? value.toLowerCase() : value;
+  }
+
   function uniqueStreamId(field: string, value: unknown): string {
-    return JSON.stringify([obj.name, field, value]);
+    return JSON.stringify([obj.name, field, normalizeUnique(field, value)]);
   }
 
   // Reserve a value for a field; throws UniqueFieldError if a live record already holds it. Mirrors allocate()'s OCC loop.
@@ -206,8 +214,8 @@ export function createObjectApi<State extends { id: string }>(
     const { id: _id, ...data } = parsed;
     void _id;
     const claims: Claim[] = uniqueFields
-      .filter((f) => isClaimable(data[f]))
-      .map((f) => ({ field: f, value: data[f] }));
+      .filter((f) => isClaimable(data[f.name]))
+      .map((f) => ({ field: f.name, value: data[f.name] }));
     await claimAll(claims, actor);
     try {
       for (const field of sequenceFields) {
@@ -236,20 +244,20 @@ export function createObjectApi<State extends { id: string }>(
       if (live) {
         const cur = current as Record<string, unknown>;
         for (const f of uniqueFields) {
-          if (!(f in patchRec)) continue;
-          const next = patchRec[f];
-          const prev = cur[f];
-          if (next === prev) continue;
+          if (!(f.name in patchRec)) continue;
+          const next = patchRec[f.name];
+          const prev = cur[f.name];
+          if (normalizeUnique(f.name, next) === normalizeUnique(f.name, prev)) continue;
           if (isClaimable(next)) {
             try {
-              await claim(f, next, actor);
-              claimed.push({ field: f, value: next });
+              await claim(f.name, next, actor);
+              claimed.push({ field: f.name, value: next });
             } catch (err) {
               await releaseAll(claimed, actor);
               throw err;
             }
           }
-          if (isClaimable(prev)) toFree.push({ field: f, value: prev });
+          if (isClaimable(prev)) toFree.push({ field: f.name, value: prev });
         }
       }
     }
@@ -326,7 +334,7 @@ export function createObjectApi<State extends { id: string }>(
       });
       const rec = state as Record<string, unknown>;
       for (const f of uniqueFields) {
-        if (isClaimable(rec[f])) await release(f, rec[f], actor);
+        if (isClaimable(rec[f.name])) await release(f.name, rec[f.name], actor);
       }
       return state;
     };
