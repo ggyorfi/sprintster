@@ -29,6 +29,9 @@ export function commandEventInfos(obj: ObjectConfig): CommandEventInfo[] {
 
 // softDelete is a boolean flag (init false, flipped true on remove); statusField is an enum (init to its config default; both lifecycle fields are excluded from the create/update schemas, so a statusField transition is a future named command, not a generic field edit, and has no remove).
 export function lifecycleInfo(obj: ObjectConfig): LifecycleInfo {
+  if (obj.lifecycle === undefined) {
+    throw new Error(`object '${obj.name}' has no lifecycle (singletons do not use one)`);
+  }
   if ('softDelete' in obj.lifecycle) {
     return { field: obj.lifecycle.softDelete, kind: 'softDelete', initial: false };
   }

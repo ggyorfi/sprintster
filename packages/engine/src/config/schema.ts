@@ -201,9 +201,10 @@ export const ObjectConfig = z
     name: z.string().min(1),
     title: z.string(),
     titlePlural: z.string(),
-    lifecycle: Lifecycle,
+    singleton: z.boolean().optional(),
+    lifecycle: Lifecycle.optional(),
     properties: z.array(PropertyConfigSchema).min(1),
-    lists: z.array(ListConfig),
+    lists: z.array(ListConfig).default([]),
     views: z.array(ViewConfig).optional(),
     commands: z.array(CommandConfig).optional(),
   })

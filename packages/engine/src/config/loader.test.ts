@@ -193,6 +193,65 @@ describe('loadConfig: code and markdown property options', () => {
   });
 });
 
+describe('loadConfig: singleton objects', () => {
+  function singletonRaw(props: unknown[]): unknown {
+    const names = (props as Array<{ name: string; type: string }>).filter((p) => p.type !== 'id').map((p) => p.name);
+    return {
+      version: '1',
+      objects: [
+        {
+          name: 'settings',
+          title: 'Settings',
+          titlePlural: 'Settings',
+          singleton: true,
+          properties: props,
+          views: [{ name: 'default', title: 'Settings', fields: names.map((n) => ({ property: n })) }],
+        },
+      ],
+    };
+  }
+
+  it('loads a singleton with no lifecycle and defaults its lists to empty', () => {
+    const c = loadConfig(
+      singletonRaw([
+        { name: 'siteName', type: 'text', default: 'My Site' },
+        { name: 'tagline', type: 'text', nullable: true },
+        { name: 'itemsPerPage', type: 'integer', default: 10 },
+        { name: 'tags', type: 'refs', target: 'settings' },
+      ]),
+    );
+    expect(c.objects[0]?.singleton).toBe(true);
+    expect(c.objects[0]?.lifecycle).toBeUndefined();
+    expect(c.objects[0]?.lists).toEqual([]);
+  });
+
+  it('rejects a singleton field with no initial value (required, no default)', () => {
+    expect(() => loadConfig(singletonRaw([{ name: 'siteName', type: 'text', validation: { required: true } }]))).toThrow(
+      /initial value/,
+    );
+  });
+
+  it('rejects a non-nullable singleton field without a default', () => {
+    expect(() => loadConfig(singletonRaw([{ name: 'enabled', type: 'boolean' }]))).toThrow(/initial value/);
+  });
+
+  it('requires a lifecycle for non-singleton objects', () => {
+    const raw = {
+      version: '1',
+      objects: [
+        {
+          name: 'thing',
+          title: 'Thing',
+          titlePlural: 'Things',
+          properties: [{ name: 'id', type: 'id', strategy: 'uuid', system: true }],
+          lists: [],
+        },
+      ],
+    };
+    expect(() => loadConfig(raw)).toThrow(/lifecycle/);
+  });
+});
+
 describe('loadConfig: refs target validation', () => {
   function rawWithRefs(target: string): unknown {
     return {

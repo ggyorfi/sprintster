@@ -13,10 +13,33 @@ function validateSemantics(config: Config): void {
   const objectsByName = new Map(config.objects.map((o) => [o.name, o]));
   for (const obj of config.objects) {
     checkProperties(obj.name, obj.properties, knownObjects);
-    checkLifecycle(obj);
-    checkCommands(obj);
     checkViews(obj, objectsByName);
-    checkListActions(obj);
+    if (obj.singleton === true) {
+      checkSingleton(obj);
+    } else {
+      if (obj.lifecycle === undefined) {
+        throw new Error(`object '${obj.name}' must declare a lifecycle unless it is a singleton`);
+      }
+      checkLifecycle(obj);
+      checkCommands(obj);
+      checkListActions(obj);
+    }
+  }
+}
+
+// A singleton is served from config defaults with zero events, so every non-id field needs an initial value.
+function hasInitialValue(prop: PropertyConfig): boolean {
+  return prop.default !== undefined || prop.nullable === true || prop.type === 'array' || prop.type === 'refs';
+}
+
+function checkSingleton(obj: ObjectConfig): void {
+  for (const prop of obj.properties) {
+    if (prop.type === 'id') continue;
+    if (!hasInitialValue(prop)) {
+      throw new Error(
+        `singleton '${obj.name}' field '${prop.name}' has no initial value; give it a default or make it nullable`,
+      );
+    }
   }
 }
 
@@ -101,7 +124,7 @@ function checkListActions(obj: ObjectConfig): void {
         if (action.view !== undefined) {
           throw new Error(`list action '${obj.name}.${list.name}.${action.hotkey}': kind 'delete' must not set 'view'`);
         }
-        if (!('softDelete' in obj.lifecycle)) {
+        if (obj.lifecycle === undefined || !('softDelete' in obj.lifecycle)) {
           throw new Error(`list action '${obj.name}.${list.name}.${action.hotkey}': kind 'delete' requires a softDelete lifecycle`);
         }
         continue;
@@ -120,7 +143,7 @@ function checkListActions(obj: ObjectConfig): void {
 
 function checkCommands(obj: ObjectConfig): void {
   if (obj.commands === undefined || obj.commands.length === 0) return;
-  if (!('statusField' in obj.lifecycle)) {
+  if (obj.lifecycle === undefined || !('statusField' in obj.lifecycle)) {
     throw new Error(`object '${obj.name}': transition commands require a statusField lifecycle`);
   }
   const statusFieldName = obj.lifecycle.statusField;
@@ -180,6 +203,7 @@ function checkProperties(scope: string, properties: PropertyConfig[], knownObjec
 }
 
 function checkLifecycle(obj: ObjectConfig): void {
+  if (obj.lifecycle === undefined) return;
   const field = 'softDelete' in obj.lifecycle ? obj.lifecycle.softDelete : obj.lifecycle.statusField;
   if (!obj.properties.some((p) => p.name === field)) {
     throw new Error(`lifecycle field '${field}' is not a property of object '${obj.name}'`);

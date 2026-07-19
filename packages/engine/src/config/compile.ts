@@ -109,6 +109,7 @@ export function compileObject(obj: { properties: PropertyConfig[] }): z.ZodTypeA
 type ObjectShape = Pick<ObjectConfig, 'properties' | 'lifecycle'>;
 
 function lifecycleFieldName(lifecycle: ObjectConfig['lifecycle']): string {
+  if (lifecycle === undefined) return '';
   return 'softDelete' in lifecycle ? lifecycle.softDelete : lifecycle.statusField;
 }
 
