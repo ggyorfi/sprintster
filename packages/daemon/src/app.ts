@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { appConfig, type BlobApi, type ObjectConfig, type PluginObjectApi } from '@sprintster/engine';
+import { appConfig, objectRoute, type BlobApi, type ObjectConfig, type PluginObjectApi } from '@sprintster/engine';
 import { healthRoute } from './routes/health.js';
 import { createObjectRoute } from './routes/object.js';
 import { createAssetRoute } from './routes/asset.js';
@@ -27,7 +27,7 @@ export function createApp(deps: AppDeps): Hono {
     }),
   );
   for (const { api, obj } of deps.apis) {
-    app.route(`/${obj.titlePlural.toLowerCase()}`, createObjectRoute(api, obj));
+    app.route(`/${objectRoute(obj)}`, createObjectRoute(api, obj));
   }
   if (deps.blobApi !== undefined) {
     app.route('/assets', createAssetRoute(deps.blobApi));

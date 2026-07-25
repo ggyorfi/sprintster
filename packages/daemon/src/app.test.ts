@@ -450,3 +450,52 @@ describe('static web hosting (webRoot)', () => {
     expect((await app.request('/clients')).status).toBe(200);
   });
 });
+
+describe('object route paths', () => {
+  function mount(obj: ObjectConfig) {
+    const store = new InMemoryEventStore();
+    return createApp({ apis: [{ obj, api: createObjectApi<{ id: string }>(store, obj) }] });
+  }
+
+  function objWith(over: Partial<ObjectConfig>): ObjectConfig {
+    return {
+      name: 'settings',
+      title: 'Site Setting',
+      titlePlural: 'Site Settings',
+      lifecycle: { softDelete: 'removed' },
+      properties: [
+        { name: 'id', type: 'id', strategy: 'uuid', system: true },
+        { name: 'removed', type: 'boolean', system: true },
+      ],
+      lists: [{ name: 'default', title: 'Settings', columns: [{ property: 'id', label: 'ID', width: 10 }] }],
+      ...over,
+    };
+  }
+
+  it('mounts a multi-word label as a hyphenated slug', async () => {
+    const app = mount(objWith({}));
+    expect((await app.request('/site-settings')).status).toBe(200);
+  });
+
+  it('does not mount the raw label with a space in it', async () => {
+    const app = mount(objWith({}));
+    expect((await app.request('/site settings')).status).toBe(404);
+    expect((await app.request('/site%20settings')).status).toBe(404);
+  });
+
+  it('folds an accented label to ASCII', async () => {
+    const app = mount(objWith({ titlePlural: 'Beállítások' }));
+    expect((await app.request('/beallitasok')).status).toBe(200);
+  });
+
+  it('leaves a single-word label unchanged', async () => {
+    const app = mount(objWith({ name: 'page', title: 'Page', titlePlural: 'Pages' }));
+    expect((await app.request('/pages')).status).toBe(200);
+  });
+
+  it('honours an explicit route override', async () => {
+    const app = mount(objWith({ route: 'config-panel' }));
+    expect((await app.request('/config-panel')).status).toBe(200);
+    expect((await app.request('/site-settings')).status).toBe(404);
+  });
+});

@@ -21,13 +21,39 @@ lifecycle, a set of **properties** (fields), one or more **list** screens, and
 
 | Field | Required | Meaning |
 |---|---|---|
-| `name` | yes | Unique machine name (used in the API path and events). |
+| `name` | yes | Unique machine name (used in event names). |
 | `title` / `titlePlural` | yes | Display names. |
+| `route` | no | HTTP path segment; defaults to the slug of `titlePlural` (see below). |
 | `lifecycle` | yes | How records are retired (see below). |
 | `properties` | yes | The fields (at least one). |
 | `lists` | no | Table screens; see [Views and lists](./views-and-lists.md). |
 | `views` | no | Forms; see [Views and lists](./views-and-lists.md). |
 | `commands` | no | Named status transitions (requires a `statusField` lifecycle). |
+
+## Route
+
+Each object is served by the daemon under a path derived from `titlePlural`:
+lowercased, accents folded to ASCII, runs of whitespace, underscores and
+punctuation collapsed to a single `-`, anything left outside `[a-z0-9-]`
+dropped.
+
+| `titlePlural` | path |
+|---|---|
+| `Posts` | `/posts` |
+| `Site Settings` | `/site-settings` |
+| `Beállítások` | `/beallitasok` |
+
+Set `route` explicitly when the label and the URL should differ. The value must
+already be a slug.
+
+```jsonc
+{ "titlePlural": "Site Settings", "route": "config-panel" }   // served at /config-panel
+```
+
+Routes are resolved when the config loads, so `GET /config` reports the
+resolved `route` on every object: a client never has to re-derive it. Loading
+fails if two objects resolve to the same path, if a label slugs to nothing, or
+if a route collides with `health`, `config` or `assets`.
 
 ## Lifecycle
 

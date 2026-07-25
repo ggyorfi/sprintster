@@ -1,6 +1,7 @@
 import { ApiError } from '../errors/api-error.js';
 import { appConfig } from '../config/app-config.js';
 import type { ObjectConfig } from '../config/schema.js';
+import { objectRoute } from '../config/route.js';
 import type { ObjectStatus } from '../plugin/types.js';
 
 export class NetworkError extends Error {
@@ -45,7 +46,7 @@ export function createApiClient(
   const fetchImpl = options.fetch ?? fetch;
   const trimmedBase = baseUrl.replace(/\/+$/, '');
   const objects = options.objects ?? appConfig.objects;
-  const pathByName = new Map(objects.map((o) => [o.name, `/${o.titlePlural.toLowerCase()}`]));
+  const pathByName = new Map(objects.map((o) => [o.name, `/${objectRoute(o)}`]));
 
   async function call<T>(opts: {
     method: 'GET' | 'POST' | 'DELETE' | 'PATCH';

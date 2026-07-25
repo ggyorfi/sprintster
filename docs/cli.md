@@ -34,7 +34,8 @@ configured for the `dev` environment).
 ## What the daemon serves
 
 - The HTTP API for every object (list, get, create, update, remove, and status
-  transitions), under `/<objects>` (the object's lowercased plural).
+  transitions), under `/<objects>` (the object's `route`; see
+  [Objects and properties](./objects-and-properties.md#route)).
 - `GET /config`: the app config the frontends render from.
 - `POST /assets` and `GET /assets/:hash`: image upload and serving.
 - The built web GUI (if present), served as a single-page app.

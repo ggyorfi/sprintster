@@ -1,14 +1,17 @@
 import { ConfigSchema, type Config, type ObjectConfig, type PropertyConfig } from './schema.js';
+import { objectRoute, slugify, RESERVED_ROUTES } from './route.js';
 
 export function loadConfig(raw: unknown): Config {
   const config = ConfigSchema.parse(raw);
   validateSemantics(config);
-  return config;
+  // Resolve every route up front so `/config` consumers never re-derive the slug rule.
+  return { ...config, objects: config.objects.map((o) => ({ ...o, route: objectRoute(o) })) };
 }
 
 function validateSemantics(config: Config): void {
   const objectNames = config.objects.map((o) => o.name);
   assertUnique(objectNames, 'object name');
+  checkRoutes(config);
   const knownObjects = new Set(objectNames);
   const objectsByName = new Map(config.objects.map((o) => [o.name, o]));
   for (const obj of config.objects) {
@@ -24,6 +27,33 @@ function validateSemantics(config: Config): void {
       checkCommands(obj);
       checkListActions(obj);
     }
+  }
+}
+
+function checkRoutes(config: Config): void {
+  const ownerByRoute = new Map<string, string>();
+  for (const obj of config.objects) {
+    if (obj.route !== undefined && slugify(obj.route) !== obj.route) {
+      throw new Error(
+        `object '${obj.name}' route '${obj.route}' is not a slug; use '${slugify(obj.route)}'`,
+      );
+    }
+    const route = objectRoute(obj);
+    if (route === '') {
+      throw new Error(
+        `object '${obj.name}' titlePlural '${obj.titlePlural}' slugs to nothing; give it an explicit 'route'`,
+      );
+    }
+    if (RESERVED_ROUTES.has(route)) {
+      throw new Error(
+        `object '${obj.name}' route '${route}' is reserved by the daemon (${[...RESERVED_ROUTES].join(', ')})`,
+      );
+    }
+    const owner = ownerByRoute.get(route);
+    if (owner !== undefined) {
+      throw new Error(`duplicate object route '${route}': '${owner}' and '${obj.name}'`);
+    }
+    ownerByRoute.set(route, obj.name);
   }
 }
 

@@ -282,6 +282,88 @@ describe('loadConfig: refs target validation', () => {
   });
 });
 
+describe('loadConfig: object routes', () => {
+  function rawWithObjects(...objects: Array<Record<string, unknown>>): unknown {
+    return {
+      version: '1',
+      objects: objects.map((o) => ({
+        lifecycle: { softDelete: 'removed' },
+        properties: [
+          { name: 'id', type: 'id', strategy: 'uuid', system: true },
+          { name: 'removed', type: 'boolean', system: true },
+        ],
+        lists: [],
+        ...o,
+      })),
+    };
+  }
+
+  it('resolves a route on every object', () => {
+    const config = loadConfig(
+      rawWithObjects({ name: 'settings', title: 'Site Setting', titlePlural: 'Site Settings' }),
+    );
+    expect(config.objects[0]?.route).toBe('site-settings');
+  });
+
+  it('keeps an explicit route', () => {
+    const config = loadConfig(
+      rawWithObjects({ name: 'settings', title: 'Site Setting', titlePlural: 'Site Settings', route: 'config-panel' }),
+    );
+    expect(config.objects[0]?.route).toBe('config-panel');
+  });
+
+  it('is idempotent across a reload of its own output', () => {
+    const once = loadConfig(rawWithObjects({ name: 'settings', title: 'Site Setting', titlePlural: 'Site Settings' }));
+    expect(loadConfig(once).objects[0]?.route).toBe('site-settings');
+  });
+
+  it('rejects two objects that slug to the same route', () => {
+    expect(() =>
+      loadConfig(
+        rawWithObjects(
+          { name: 'settings', title: 'Site Setting', titlePlural: 'Site Settings' },
+          { name: 'siteSettings', title: 'Site-Setting', titlePlural: 'Site-Settings' },
+        ),
+      ),
+    ).toThrow(/duplicate object route 'site-settings'/);
+  });
+
+  it('rejects an explicit route colliding with a derived one', () => {
+    expect(() =>
+      loadConfig(
+        rawWithObjects(
+          { name: 'page', title: 'Page', titlePlural: 'Pages' },
+          { name: 'article', title: 'Article', titlePlural: 'Articles', route: 'pages' },
+        ),
+      ),
+    ).toThrow(/duplicate object route 'pages'/);
+  });
+
+  it.each(['health', 'config', 'assets'])('rejects the daemon-reserved route %s', (route) => {
+    expect(() => loadConfig(rawWithObjects({ name: 'thing', title: 'Thing', titlePlural: 'Things', route }))).toThrow(
+      /reserved by the daemon/,
+    );
+  });
+
+  it('rejects a reserved route reached by slugifying the label', () => {
+    expect(() => loadConfig(rawWithObjects({ name: 'setting', title: 'Config', titlePlural: 'Config' }))).toThrow(
+      /reserved by the daemon/,
+    );
+  });
+
+  it('rejects a label that slugs to nothing', () => {
+    expect(() => loadConfig(rawWithObjects({ name: 'thing', title: 'Thing', titlePlural: '...' }))).toThrow(
+      /slugs to nothing/,
+    );
+  });
+
+  it('rejects an explicit route that is not already a slug', () => {
+    expect(() =>
+      loadConfig(rawWithObjects({ name: 'settings', title: 'Site Setting', titlePlural: 'Site Settings', route: 'Site Settings' })),
+    ).toThrow(/is not a slug; use 'site-settings'/);
+  });
+});
+
 describe('loadConfig: semantic validation', () => {
   it('rejects duplicate object names', () => {
     const bad = clone();
