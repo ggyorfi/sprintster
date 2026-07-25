@@ -16,6 +16,12 @@ export interface AppDeps {
   webRoot?: string;
 }
 
+// A client-side route has no file extension on its last segment; a missing asset does.
+function looksLikeFile(path: string): boolean {
+  const last = path.slice(path.lastIndexOf('/') + 1);
+  return last.includes('.');
+}
+
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
   app.route('/health', healthRoute);
@@ -35,7 +41,10 @@ export function createApp(deps: AppDeps): Hono {
   if (deps.webRoot !== undefined) {
     const root = deps.webRoot;
     app.use('/*', serveStatic({ root }));
-    app.get('*', serveStatic({ path: 'index.html', root }));
+    app.get('*', async (c, next) => {
+      if (looksLikeFile(c.req.path)) return next();
+      return serveStatic({ path: 'index.html', root })(c, next);
+    });
   }
   return app;
 }

@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import { isApiError, type BlobApi } from '@sprintster/engine';
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
+const SHA256 = /^[0-9a-f]{64}$/;
 
 export function createAssetRoute(blobApi: BlobApi): Hono {
   const route = new Hono();
@@ -24,8 +25,11 @@ export function createAssetRoute(blobApi: BlobApi): Hono {
     }
   });
 
-  route.get('/:hash', async (c) => {
-    const blob = await blobApi.get(c.req.param('hash'));
+  route.get('/:hash', async (c, next) => {
+    const hash = c.req.param('hash');
+    // Only claim paths that could be a blob, so static files under /assets fall through.
+    if (!SHA256.test(hash)) return next();
+    const blob = await blobApi.get(hash);
     if (blob === null) return c.json({ code: 'not_found', message: 'blob not found' }, 404);
     return new Response(blob.bytes as BodyInit, {
       headers: {

@@ -442,6 +442,12 @@ describe('static web hosting (webRoot)', () => {
     expect(await res.text()).toContain('id="root"');
   });
 
+  it('404s a missing file instead of returning index.html', async () => {
+    const app = withWeb();
+    expect((await app.request('/_app/missing.js')).status).toBe(404);
+    expect((await app.request('/missing.css')).status).toBe(404);
+  });
+
   it('does not let the web catch-all shadow the API', async () => {
     const app = withWeb();
     expect((await app.request('/health')).status).toBe(200);

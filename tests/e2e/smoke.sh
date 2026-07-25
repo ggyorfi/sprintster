@@ -43,6 +43,18 @@ code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "http://127.0.0.1:$PORT/us
   -H 'content-type: application/json' -d '{"id":"22222222-2222-4222-8222-222222222222","name":""}')
 [ "$code" = "400" ] || fail "expected 400 for empty name, got $code"
 
-curl -sf "http://127.0.0.1:$PORT/" | grep -q 'id="root"' || fail "web GUI not served at /"
+index=$(curl -sf "http://127.0.0.1:$PORT/") || fail "web GUI not served at /"
+echo "$index" | grep -q 'id="root"' || fail "web GUI not served at /"
 
-echo "E2E OK: scaffold -> s8r daemon -> user CRUD + validation + web GUI served (sqlite)"
+# The GUI is blank unless the files index.html points at are actually reachable.
+refs=$(echo "$index" | grep -o '\(src\|href\)="/[^"]*\.\(js\|css\)"' | sed 's/.*="//;s/"$//')
+[ -n "$refs" ] || fail "index.html references no js/css; the bundle is not wired up"
+for ref in $refs; do
+  code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$PORT$ref")
+  [ "$code" = "200" ] || fail "bundle file $ref returned $code, not 200"
+done
+
+code=$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:$PORT/_app/does-not-exist.js")
+[ "$code" = "404" ] || fail "expected 404 for a missing bundle file, got $code"
+
+echo "E2E OK: scaffold -> s8r daemon -> user CRUD + validation + web GUI served with reachable bundle (sqlite)"

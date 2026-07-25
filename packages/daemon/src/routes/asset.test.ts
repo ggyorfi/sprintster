@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { createBlobApi, InMemoryBlobStore, InMemoryEventStore } from '@sprintster/engine';
 import { createApp } from '../app.js';
 
@@ -71,7 +71,51 @@ describe('GET /assets/:hash', () => {
 
   it('returns 404 for an unknown hash', async () => {
     const { app } = buildApp();
-    expect((await app.request('/assets/deadbeef')).status).toBe(404);
+    const res = await app.request(`/assets/${'0'.repeat(64)}`);
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { code: string }).code).toBe('not_found');
+  });
+});
+
+describe('/assets does not swallow the web bundle', () => {
+  function webApp(files: Record<string, string>) {
+    const dir = mkdtempSync(join(tmpdir(), 'sprintster-web-'));
+    for (const [name, body] of Object.entries(files)) {
+      const target = join(dir, name);
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, body);
+    }
+    const events = new InMemoryEventStore();
+    return createApp({ apis: [], blobApi: createBlobApi(events, new InMemoryBlobStore()), webRoot: dir });
+  }
+
+  it('serves a bundle file under the vite assetsDir', async () => {
+    const app = webApp({ 'index.html': '<div id="root"></div>', '_app/index-Bk.js': 'export const x = 1;' });
+    const res = await app.request('/_app/index-Bk.js');
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('export const x');
+  });
+
+  it('falls through to static for an /assets path that is not a sha256', async () => {
+    const app = webApp({ 'index.html': '<div id="root"></div>', 'assets/index-Bk.js': 'export const y = 2;' });
+    const res = await app.request('/assets/index-Bk.js');
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('export const y');
+  });
+
+  it('still serves a real blob when a webRoot is mounted', async () => {
+    const app = webApp({ 'index.html': '<div id="root"></div>' });
+    const hash = await hashOf(await app.request('/assets', upload(png, 'image/png')));
+    const res = await app.request(`/assets/${hash}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/png');
+  });
+
+  it('still 404s a missing blob rather than falling through to the SPA', async () => {
+    const app = webApp({ 'index.html': '<div id="root"></div>' });
+    const res = await app.request(`/assets/${'0'.repeat(64)}`);
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { code: string }).code).toBe('not_found');
   });
 });
 

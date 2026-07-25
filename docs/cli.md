@@ -37,8 +37,13 @@ configured for the `dev` environment).
   transitions), under `/<objects>` (the object's `route`; see
   [Objects and properties](./objects-and-properties.md#route)).
 - `GET /config`: the app config the frontends render from.
-- `POST /assets` and `GET /assets/:hash`: image upload and serving.
-- The built web GUI (if present), served as a single-page app.
+- `POST /assets` and `GET /assets/:hash`: image upload and serving. The `:hash`
+  is always a sha256 (64 lowercase hex characters); any other `/assets/*` path
+  falls through to static serving.
+- The built web GUI (if present), served as a single-page app. Its bundle files
+  are served from `/_app/`, kept out of `/assets/` so they cannot collide with
+  blob URLs. Paths with a file extension 404 when missing; extensionless paths
+  fall back to `index.html` so client-side routes work.
 
 ## Environment variables
 
