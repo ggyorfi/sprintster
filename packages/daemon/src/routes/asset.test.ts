@@ -117,6 +117,13 @@ describe('/assets does not swallow the web bundle', () => {
     expect(res.status).toBe(404);
     expect(((await res.json()) as { code: string }).code).toBe('not_found');
   });
+
+  it('404s an extensionless /assets path rather than falling through to the SPA', async () => {
+    const app = webApp({ 'index.html': '<div id="root"></div>' });
+    const res = await app.request('/assets/not-a-hash');
+    expect(res.status).toBe(404);
+    expect(((await res.json()) as { code: string }).code).toBe('not_found');
+  });
 });
 
 describe('/assets is not mounted without a blob api, nor shadowed by the web catch-all', () => {

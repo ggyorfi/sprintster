@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createObjectApi, InMemoryEventStore, loadConfig, type ObjectConfig } from '@sprintster/engine';
 import { createApp } from '../app.js';
+
+// With a webRoot mounted, an unregistered path is claimed by the SPA fallback unless the API closes it.
+const webRoot = mkdtempSync(join(tmpdir(), 'sprintster-singleton-web-'));
+writeFileSync(join(webRoot, 'index.html'), '<!doctype html><div id="root"></div>');
 
 function settingsConfig(props: unknown[] = []): ObjectConfig {
   const config = loadConfig({
@@ -29,7 +36,7 @@ function settingsConfig(props: unknown[] = []): ObjectConfig {
 function buildApp(obj = settingsConfig()) {
   const store = new InMemoryEventStore();
   const api = createObjectApi<{ id: string }>(store, obj);
-  return createApp({ apis: [{ obj, api }] });
+  return createApp({ apis: [{ obj, api }], webRoot });
 }
 
 const patch = (body: unknown): RequestInit => ({
@@ -74,9 +81,15 @@ describe('singleton daemon route', () => {
 
   it('exposes no create, delete or id routes', async () => {
     const app = buildApp();
-    expect((await app.request('/site-settings', { method: 'POST', body: '{}' })).status).toBe(404);
-    expect((await app.request('/site-settings/settings', { method: 'DELETE' })).status).toBe(404);
-    expect((await app.request('/site-settings/settings')).status).toBe(404);
+    for (const req of [
+      app.request('/site-settings', { method: 'POST', body: '{}' }),
+      app.request('/site-settings/settings', { method: 'DELETE' }),
+      app.request('/site-settings/settings'),
+    ]) {
+      const res = await req;
+      expect(res.status).toBe(404);
+      expect((await res.json()) as { code: string }).toMatchObject({ code: 'not_found' });
+    }
   });
 
   it('rejects an unknown field', async () => {

@@ -455,6 +455,24 @@ describe('static web hosting (webRoot)', () => {
     expect(((await cfg.json()) as { objects: unknown[] }).objects.length).toBe(1);
     expect((await app.request('/clients')).status).toBe(200);
   });
+
+  it('404s as JSON under an API namespace instead of returning index.html', async () => {
+    const app = withWeb();
+    for (const path of [`/clients/${ID_A}/extra`, '/clients/one/two', '/health/x', '/config/x']) {
+      const res = await app.request(path);
+      expect([path, res.status]).toEqual([path, 404]);
+      expect((await res.json()) as { code: string }).toMatchObject({ code: 'not_found' });
+    }
+  });
+
+  it('still falls back to index.html outside the API namespaces', async () => {
+    const app = withWeb();
+    for (const path of ['/unknown-object', '/clients-archive/deep', '/client']) {
+      const res = await app.request(path);
+      expect([path, res.status]).toEqual([path, 200]);
+      expect(await res.text()).toContain('id="root"');
+    }
+  });
 });
 
 describe('object route paths', () => {
