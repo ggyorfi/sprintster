@@ -18,11 +18,14 @@ export function makeReducer<State extends { id: string }>(obj: ObjectConfig): Re
       if (state !== null) return state;
       const { [idKey]: _idKey, ...data } = p;
       void _idKey;
-      return { ...data, id: event.streamId, [lifecycleField]: lifecycleInitial } as unknown as State;
+      const added: Record<string, unknown> = { ...data, id: event.streamId };
+      if (lifecycleField !== null) added[lifecycleField] = lifecycleInitial;
+      return added as unknown as State;
     }
     if (event.eventType === names.fieldChanged) {
       return state === null ? null : ({ ...state, [p['field'] as string]: p['value'] } as State);
     }
+    if (lifecycleField === null) return state;
     if (event.eventType === names.removed) {
       return state === null ? null : ({ ...state, [lifecycleField]: true } as State);
     }

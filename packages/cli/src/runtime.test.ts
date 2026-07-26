@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { InMemoryEventStore, fixtureConfig, fixtureRefConfig } from '@sprintster/engine';
+import { InMemoryEventStore, fixtureConfig, fixtureRefConfig, loadConfig } from '@sprintster/engine';
 import { buildApis, startDaemon } from './runtime.js';
 
 const CLIENT = '11111111-1111-4111-8111-111111111111';
@@ -69,6 +69,53 @@ describe('startDaemon', () => {
       ).rejects.toThrow(/already in use/);
     } finally {
       await first.close();
+    }
+  });
+});
+
+// Regression: singleton objects used to throw in createObjectApi via lifecycleInfo,
+// so a daemon with one in its config could not start at all.
+describe('singleton objects at startup', () => {
+  const config = loadConfig({
+    version: '1',
+    objects: [
+      {
+        name: 'settings',
+        title: 'Site Setting',
+        titlePlural: 'Site Settings',
+        singleton: true,
+        properties: [
+          { name: 'id', type: 'id', strategy: 'uuid', system: true },
+          { name: 'siteTitle', type: 'text', default: 'My site' },
+          { name: 'baseUrl', type: 'text' },
+        ],
+        lists: [],
+        views: [
+          { name: 'default', title: 'Settings', fields: [{ property: 'siteTitle' }, { property: 'baseUrl' }] },
+        ],
+      },
+    ],
+  });
+
+  it('buildApis constructs an api for a singleton', () => {
+    expect(() => buildApis(config, new InMemoryEventStore())).not.toThrow();
+  });
+
+  it('the daemon starts and serves the singleton as an object', async () => {
+    const daemon = await startDaemon({
+      config,
+      store: new InMemoryEventStore(),
+      host: '127.0.0.1',
+      port: 3974,
+    });
+    try {
+      const res = await fetch('http://127.0.0.1:3974/site-settings');
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(Array.isArray(body)).toBe(false);
+      expect(body).toMatchObject({ siteTitle: 'My site', baseUrl: '' });
+    } finally {
+      await daemon.close();
     }
   });
 });

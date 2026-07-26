@@ -13,6 +13,7 @@ export * from './engine/backlinks.js';
 export * from './engine/list.js';
 export * from './engine/view.js';
 export * from './engine/lifecycle.js';
+export * from './engine/singleton.js';
 export * from './engine/reducer.js';
 export * from './engine/object-api.js';
 export * from './events/names.js';

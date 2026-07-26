@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { randomUUID } from 'node:crypto';
 import { Box, Text, useApp, useInput, useStdout } from 'ink';
 import {
@@ -328,6 +328,23 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
     }
     buildPanel(action, source);
   }
+
+  // Entering a singleton opens its form; escape still falls back to the (degenerate) list.
+  const autoOpenedSingleton = useRef<number | null>(null);
+  useEffect(() => {
+    if (activeObj === null || activeObj.singleton !== true) {
+      autoOpenedSingleton.current = null;
+      return;
+    }
+    if (loading || mode !== 'list' || autoOpenedSingleton.current === contextIndex) return;
+    const row = data[0];
+    if (row === undefined) return;
+    autoOpenedSingleton.current = contextIndex;
+    buildPanel(
+      { hotkey: 'e', label: 'Edit', kind: 'edit', view: activeObj.views?.[0]?.name ?? 'default' },
+      row,
+    );
+  }, [activeObj, contextIndex, data, loading, mode]);
 
   function openPanel(action: ListActionConfig, row: Row | null): void {
     if (activeObj === null) return;

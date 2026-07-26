@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { ApiError } from '../errors/api-error.js';
 import { createApiClient, NetworkError, isNetworkError } from './client.js';
 import { fixtureConfig } from '../config/fixture.js';
+import { loadConfig } from '../config/loader.js';
 import { setAppConfig } from '../config/app-config.js';
 
 setAppConfig(fixtureConfig);
@@ -242,5 +243,57 @@ describe('createApiClient error handling', () => {
     const api = createApiClient(`${BASE}//`, { fetch });
     await api.object('client').list();
     expect(calls[0]?.url).toBe(`${BASE}/clients`);
+  });
+});
+
+describe('createApiClient: singleton objects', () => {
+  const settings = loadConfig({
+    version: '1',
+    objects: [
+      {
+        name: 'settings',
+        title: 'Site Setting',
+        titlePlural: 'Site Settings',
+        singleton: true,
+        properties: [
+          { name: 'id', type: 'id', strategy: 'uuid', system: true },
+          { name: 'siteTitle', type: 'text', default: 'My site' },
+        ],
+        lists: [],
+        views: [{ name: 'default', title: 'Settings', fields: [{ property: 'siteTitle' }] }],
+      },
+    ],
+  }).objects[0]!;
+
+  const record = { id: 'settings', siteTitle: 'My site' };
+
+  function clientWith(fetch: ReturnType<typeof vi.fn>) {
+    return createApiClient(BASE, { fetch: fetch as unknown as typeof globalThis.fetch, objects: [settings] });
+  }
+
+  it('reads the object from the collection path, with no id segment', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify(record), { status: 200 }));
+    const got = await clientWith(fetch).object('settings').get('ignored');
+    expect(got).toEqual(record);
+    expect(fetch.mock.calls[0]?.[0]).toBe(`${BASE}/site-settings`);
+  });
+
+  it('wraps the object as a one-element list', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify(record), { status: 200 }));
+    expect(await clientWith(fetch).object('settings').list()).toEqual([record]);
+  });
+
+  it('PATCHes the collection path, ignoring the id', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify(record), { status: 200 }));
+    await clientWith(fetch).object('settings').update('whatever', { siteTitle: 'New' });
+    expect(fetch.mock.calls[0]?.[0]).toBe(`${BASE}/site-settings`);
+    expect((fetch.mock.calls[0]?.[1] as RequestInit).method).toBe('PATCH');
+  });
+
+  it('refuses operations a singleton cannot have', () => {
+    const fetch = vi.fn(async () => new Response('{}', { status: 200 }));
+    const obj = clientWith(fetch).object('settings');
+    expect(() => obj.add({})).toThrow(/singleton/);
+    expect(() => obj.remove('x')).toThrow(/singleton/);
   });
 });

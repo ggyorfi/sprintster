@@ -2,10 +2,12 @@ import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
-import { isApiError, type ObjectConfig, type PluginObjectApi } from '@sprintster/engine';
+import { isApiError, singletonId, type ObjectConfig, type PluginObjectApi } from '@sprintster/engine';
 
 export function createObjectRoute(api: PluginObjectApi<{ id: string }>, obj: ObjectConfig): Hono {
   const route = new Hono();
+
+  if (obj.singleton === true) return createSingletonRoute(api, obj);
 
   route.get('/', async (c) => c.json(await api.list()));
 
@@ -103,6 +105,38 @@ export function createObjectRoute(api: PluginObjectApi<{ id: string }>, obj: Obj
     route.delete('/:id', async (c) => {
       try {
         return c.json(await remove(c.req.param('id')));
+      } catch (err) {
+        return apiErrorResponse(c, err);
+      }
+    });
+  }
+
+  return route;
+}
+
+// Addressed as an object at the collection path: no create, no delete, no id segment.
+function createSingletonRoute(api: PluginObjectApi<{ id: string }>, obj: ObjectConfig): Hono {
+  const route = new Hono();
+  const id = singletonId(obj);
+
+  route.get('/', async (c) => c.json(await api.requireGet(id)));
+
+  const update = api.update;
+  const updateSchema = api.updateSchema;
+  if (update !== undefined && updateSchema !== undefined) {
+    route.patch('/', async (c) => {
+      let body: unknown;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.json({ code: 'bad_request', message: 'invalid JSON body' }, 400);
+      }
+      const parsed = updateSchema.safeParse(body);
+      if (!parsed.success) {
+        return c.json({ code: 'bad_request', message: parsed.error.message }, 400);
+      }
+      try {
+        return c.json(await update(id, parsed.data));
       } catch (err) {
         return apiErrorResponse(c, err);
       }

@@ -36,6 +36,9 @@ configured for the `dev` environment).
 - The HTTP API for every object (list, get, create, update, remove, and status
   transitions), under `/<objects>` (the object's `route`; see
   [Objects and properties](./objects-and-properties.md#route)).
+- A [singleton](./objects-and-properties.md#singleton) object instead serves the
+  record itself at its route: `GET` always returns an object (never a list, never
+  404) and `PATCH` updates it. It has no create, delete or `/:id` routes.
 - `GET /config`: the app config the frontends render from.
 - `POST /assets` and `GET /assets/:hash`: image upload and serving. The `:hash`
   is always a sha256 (64 lowercase hex characters); any other `/assets/*` path

@@ -24,7 +24,8 @@ lifecycle, a set of **properties** (fields), one or more **list** screens, and
 | `name` | yes | Unique machine name (used in event names). |
 | `title` / `titlePlural` | yes | Display names. |
 | `route` | no | HTTP path segment; defaults to the slug of `titlePlural` (see below). |
-| `lifecycle` | yes | How records are retired (see below). |
+| `singleton` | no | Exactly one record, forever (see below). |
+| `lifecycle` | yes | How records are retired, unless `singleton` (see below). |
 | `properties` | yes | The fields (at least one). |
 | `lists` | no | Table screens; see [Views and lists](./views-and-lists.md). |
 | `views` | no | Forms; see [Views and lists](./views-and-lists.md). |
@@ -55,9 +56,65 @@ resolved `route` on every object: a client never has to re-derive it. Loading
 fails if two objects resolve to the same path, if a label slugs to nothing, or
 if a route collides with `health`, `config` or `assets`.
 
+## Singleton
+
+`"singleton": true` marks an object that has exactly one record for the life of the
+app: site settings, a homepage, a global footer. It declares no `lifecycle`, because
+there is nothing to retire, and it must declare at least one `view`, because that
+form is its entire UI. Its `lists` are unused and default to empty.
+
+```jsonc
+{
+  "name": "settings",
+  "title": "Site Setting",
+  "titlePlural": "Site Settings",
+  "singleton": true,
+  "properties": [
+    { "name": "id", "type": "id", "strategy": "uuid", "system": true },
+    { "name": "siteTitle", "type": "text", "title": "Site title", "default": "My site" },
+    { "name": "baseUrl", "type": "text", "title": "Base URL" }
+  ],
+  "views": [
+    { "name": "default", "title": "Settings",
+      "fields": [{ "property": "siteTitle" }, { "property": "baseUrl" }] }
+  ]
+}
+```
+
+A singleton always reads as an object. Before anything is saved it is projected from
+its configuration: each field takes its `default`, or a zero value for its type if it
+has none.
+
+| type | unset value |
+|---|---|
+| `text`, `code`, `markdown` | `""` |
+| `integer`, `sequence` | `0` |
+| `money` | `"0"` |
+| `boolean` | `false` |
+| `refs`, `array` | `[]` |
+| `object` | its sub-fields, projected the same way |
+| everything else | `null` |
+
+Because the record is projected before it is ever written, a `required` field must
+declare a `default`; loading fails otherwise. A field that is *not* required needs no
+default and reads as the zero value above, which is a useful "not configured yet"
+signal: an unset `baseUrl` reads as `""`, and a build step can refuse to run on it.
+
+Over HTTP a singleton is the object itself at the collection path, with no id segment
+and no create or delete:
+
+```
+GET   /site-settings   -> { "id": "settings", "siteTitle": "My site", ... }
+PATCH /site-settings   -> the updated object
+```
+
+The first `PATCH` writes the record; later ones update it. Fields added to the config
+after that keep projecting their default or zero value until they are saved. Both the
+web GUI and the TUI open a singleton's form directly instead of listing it.
+
 ## Lifecycle
 
-Every object declares how a record is retired, one of:
+Every object except a singleton declares how a record is retired, one of:
 
 - **Soft delete**: `{ "softDelete": "removed" }`. Names a `boolean` property that
   is flipped to `true` on delete. Removed records drop out of lists but their

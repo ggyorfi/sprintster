@@ -8,6 +8,7 @@ import type { CommandConfig, ObjectConfig } from '../config/schema.js';
 import type { PropertyConfig } from '../config/schema.js';
 import { eventTypeNames, objectIdKey } from '../events/names.js';
 import { commandEventInfos, lifecycleInfo } from './lifecycle.js';
+import { singletonId, synthesizeSingleton } from './singleton.js';
 import { makeReducer } from './reducer.js';
 import { nowAsIso } from '../time/index.js';
 
@@ -50,6 +51,8 @@ export function createObjectApi<State extends { id: string }>(
   const names = eventTypeNames(obj.name);
   const idKey = objectIdKey(obj.name);
   const { field: lifecycleField, kind } = lifecycleInfo(obj);
+  const isSingleton = obj.singleton === true;
+  const singletonKey = singletonId(obj);
   const createSchema = compileCreateSchema(obj);
   const updateSchema = compileUpdateSchema(obj);
   const sequenceFields = obj.properties.filter((p) => p.type === 'sequence').map((p) => p.name);
@@ -201,7 +204,7 @@ export function createObjectApi<State extends { id: string }>(
 
   function assertLive(state: State | null, id: string): State {
     if (state === null) throw new NotFoundError(obj.name, id);
-    if (kind === 'softDelete' && (state as Record<string, unknown>)[lifecycleField] === true) {
+    if (kind === 'softDelete' && lifecycleField !== null && (state as Record<string, unknown>)[lifecycleField] === true) {
       throw new InvalidStateError(`${obj.name} '${id}' has been removed`);
     }
     return state;
@@ -240,7 +243,7 @@ export function createObjectApi<State extends { id: string }>(
     const toFree: Claim[] = [];
     if (uniqueFields.length > 0) {
       const current = await base.findOneById(id);
-      const live = current !== null && !(kind === 'softDelete' && (current as Record<string, unknown>)[lifecycleField] === true);
+      const live = current !== null && !(kind === 'softDelete' && lifecycleField !== null && (current as Record<string, unknown>)[lifecycleField] === true);
       if (live) {
         const cur = current as Record<string, unknown>;
         for (const f of uniqueFields) {
@@ -280,17 +283,48 @@ export function createObjectApi<State extends { id: string }>(
     }
   }
 
+  async function readSingleton(): Promise<State> {
+    const stored = await base.findOneById(singletonKey);
+    return { ...synthesizeSingleton(obj), ...(stored ?? {}), id: singletonKey } as unknown as State;
+  }
+
+  async function saveSingleton(input: unknown, actor: string = defaultActor): Promise<State> {
+    const patch = updateSchema.parse(input) as Record<string, unknown>;
+    await checkRefs(patch);
+    const stored = await base.findOneById(singletonKey);
+    if (stored === null) {
+      await base.createEvent(singletonKey, (state) => {
+        if (state !== null) throw new AlreadyExistsError(obj.name, singletonKey);
+        return { eventType: names.added, eventVersion: 1, payload: { [idKey]: singletonKey, ...patch }, actor };
+      });
+      return readSingleton();
+    }
+    await applyUpdate(base, singletonKey, patch as Partial<State>, {
+      actor,
+      assertWritable: (state) => state as State,
+      build: (entityId, field, value) => ({
+        eventType: names.fieldChanged,
+        eventVersion: 1,
+        payload: { [idKey]: entityId, field, value },
+      }),
+    });
+    return readSingleton();
+  }
+
   async function get(id: string): Promise<State | null> {
+    if (isSingleton) return readSingleton();
     return base.findOneById(id);
   }
 
   async function requireGet(id: string): Promise<State> {
+    if (isSingleton) return readSingleton();
     return assertLive(await get(id), id);
   }
 
   async function list(): Promise<State[]> {
+    if (isSingleton) return [await readSingleton()];
     const all = await base.findMany();
-    if (kind === 'softDelete') {
+    if (kind === 'softDelete' && lifecycleField !== null) {
       return all.filter((r) => (r as Record<string, unknown>)[lifecycleField] !== true);
     }
     return all;
@@ -300,6 +334,9 @@ export function createObjectApi<State extends { id: string }>(
     const ce = commandByName.get(name);
     if (ce === undefined) {
       throw new InvalidStateError(`unknown command '${name}' on object '${obj.name}'`);
+    }
+    if (lifecycleField === null) {
+      throw new InvalidStateError(`object '${obj.name}' has no lifecycle; commands require a statusField`);
     }
     return base.createEvent(id, (state) => {
       const live = assertLive(state, id);
@@ -315,8 +352,12 @@ export function createObjectApi<State extends { id: string }>(
 
   const api: ObjectApi<State> = {
     base,
-    add,
-    update,
+    add: isSingleton
+      ? async () => {
+          throw new InvalidStateError(`'${obj.name}' is a singleton; it always exists and cannot be created`);
+        }
+      : add,
+    update: isSingleton ? (_id, input, actor) => saveSingleton(input, actor) : update,
     runCommand,
     get,
     list,

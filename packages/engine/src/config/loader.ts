@@ -57,17 +57,16 @@ function checkRoutes(config: Config): void {
   }
 }
 
-// A singleton is served from config defaults with zero events, so every non-id field needs an initial value.
-function hasInitialValue(prop: PropertyConfig): boolean {
-  return prop.default !== undefined || prop.nullable === true || prop.type === 'array' || prop.type === 'refs';
-}
-
+// A singleton is projected from its defaults before the first save, so a required field with no default could never be satisfied.
 function checkSingleton(obj: ObjectConfig): void {
+  // The form is a singleton's entire UI, so with no view there is nothing to render.
+  if (obj.views === undefined || obj.views.length === 0) {
+    throw new Error(`singleton '${obj.name}' must declare a view; it is opened as a form, not a list`);
+  }
   for (const prop of obj.properties) {
-    if (prop.type === 'id') continue;
-    if (!hasInitialValue(prop)) {
+    if (prop.validation?.required === true && prop.default === undefined) {
       throw new Error(
-        `singleton '${obj.name}' field '${prop.name}' has no initial value; give it a default or make it nullable`,
+        `singleton '${obj.name}' field '${prop.name}' is required but has no default; required singleton fields must declare one`,
       );
     }
   }

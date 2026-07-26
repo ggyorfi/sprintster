@@ -225,14 +225,23 @@ describe('loadConfig: singleton objects', () => {
     expect(c.objects[0]?.lists).toEqual([]);
   });
 
-  it('rejects a singleton field with no initial value (required, no default)', () => {
+  it('rejects a singleton with no view, which would render an empty form', () => {
+    const raw = singletonRaw([{ name: 'siteName', type: 'text', default: 'My Site' }]) as {
+      objects: Array<{ views?: unknown }>;
+    };
+    delete raw.objects[0]!.views;
+    expect(() => loadConfig(raw)).toThrow(/must declare a view/);
+  });
+
+  it('rejects a required singleton field with no default', () => {
     expect(() => loadConfig(singletonRaw([{ name: 'siteName', type: 'text', validation: { required: true } }]))).toThrow(
-      /initial value/,
+      /required but has no default/,
     );
   });
 
-  it('rejects a non-nullable singleton field without a default', () => {
-    expect(() => loadConfig(singletonRaw([{ name: 'enabled', type: 'boolean' }]))).toThrow(/initial value/);
+  it('accepts a non-nullable singleton field without a default; it projects to a zero value', () => {
+    expect(() => loadConfig(singletonRaw([{ name: 'enabled', type: 'boolean' }]))).not.toThrow();
+    expect(() => loadConfig(singletonRaw([{ name: 'baseUrl', type: 'text' }]))).not.toThrow();
   });
 
   it('requires a lifecycle for non-singleton objects', () => {

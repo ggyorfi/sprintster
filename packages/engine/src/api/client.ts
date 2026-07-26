@@ -39,6 +39,27 @@ export interface CreateApiClientOptions {
   objects?: ReadonlyArray<ObjectConfig>;
 }
 
+type Call = <T>(opts: { method: 'GET' | 'POST' | 'DELETE' | 'PATCH'; path: string; body?: unknown }) => Promise<T>;
+
+// The singleton is one object at the collection path, so reads ignore the id and there is nothing to create or remove.
+function singletonClient<T>(base: string, call: Call): ObjectClient<T> {
+  const read = (): Promise<T> => call<T>({ method: 'GET', path: base });
+  const unsupported = (action: string): never => {
+    throw new Error(`cannot ${action} a singleton object`);
+  };
+  return {
+    list: async () => [await read()],
+    get: async () => read(),
+    add: () => unsupported('add'),
+    update: (_id, input) => call<T>({ method: 'PATCH', path: base, body: input }),
+    remove: () => unsupported('remove'),
+    transition: () => unsupported('transition'),
+    status: async () => null,
+    sync: () => unsupported('sync'),
+    refresh: async () => read(),
+  };
+}
+
 export function createApiClient(
   baseUrl: string,
   options: CreateApiClientOptions = {},
@@ -47,6 +68,7 @@ export function createApiClient(
   const trimmedBase = baseUrl.replace(/\/+$/, '');
   const objects = options.objects ?? appConfig.objects;
   const pathByName = new Map(objects.map((o) => [o.name, `/${objectRoute(o)}`]));
+  const singletonNames = new Set(objects.filter((o) => o.singleton === true).map((o) => o.name));
 
   async function call<T>(opts: {
     method: 'GET' | 'POST' | 'DELETE' | 'PATCH';
@@ -96,6 +118,7 @@ export function createApiClient(
     const base = pathByName.get(name);
     if (base === undefined) throw new Error(`unknown object '${name}'`);
     const idPath = (id: string): string => `${base}/${encodeURIComponent(id)}`;
+    if (singletonNames.has(name)) return singletonClient<T>(base, call);
     return {
       list: () => call<T[]>({ method: 'GET', path: base }),
       get: async (id) => {

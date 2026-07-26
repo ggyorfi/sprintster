@@ -13,6 +13,7 @@ import { Table, SearchBar, Button, EmptyState, type Column } from '../ui/index.j
 import { useObjectList } from './useObjectList.js';
 import { renderCell } from './cells.js';
 import { ObjectPanel } from './ObjectPanel.js';
+import { SingletonScreen } from './SingletonScreen.js';
 import type { Row } from './resolve.js';
 import styles from './ObjectScreen.module.css';
 
@@ -22,7 +23,12 @@ export interface ObjectScreenProps {
   resolveObject: ObjectResolver;
 }
 
-export function ObjectScreen({ api, obj, resolveObject }: ObjectScreenProps) {
+export function ObjectScreen(props: ObjectScreenProps) {
+  if (props.obj.singleton === true) return <SingletonScreen {...props} />;
+  return <ListScreen {...props} />;
+}
+
+function ListScreen({ api, obj, resolveObject }: ObjectScreenProps) {
   const { rows, loading, error, refetch } = useObjectList(api, obj, resolveObject);
   const [query, setQuery] = useState('');
   const [panel, setPanel] = useState<{ mode: ViewMode; row: Row | null } | null>(null);
