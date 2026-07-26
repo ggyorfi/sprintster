@@ -1,5 +1,6 @@
 import type { ObjectConfig, PropertyConfig, ViewFieldConfig, ViewFieldsetConfig, ViewItemConfig } from '../config/schema.js';
 import type { ObjectResolver } from './list.js';
+import { isoToLocalInput, localInputToIso } from '../time/index.js';
 
 function isFieldset(item: ViewItemConfig): item is ViewFieldsetConfig {
   return 'kind' in item && item.kind === 'fieldset';
@@ -57,10 +58,28 @@ export function penceToPounds(pence: string): string {
 export function toInput(property: PropertyConfig, value: unknown): string {
   if (property.type === 'array') return '';
   if (value === null || value === undefined) return '';
-  if (property.type === 'money') return penceToPounds(String(value));
-  if (property.type === 'refs') return JSON.stringify(Array.isArray(value) ? value : []);
-  if (property.type === 'image') return JSON.stringify(value);
-  return String(value);
+  switch (property.type) {
+    case 'money':
+      return penceToPounds(String(value));
+    case 'refs':
+      return JSON.stringify(Array.isArray(value) ? value : []);
+    case 'image':
+      return JSON.stringify(value);
+    case 'datetime':
+      return isoToLocalInput(String(value));
+    case 'id':
+    case 'text':
+    case 'code':
+    case 'markdown':
+    case 'enum':
+    case 'integer':
+    case 'date':
+    case 'boolean':
+    case 'ref':
+    case 'sequence':
+    case 'object':
+      return String(value);
+  }
 }
 
 type ArrayProperty = Extract<PropertyConfig, { type: 'array' }>;
@@ -148,7 +167,21 @@ export function toStorage(property: PropertyConfig, input: string): unknown {
         return null;
       }
     }
-    default:
+    case 'datetime': {
+      if (s === '') return property.nullable ? null : '';
+      return localInputToIso(s);
+    }
+    case 'id':
+    case 'text':
+    case 'code':
+    case 'markdown':
+    case 'enum':
+    case 'date':
+    case 'boolean':
+    case 'ref':
+    case 'sequence':
+    case 'object':
+    case 'array':
       return s === '' ? (property.nullable ? null : '') : s;
   }
 }

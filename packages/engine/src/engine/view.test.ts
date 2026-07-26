@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { loadConfig } from '../config/loader.js';
 import { assembleValues, hasView, viewFields, arrayInitialValues, arrayItemCount, regroupArray, toInput, toStorage } from './view.js';
 import type { ObjectConfig, PropertyConfig } from '../config/schema.js';
+import { IsoInstant } from '../time/index.js';
 
 const emailsProp = {
   name: 'emails',
@@ -136,6 +137,47 @@ describe('image web-boundary encoding', () => {
   it('assembleValues reassembles the JSON input into an image object', () => {
     expect(assembleValues(withImage, 'default', { hero: JSON.stringify(img) }, 'create')['hero']).toEqual(img);
     expect(assembleValues(withImage, 'default', {}, 'create')['hero']).toBeNull();
+  });
+});
+
+describe('datetime web-boundary encoding', () => {
+  const dtProp = { name: 'publishedAt', type: 'datetime', nullable: true } as PropertyConfig;
+  const required = { name: 'publishedAt', type: 'datetime' } as PropertyConfig;
+
+  it('toStorage turns the local datetime-local value into an ISO instant', () => {
+    const stored = toStorage(dtProp, '2026-07-25T14:30:00');
+    expect(stored).toBe(new Date('2026-07-25T14:30:00').toISOString());
+    expect(IsoInstant.safeParse(stored).success).toBe(true);
+  });
+
+  it('toStorage accepts a value with no seconds, as the browser control emits', () => {
+    const stored = toStorage(dtProp, '2026-07-25T14:30');
+    expect(IsoInstant.safeParse(stored).success).toBe(true);
+  });
+
+  it('round-trips a stored instant without shifting it', () => {
+    const original = new Date('2026-07-25T14:30:45').toISOString();
+    expect(toStorage(dtProp, toInput(dtProp, original))).toBe(original);
+  });
+
+  it('preserves seconds across the round trip', () => {
+    const original = new Date('2026-07-25T14:30:45').toISOString();
+    expect(toInput(dtProp, original)).toMatch(/T\d{2}:\d{2}:45$/);
+  });
+
+  it('blanks a null value and treats blank input as null when nullable', () => {
+    expect(toInput(dtProp, null)).toBe('');
+    expect(toStorage(dtProp, '')).toBeNull();
+    expect(toStorage(dtProp, '   ')).toBeNull();
+  });
+
+  it('treats blank as empty string when not nullable', () => {
+    expect(toStorage(required, '')).toBe('');
+  });
+
+  it('returns unparseable input verbatim so the server reports a field error', () => {
+    expect(toStorage(dtProp, 'not a date')).toBe('not a date');
+    expect(toInput(dtProp, 'not a date')).toBe('not a date');
   });
 });
 

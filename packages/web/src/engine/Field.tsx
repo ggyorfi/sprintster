@@ -74,6 +74,8 @@ export function Field({ spec, value, onChange, refOptions, display }: FieldProps
       return <TextField label={label} value={value} onChange={onChange} inputMode="numeric" placeholder={placeholder} />;
     case 'date':
       return <TextField label={label} value={value} onChange={onChange} type="date" placeholder={placeholder} />;
+    case 'datetime':
+      return <TextField label={label} value={value} onChange={onChange} type="datetime-local" step="1" />;
     case 'code':
       return (
         <Suspense fallback={<div className={styles.loading}>Loading editor…</div>}>
@@ -94,7 +96,12 @@ export function Field({ spec, value, onChange, refOptions, display }: FieldProps
         </Suspense>
       );
     }
-    default:
+    case 'id':
+    case 'text':
+    case 'boolean':
+    case 'sequence':
+    case 'object':
+    case 'array':
       return (
         <TextField
           label={label}

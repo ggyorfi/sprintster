@@ -11,6 +11,7 @@ export interface TextFieldProps {
   rows?: number;
   prefix?: string;
   type?: string;
+  step?: string;
   inputMode?: 'text' | 'numeric' | 'decimal';
   readOnly?: boolean;
   disabled?: boolean;
@@ -27,6 +28,7 @@ export function TextField({
   rows = 1,
   prefix,
   type = 'text',
+  step,
   inputMode,
   readOnly,
   disabled,
@@ -63,7 +65,7 @@ export function TextField({
         {multiline ? (
           <textarea {...shared} rows={rows} onChange={(e) => onChange?.(e.target.value)} />
         ) : (
-          <input {...shared} type={type} inputMode={inputMode} onChange={(e) => onChange?.(e.target.value)} />
+          <input {...shared} type={type} step={step} inputMode={inputMode} onChange={(e) => onChange?.(e.target.value)} />
         )}
       </div>
       {invalid && (
