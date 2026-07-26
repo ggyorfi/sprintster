@@ -43,10 +43,34 @@ configured for the `dev` environment).
 - `POST /assets` and `GET /assets/:hash`: image upload and serving. The `:hash`
   is always a sha256 (64 lowercase hex characters); any other `/assets/*` path
   falls through to static serving.
+- `GET /health`: a liveness probe reporting the engine version.
 - The built web GUI (if present), served as a single-page app. Its bundle files
   are served from `/_app/`, kept out of `/assets/` so they cannot collide with
   blob URLs. Paths with a file extension 404 when missing; extensionless paths
   fall back to `index.html` so client-side routes work.
+
+### Unmatched paths
+
+The first segment of the path decides whether a request belongs to the API or to
+the web GUI. An object's `route`, plus `health`, `config` and `assets`, are API
+namespaces; every other first segment belongs to the client.
+
+So a path the API does not recognise gets a JSON 404 body of the usual shape when
+its first segment is an API namespace, and falls back to `index.html` otherwise:
+
+```
+GET /site-settings/x    404  {"code":"not_found","message":"no route for GET /site-settings/x"}
+GET /pages/<id>/extra   404  {"code":"not_found",...}
+GET /config/x           404  {"code":"not_found",...}
+GET /unknown-object     200  index.html (a client-side route)
+```
+
+This holds whether or not a web GUI is mounted, so a malformed or out-of-date
+request is never answered with HTML and a 200.
+
+`/assets` is the one shared namespace, since bundle files may sit alongside blob
+URLs there. Only its extensionless paths get the JSON 404; a path with a file
+extension still falls through to static serving, and 404s as a missing file.
 
 ## Environment variables
 
