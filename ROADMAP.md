@@ -9,8 +9,10 @@ Each step states what "done" means, so it can be closed on evidence rather than
 on judgement. Where a step rests on something we have verified, the file and
 line are cited. Where it rests on a design we have not built yet, it says so.
 
-Status: `agreed` (we will build it), `in progress`, `blocked`, `open question`
-(needs a decision before it can start).
+Steps are checkboxes. Tick one when it ships, in the same commit as the work, so
+the file says what is actually done rather than what was planned. A step still
+carrying a tag (`in progress`, `blocked`, `open question`) needs something other
+than time before it can be ticked.
 
 ---
 
@@ -107,62 +109,62 @@ change.
 
 ### Steps
 
-1. **Stop destroying images.** `agreed`. Add the image node so
-   `![alt](/assets/<hash>)` parses, renders and serialises unchanged. Ships
-   alone, before any insert UI, because it is a correctness fix on existing
-   content.
-   *Done when:* a test opens a body containing an image, edits unrelated text,
-   and asserts the emitted markdown still contains the original image with its
-   alt text intact. The test fails against today's editor.
+- [x] **1. Stop destroying images.** Add the image node so
+      `![alt](/assets/<hash>)` parses, renders and serialises unchanged. Ships
+      alone, before any insert UI, because it is a correctness fix on existing
+      content.
+      *Done when:* a test opens a body containing an image, edits unrelated text,
+      and asserts the emitted markdown still contains the original image with its
+      alt text intact. The test fails against today's editor.
 
-2. **Normalise the URL on serialise.** `agreed`. Extend the node to override
-   `renderMarkdown` so the configured API base, whether a full origin or a
-   proxied path prefix, is stripped back to `/assets/<hash>`. The rule is narrow
-   on purpose: only our own asset URLs are rewritten. Any other URL, including a
-   `data:` URL and a link to someone else's image, is content and passes through
-   untouched. Rewriting it would be the same destruction of an author's content
-   that step 1 just fixed; a `data:` URL is instead avoided at the point of
-   insert, where we upload rather than inline (step 5).
-   *Done when:* with a non-empty API base URL configured, the editor displays
-   the image and the serialised markdown still reads `/assets/<hash>`, asserted
-   on the stored string rather than on the DOM, including for a node whose `src`
-   was set absolute; and a `data:` URL has defined, tested behaviour.
+- [x] **2. Normalise the URL on serialise.** Extend the node to override
+      `renderMarkdown` so the configured API base, whether a full origin or a
+      proxied path prefix, is stripped back to `/assets/<hash>`. The rule is narrow
+      on purpose: only our own asset URLs are rewritten. Any other URL, including a
+      `data:` URL and a link to someone else's image, is content and passes through
+      untouched. Rewriting it would be the same destruction of an author's content
+      that step 1 just fixed; a `data:` URL is instead avoided at the point of
+      insert, where we upload rather than inline (step 5).
+      *Done when:* with a non-empty API base URL configured, the editor displays
+      the image and the serialised markdown still reads `/assets/<hash>`, asserted
+      on the stored string rather than on the DOM, including for a node whose `src`
+      was set absolute; and a `data:` URL has defined, tested behaviour.
 
-3. **Insert from the toolbar.** `agreed`. A file picker in the WYSIWYG toolbar
-   that uploads through the shared hook and inserts at the cursor. Content
-   addressing means the same file uploaded twice yields one blob and there is
-   nothing to deduplicate.
-   *Done when:* an author inserts an image without leaving the editor, and the
-   row read back from the API contains the root-relative markdown.
+- [x] **3. Insert from the toolbar.** A file picker in the WYSIWYG toolbar
+      that uploads through the shared hook and inserts at the cursor. Content
+      addressing means the same file uploaded twice yields one blob and there is
+      nothing to deduplicate.
+      *Done when:* an author inserts an image without leaving the editor, and the
+      row read back from the API contains the root-relative markdown.
 
-4. **Alt text, authorable in place.** `agreed`. Insert with empty alt (valid
-   CommonMark, and correct for decorative images) and let a selected image be
-   given alt text in place. We are deliberately not prompting on insert: a modal
-   on every paste is hostile, and screenshots are the main case.
-   *Done when:* alt text can be set and changed after insert, and round-trips
-   through save and reload.
+- [ ] **4. Alt text, authorable in place.** Insert with empty alt (valid
+      CommonMark, and correct for decorative images) and let a selected image be
+      given alt text in place. We are deliberately not prompting on insert: a modal
+      on every paste is hostile, and screenshots are the main case.
+      *Done when:* alt text can be set and changed after insert, and round-trips
+      through save and reload.
 
-5. **Paste and drag.** `agreed`, after 3 and 4. The same upload path bound to
-   paste and drop. Paste is the interaction authors actually reach for.
-   *Done when:* pasting an image and dropping a file both produce the same
-   markdown as the toolbar path, and pasting the same image twice results in one
-   blob.
+- [ ] **5. Paste and drag.** After 3 and 4. The same upload path bound to
+      paste and drop. Paste is the interaction authors actually reach for.
+      *Done when:* pasting an image and dropping a file both produce the same
+      markdown as the toolbar path, and pasting the same image twice results in one
+      blob.
 
-6. **Failure and limits.** `agreed`. Today `ImageField` surfaces an upload error
-   as text (`packages/web/src/ui/ImageField.tsx:116`) and that is the whole
-   story. Implement, in the shared hook: what an over-size or wrong-type upload
-   does, what the editor shows for a hash whose blob is missing, and whether
-   uploads report progress.
-   *Done when:* each of those three cases has defined behaviour and a test, and
-   the size and type limits are enforced by the daemon rather than only by the
-   widgets.
+- [ ] **6. Failure and limits.** Today `ImageField` surfaces an upload error
+      as text (`packages/web/src/ui/ImageField.tsx:116`) and that is the whole
+      story. Implement, in the shared hook: what an over-size or wrong-type upload
+      does, what the editor shows for a hash whose blob is missing, and whether
+      uploads report progress.
+      *Done when:* each of those three cases has defined behaviour and a test, and
+      the size and type limits are enforced by the daemon rather than only by the
+      widgets.
 
-7. **Confirm the lossless paths stay lossless.** `agreed`. Source mode
-   (`CodeEditor`) and the TUI edit markdown as text and should preserve images
-   for free. We are not building TUI insert: it is a poor fit for a terminal and
-   source editing remains available there.
-   *Done when:* a test pins that a body with images survives a source-mode and a
-   TUI edit unchanged.
+- [ ] **7. Confirm the lossless paths stay lossless.** Source mode
+      (`CodeEditor`) and the TUI edit markdown as text and should preserve images
+      for free. We are not building TUI insert: it is a poor fit for a terminal and
+      source editing remains available there.
+      *Done when:* a test pins that a body with images survives a source-mode and a
+      TUI edit unchanged.
 
 ---
 
@@ -261,37 +263,37 @@ bounded.
 
 ### Steps
 
-1. **Extractor.** `agreed`. The exhaustive `PropertyConfig['type']` switch from
-   a stored value to referenced hashes, in the engine.
-   *Done when:* it is covered per property type, including a markdown body with
-   several images, one with the same image twice, and one with none, and adding
-   a property type without handling it fails to compile.
+- [ ] **1. Extractor.** The exhaustive `PropertyConfig['type']` switch from
+      a stored value to referenced hashes, in the engine.
+      *Done when:* it is covered per property type, including a markdown body with
+      several images, one with the same image twice, and one with none, and adding
+      a property type without handling it fails to compile.
 
-2. **Reverse index on write.** `agreed`, after 1. Derive the before and after
-   hash sets on create, update and remove, and append the difference as facts to
-   the hash-keyed stream, each carrying object, id and property.
-   *Done when:* creating, editing and removing records leaves the folded
-   referrer set correct, including replacing an image with another, editing a
-   body down to no images at all, and an asset used by two properties of the
-   same record.
+- [ ] **2. Reverse index on write.** After 1. Derive the before and after
+      hash sets on create, update and remove, and append the difference as facts to
+      the hash-keyed stream, each carrying object, id and property.
+      *Done when:* creating, editing and removing records leaves the folded
+      referrer set correct, including replacing an image with another, editing a
+      body down to no images at all, and an asset used by two properties of the
+      same record.
 
-3. **Query API.** `agreed`, after 2. One engine call from hash to referring
-   objects, and a daemon route exposing it.
-   *Done when:* the route answers with the referring objects and properties for
-   a hash, and with an empty set for an unreferenced one, against a fixture with
-   several object types.
+- [ ] **3. Query API.** After 2. One engine call from hash to referring
+      objects, and a daemon route exposing it.
+      *Done when:* the route answers with the referring objects and properties for
+      a hash, and with an empty set for an unreferenced one, against a fixture with
+      several object types.
 
-4. **Backfill.** `agreed`, after 2. Existing data has no index events, and a
-   changed extractor needs a rebuild. A documented command that walks existing
-   records and emits the facts, safe to run more than once.
-   *Done when:* running it twice over a populated store yields the same referrer
-   sets as running it once, and running it after an extractor change corrects
-   entries written by the old one.
+- [ ] **4. Backfill.** After 2. Existing data has no index events, and a
+      changed extractor needs a rebuild. A documented command that walks existing
+      records and emits the facts, safe to run more than once.
+      *Done when:* running it twice over a populated store yields the same referrer
+      sets as running it once, and running it after an extractor change corrects
+      entries written by the old one.
 
-5. **Asset management UI.** `open question`, after 3. The aggregate view this
-   epic exists to serve.
-   *Done when:* scoped. We have not designed it yet, and the payload decided
-   above is what it has to work with.
+- [ ] **5. Asset management UI.** `open question`, after 3. The aggregate view this
+      epic exists to serve.
+      *Done when:* scoped. We have not designed it yet, and the payload decided
+      above is what it has to work with.
 
 ### Still open
 

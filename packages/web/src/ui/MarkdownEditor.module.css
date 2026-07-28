@@ -149,3 +149,17 @@
 .editor :global(.ProseMirror img.ProseMirror-selectednode) {
   box-shadow: 0 0 0 3px var(--ring);
 }
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.error {
+  color: var(--red);
+  font-size: 12px;
+  align-self: center;
+}

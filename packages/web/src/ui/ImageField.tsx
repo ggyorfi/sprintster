@@ -1,5 +1,5 @@
-import { useState } from 'react';
 import { TextField } from './TextField.js';
+import { useAssetUpload } from './useAssetUpload.js';
 import type { UploadedAsset } from '../api/assets.js';
 import styles from './ImageField.module.css';
 
@@ -49,28 +49,20 @@ async function readImageSize(file: File): Promise<{ width: number; height: numbe
 
 export function ImageField({ label, value, onChange, upload, assetUrl, readOnly = false }: ImageFieldProps) {
   const image = parseImageValue(value);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, select } = useAssetUpload(upload);
 
   async function onFile(file: File | undefined) {
     if (file === undefined) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const [asset, dims] = await Promise.all([upload(file), readImageSize(file)]);
-      const next: ImageValue = {
-        hash: asset.hash,
-        filename: asset.filename,
-        contentType: asset.contentType,
-        size: asset.size,
-        ...(dims !== null ? { width: dims.width, height: dims.height } : {}),
-      };
-      onChange(JSON.stringify(next));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'upload failed');
-    } finally {
-      setBusy(false);
-    }
+    const [asset, dims] = await Promise.all([select(file), readImageSize(file)]);
+    if (asset === null) return;
+    const next: ImageValue = {
+      hash: asset.hash,
+      filename: asset.filename,
+      contentType: asset.contentType,
+      size: asset.size,
+      ...(dims !== null ? { width: dims.width, height: dims.height } : {}),
+    };
+    onChange(JSON.stringify(next));
   }
 
   function setAlt(alt: string) {

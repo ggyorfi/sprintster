@@ -89,9 +89,9 @@ export function Field({ spec, value, onChange, refOptions, display }: FieldProps
           {mode === 'source' ? (
             <CodeEditor label={label} value={value} onChange={onChange} language="markdown" placeholder={placeholder} />
           ) : mode === 'wysiwyg' ? (
-            <MarkdownEditor label={label} value={value} onChange={onChange} />
+            <MarkdownEditor label={label} value={value} onChange={onChange} upload={uploadAsset} />
           ) : (
-            <ComboEditor label={label} value={value} onChange={onChange} />
+            <ComboEditor label={label} value={value} onChange={onChange} upload={uploadAsset} />
           )}
         </Suspense>
       );

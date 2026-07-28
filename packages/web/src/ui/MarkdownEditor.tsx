@@ -3,7 +3,8 @@ import { useEditor, useEditorState, EditorContent, type Editor } from '@tiptap/r
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
 import Image from '@tiptap/extension-image';
-import { storedAssetUrl } from '../api/assets.js';
+import { assetUrl, storedAssetUrl, type UploadedAsset } from '../api/assets.js';
+import { useAssetUpload } from './useAssetUpload.js';
 import styles from './MarkdownEditor.module.css';
 
 // Serialising is the one path every edit goes through, so it is where the root-relative rule is enforced rather than assumed.
@@ -21,9 +22,51 @@ export interface MarkdownEditorProps {
   value: string;
   onChange: (value: string) => void;
   readOnly?: boolean;
+  upload?: ((file: File) => Promise<UploadedAsset>) | undefined;
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+// The node holds a displayable src; the serialiser is what makes it root-relative again, so insert can use the resolved URL.
+function ImageButton({ editor, upload }: { editor: Editor; upload: (file: File) => Promise<UploadedAsset> }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { busy, error, select } = useAssetUpload(upload);
+
+  async function onFile(file: File | undefined) {
+    const asset = await select(file);
+    if (asset === null) return;
+    editor.chain().focus().setImage({ src: assetUrl(asset.hash), alt: '' }).run();
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className={styles.tbtn}
+        aria-label="Insert image"
+        title="Insert image"
+        disabled={busy}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => inputRef.current?.click()}
+      >
+        {busy ? '…' : 'IMG'}
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className={styles.fileInput}
+        disabled={busy}
+        onChange={(e) => void onFile(e.target.files?.[0])}
+      />
+      {error !== null && (
+        <span role="alert" className={styles.error}>
+          {error}
+        </span>
+      )}
+    </>
+  );
+}
+
+function Toolbar({ editor, upload }: { editor: Editor; upload: ((file: File) => Promise<UploadedAsset>) | undefined }) {
   const s = useEditorState({
     editor,
     // The editor can be torn down mid-render (React strict/concurrent, combo toggles); guard against a destroyed instance.
@@ -80,6 +123,8 @@ function Toolbar({ editor }: { editor: Editor }) {
       {btn('Ordered list', '1.', s.orderedList, () => chain().toggleOrderedList().run())}
       {btn('Blockquote', '❝', s.blockquote, () => chain().toggleBlockquote().run())}
       {btn('Code block', '{ }', s.codeBlock, () => chain().toggleCodeBlock().run())}
+      {upload !== undefined && <span className={styles.sep} />}
+      {upload !== undefined && <ImageButton editor={editor} upload={upload} />}
       <span className={styles.sep} />
       {btn('Undo', '↺', false, () => chain().undo().run(), !s.canUndo)}
       {btn('Redo', '↻', false, () => chain().redo().run(), !s.canRedo)}
@@ -88,7 +133,7 @@ function Toolbar({ editor }: { editor: Editor }) {
 }
 
 // WYSIWYG markdown editor: markdown shortcuts format in place, value stays a raw markdown string.
-export function MarkdownEditor({ label, value, onChange, readOnly = false }: MarkdownEditorProps) {
+export function MarkdownEditor({ label, value, onChange, readOnly = false, upload }: MarkdownEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -116,7 +161,7 @@ export function MarkdownEditor({ label, value, onChange, readOnly = false }: Mar
     <div className={styles.field}>
       {label !== undefined && <span className={styles.label}>{label}</span>}
       <div className={styles.editor}>
-        {editor !== null && !readOnly && <Toolbar editor={editor} />}
+        {editor !== null && !readOnly && <Toolbar editor={editor} upload={upload} />}
         <EditorContent editor={editor} />
       </div>
     </div>

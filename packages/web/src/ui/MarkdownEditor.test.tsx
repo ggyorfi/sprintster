@@ -3,6 +3,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MarkdownEditor } from './MarkdownEditor.js';
 
+const uploaded = { hash: 'd4', filename: 'hero.png', contentType: 'image/png', size: 30 };
+
 afterEach(() => {
   vi.unstubAllEnvs();
 });
@@ -72,6 +74,53 @@ describe('MarkdownEditor', () => {
     await waitFor(() => expect(latest).not.toBe(''));
     expect(latest).toContain('![a](data:image/png;base64,iVBOR)');
     expect(latest).toContain('![b](https://elsewhere.example/p.png)');
+  });
+
+  it('has no image button unless an upload function is supplied', () => {
+    render(<MarkdownEditor value={'hello'} onChange={() => {}} />);
+    expect(screen.queryByRole('button', { name: 'Insert image' })).toBeNull();
+  });
+
+  it('uploads a chosen file and inserts it as root-relative markdown', async () => {
+    let latest = '';
+    const upload = vi.fn(async (_file: File) => uploaded);
+    const { container } = render(<MarkdownEditor value={'Intro'} onChange={(v) => (latest = v)} upload={upload} />);
+    const file = new File([new Uint8Array([1, 2, 3])], 'hero.png', { type: 'image/png' });
+    await userEvent.upload(container.querySelector('input[type=file]')!, file);
+    expect(upload).toHaveBeenCalledWith(file);
+    await waitFor(() => expect(latest).toContain('!['));
+    expect(latest).toContain('![](/assets/d4)');
+  });
+
+  it('inserts root-relative markdown even when the API base URL is a full origin', async () => {
+    vi.stubEnv('VITE_API_URL', 'https://app.example.com');
+    let latest = '';
+    const { container } = render(
+      <MarkdownEditor value={'Intro'} onChange={(v) => (latest = v)} upload={async () => uploaded} />,
+    );
+    const file = new File([new Uint8Array([1])], 'hero.png', { type: 'image/png' });
+    await userEvent.upload(container.querySelector('input[type=file]')!, file);
+    await waitFor(() => expect(latest).toContain('!['));
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('https://app.example.com/assets/d4');
+    expect(latest).toContain('![](/assets/d4)');
+    expect(latest).not.toContain('app.example.com');
+  });
+
+  it('reports an upload failure and inserts nothing', async () => {
+    const onChange = vi.fn();
+    const { container } = render(
+      <MarkdownEditor
+        value={'Intro'}
+        onChange={onChange}
+        upload={async () => {
+          throw new Error('upload failed (500)');
+        }}
+      />,
+    );
+    const file = new File([new Uint8Array([1])], 'hero.png', { type: 'image/png' });
+    await userEvent.upload(container.querySelector('input[type=file]')!, file);
+    expect(await screen.findByRole('alert')).toHaveTextContent('upload failed (500)');
+    expect(onChange.mock.calls.flat().join('')).not.toContain('![');
   });
 
   it('is not editable in read-only mode and hides the toolbar (preview reuse)', () => {

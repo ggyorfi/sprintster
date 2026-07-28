@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from 'react';
+import type { UploadedAsset } from '../api/assets.js';
 import styles from './ComboEditor.module.css';
 
 // Lazy so the source editor's CodeMirror chunk only loads when the author toggles to Source (combo opens in WYSIWYG).
@@ -12,10 +13,11 @@ export interface ComboEditorProps {
   value: string;
   onChange: (value: string) => void;
   defaultMode?: ComboMode;
+  upload?: (file: File) => Promise<UploadedAsset>;
 }
 
 // Strictly composes the WYSIWYG (MarkdownEditor) and source (CodeEditor) widgets over one shared markdown string.
-export function ComboEditor({ label, value, onChange, defaultMode = 'wysiwyg' }: ComboEditorProps) {
+export function ComboEditor({ label, value, onChange, defaultMode = 'wysiwyg', upload }: ComboEditorProps) {
   const [mode, setMode] = useState<ComboMode>(defaultMode);
   return (
     <div className={styles.field}>
@@ -44,7 +46,7 @@ export function ComboEditor({ label, value, onChange, defaultMode = 'wysiwyg' }:
       </div>
       <Suspense fallback={<div className={styles.loading}>Loading…</div>}>
         {mode === 'wysiwyg' ? (
-          <MarkdownEditor value={value} onChange={onChange} />
+          <MarkdownEditor value={value} onChange={onChange} upload={upload} />
         ) : (
           <CodeEditor value={value} onChange={onChange} language="markdown" />
         )}
