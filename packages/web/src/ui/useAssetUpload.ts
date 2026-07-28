@@ -8,12 +8,12 @@ export interface AssetUpload {
 }
 
 // Shared by every widget that uploads: the stored shapes differ, the upload, busy and error handling does not.
-export function useAssetUpload(upload: (file: File) => Promise<UploadedAsset>): AssetUpload {
+export function useAssetUpload(upload: ((file: File) => Promise<UploadedAsset>) | undefined): AssetUpload {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function select(file: File | undefined): Promise<UploadedAsset | null> {
-    if (file === undefined) return null;
+    if (file === undefined || upload === undefined) return null;
     setBusy(true);
     setError(null);
     try {

@@ -144,7 +144,7 @@ change.
       *Done when:* alt text can be set and changed after insert, and round-trips
       through save and reload.
 
-- [ ] **5. Paste and drag.** After 3 and 4. The same upload path bound to
+- [x] **5. Paste and drag.** After 3 and 4. The same upload path bound to
       paste and drop. Paste is the interaction authors actually reach for.
       *Done when:* pasting an image and dropping a file both produce the same
       markdown as the toolbar path, and pasting the same image twice results in one

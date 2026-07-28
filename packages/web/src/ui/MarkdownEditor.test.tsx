@@ -1,9 +1,25 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MarkdownEditor } from './MarkdownEditor.js';
 
 const uploaded = { hash: 'd4', filename: 'hero.png', contentType: 'image/png', size: 30 };
+
+const imageFile = () => new File([new Uint8Array([1, 2, 3])], 'hero.png', { type: 'image/png' });
+
+// jsdom has no DataTransfer, and the handlers only read .files off the event.
+function transferEvent(type: 'paste' | 'drop', files: File[]): Event {
+  const event =
+    type === 'drop'
+      ? new MouseEvent('drop', { bubbles: true, cancelable: true, clientX: 0, clientY: 0 })
+      : new Event('paste', { bubbles: true, cancelable: true });
+  const data = { files, items: [], types: ['Files'], getData: () => '' };
+  Object.defineProperty(event, type === 'paste' ? 'clipboardData' : 'dataTransfer', { value: data });
+  return event;
+}
+
+const paste = (target: Element, files: File[]) => fireEvent(target, transferEvent('paste', files));
+const drop = (target: Element, files: File[]) => fireEvent(target, transferEvent('drop', files));
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -171,6 +187,46 @@ describe('MarkdownEditor', () => {
 
     render(<MarkdownEditor value={latest} onChange={() => {}} />);
     expect(screen.getByLabelText('Alt text')).toHaveValue('Sunset');
+  });
+
+  it('uploads a pasted image and inserts the same markdown as the toolbar path', async () => {
+    let latest = '';
+    const upload = vi.fn(async (_file: File) => uploaded);
+    const { container } = render(<MarkdownEditor value={'Intro'} onChange={(v) => (latest = v)} upload={upload} />);
+    paste(container.querySelector('.ProseMirror')!, [imageFile()]);
+    await waitFor(() => expect(latest).toContain('!['));
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(latest).toContain('![](/assets/d4)');
+  });
+
+  it('uploads a dropped image', async () => {
+    let latest = '';
+    const { container } = render(
+      <MarkdownEditor value={'Intro'} onChange={(v) => (latest = v)} upload={async () => uploaded} />,
+    );
+    drop(container.querySelector('.ProseMirror')!, [imageFile()]);
+    await waitFor(() => expect(latest).toContain('!['));
+    expect(latest).toContain('![](/assets/d4)');
+  });
+
+  it('leaves a non-image paste to the editor', async () => {
+    const upload = vi.fn(async (_file: File) => uploaded);
+    const { container } = render(<MarkdownEditor value={'Intro'} onChange={() => {}} upload={upload} />);
+    paste(container.querySelector('.ProseMirror')!, [new File(['plain'], 'notes.txt', { type: 'text/plain' })]);
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it('pastes the same image twice and references one blob', async () => {
+    let latest = '';
+    const { container } = render(
+      <MarkdownEditor value={'Intro'} onChange={(v) => (latest = v)} upload={async () => uploaded} />,
+    );
+    const box = container.querySelector('.ProseMirror')!;
+    paste(box, [imageFile()]);
+    await waitFor(() => expect(latest).toContain('!['));
+    paste(box, [imageFile()]);
+    await waitFor(() => expect(latest.match(/!\[]\(/g)?.length).toBe(2));
+    expect(latest.match(/\/assets\/d4/g)).toHaveLength(2);
   });
 
   it('is not editable in read-only mode and hides the toolbar (preview reuse)', () => {

@@ -14,3 +14,7 @@ function stubRects(proto: object): void {
 }
 stubRects(Range.prototype);
 stubRects(Element.prototype);
+
+// Same reason: posAtCoords reaches for elementFromPoint, which jsdom does not implement at all.
+const doc = document as Document & { elementFromPoint?: (x: number, y: number) => Element | null };
+if (typeof doc.elementFromPoint !== 'function') doc.elementFromPoint = () => null;

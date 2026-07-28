@@ -5,7 +5,7 @@ import { Markdown } from '@tiptap/markdown';
 import Image from '@tiptap/extension-image';
 import { NodeSelection } from '@tiptap/pm/state';
 import { assetUrl, storedAssetUrl, type UploadedAsset } from '../api/assets.js';
-import { useAssetUpload } from './useAssetUpload.js';
+import { useAssetUpload, type AssetUpload } from './useAssetUpload.js';
 import styles from './MarkdownEditor.module.css';
 
 // Serialising is the one path every edit goes through, so it is where the root-relative rule is enforced rather than assumed.
@@ -26,30 +26,41 @@ export interface MarkdownEditorProps {
   upload?: ((file: File) => Promise<UploadedAsset>) | undefined;
 }
 
+function imageFilesOf(data: DataTransfer | null): File[] {
+  if (data === null) return [];
+  return Array.from(data.files).filter((file) => file.type.startsWith('image/'));
+}
+
 // The node holds a displayable src; the serialiser is what makes it root-relative again, so insert can use the resolved URL.
-function ImageButton({ editor, upload }: { editor: Editor; upload: (file: File) => Promise<UploadedAsset> }) {
+function insertImage(editor: Editor, hash: string, at: number | null) {
+  editor
+    .chain()
+    .focus()
+    // Collapse past whatever is selected, so inserting next to a selected image adds one rather than replacing it.
+    .setTextSelection(at ?? editor.state.selection.to)
+    .setImage({ src: assetUrl(hash), alt: '' })
+    // Leave the new image selected, so its alt field appears without the author having to know to click it.
+    .command(({ tr, dispatch }) => {
+      if (dispatch === undefined) return true;
+      for (let pos = tr.selection.from; pos >= 0; pos -= 1) {
+        if (tr.doc.nodeAt(pos)?.type.name === 'image') {
+          tr.setSelection(NodeSelection.create(tr.doc, pos));
+          break;
+        }
+      }
+      return true;
+    })
+    .run();
+}
+
+function ImageButton({ editor, uploader }: { editor: Editor; uploader: AssetUpload }) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const { busy, error, select } = useAssetUpload(upload);
+  const { busy, error, select } = uploader;
 
   async function onFile(file: File | undefined) {
     const asset = await select(file);
     if (asset === null) return;
-    editor
-      .chain()
-      .focus()
-      .setImage({ src: assetUrl(asset.hash), alt: '' })
-      // Leave the new image selected, so its alt field appears without the author having to know to click it.
-      .command(({ tr, dispatch }) => {
-        if (dispatch === undefined) return true;
-        for (let pos = tr.selection.from; pos >= 0; pos -= 1) {
-          if (tr.doc.nodeAt(pos)?.type.name === 'image') {
-            tr.setSelection(NodeSelection.create(tr.doc, pos));
-            break;
-          }
-        }
-        return true;
-      })
-      .run();
+    insertImage(editor, asset.hash, null);
   }
 
   return (
@@ -109,7 +120,7 @@ function AltTextRow({ editor }: { editor: Editor }) {
   );
 }
 
-function Toolbar({ editor, upload }: { editor: Editor; upload: ((file: File) => Promise<UploadedAsset>) | undefined }) {
+function Toolbar({ editor, uploader }: { editor: Editor; uploader: AssetUpload | null }) {
   const s = useEditorState({
     editor,
     // The editor can be torn down mid-render (React strict/concurrent, combo toggles); guard against a destroyed instance.
@@ -166,8 +177,8 @@ function Toolbar({ editor, upload }: { editor: Editor; upload: ((file: File) => 
       {btn('Ordered list', '1.', s.orderedList, () => chain().toggleOrderedList().run())}
       {btn('Blockquote', '❝', s.blockquote, () => chain().toggleBlockquote().run())}
       {btn('Code block', '{ }', s.codeBlock, () => chain().toggleCodeBlock().run())}
-      {upload !== undefined && <span className={styles.sep} />}
-      {upload !== undefined && <ImageButton editor={editor} upload={upload} />}
+      {uploader !== null && <span className={styles.sep} />}
+      {uploader !== null && <ImageButton editor={editor} uploader={uploader} />}
       <span className={styles.sep} />
       {btn('Undo', '↺', false, () => chain().undo().run(), !s.canUndo)}
       {btn('Redo', '↻', false, () => chain().redo().run(), !s.canRedo)}
@@ -180,13 +191,46 @@ export function MarkdownEditor({ label, value, onChange, readOnly = false, uploa
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
+  const uploader = useAssetUpload(upload);
+  const uploadRef = useRef(uploader);
+  uploadRef.current = uploader;
+  const editorRef = useRef<Editor | null>(null);
+
+  // Paste and drop reach the same upload path as the toolbar; the editor is created once, so the handlers read through refs.
+  async function uploadInto(files: File[], at: number | null) {
+    for (const file of files) {
+      const asset = await uploadRef.current.select(file);
+      const editor = editorRef.current;
+      if (asset !== null && editor !== null) insertImage(editor, asset.hash, at);
+    }
+  }
+
+  function claimImages(event: Event, data: DataTransfer | null, at: number | null): boolean {
+    const files = imageFilesOf(data);
+    if (files.length === 0) return false;
+    event.preventDefault();
+    void uploadInto(files, at);
+    return true;
+  }
+
   const editor = useEditor({
     extensions: [StarterKit, Markdown, AssetImage],
     content: value,
     contentType: 'markdown',
     editable: !readOnly,
     onUpdate: ({ editor }) => onChangeRef.current(editor.getMarkdown()),
+    editorProps: {
+      // handleDrop is unreachable without layout: prosemirror-view bails when posAtCoords finds nothing, so claim the DOM events instead.
+      handleDOMEvents: {
+        paste: (_view, event) => claimImages(event, event.clipboardData, null),
+        drop: (view, event) => {
+          const at = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos ?? null;
+          return claimImages(event, event.dataTransfer, at);
+        },
+      },
+    },
   });
+  editorRef.current = editor;
 
   useEffect(() => {
     if (!editor) return;
@@ -204,7 +248,7 @@ export function MarkdownEditor({ label, value, onChange, readOnly = false, uploa
     <div className={styles.field}>
       {label !== undefined && <span className={styles.label}>{label}</span>}
       <div className={styles.editor}>
-        {editor !== null && !readOnly && <Toolbar editor={editor} upload={upload} />}
+        {editor !== null && !readOnly && <Toolbar editor={editor} uploader={upload === undefined ? null : uploader} />}
         {editor !== null && !readOnly && <AltTextRow editor={editor} />}
         <EditorContent editor={editor} />
       </div>
