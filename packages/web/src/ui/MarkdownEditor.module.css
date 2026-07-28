@@ -150,6 +150,38 @@
   box-shadow: 0 0 0 3px var(--ring);
 }
 
+.altRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-2);
+  background: var(--surface-2);
+}
+
+.altLabel {
+  color: var(--text-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.altInput {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius);
+  background: var(--field);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 6px;
+}
+
+.altInput:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
 .fileInput {
   position: absolute;
   width: 1px;

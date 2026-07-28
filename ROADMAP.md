@@ -137,7 +137,7 @@ change.
       *Done when:* an author inserts an image without leaving the editor, and the
       row read back from the API contains the root-relative markdown.
 
-- [ ] **4. Alt text, authorable in place.** Insert with empty alt (valid
+- [x] **4. Alt text, authorable in place.** Insert with empty alt (valid
       CommonMark, and correct for decorative images) and let a selected image be
       given alt text in place. We are deliberately not prompting on insert: a modal
       on every paste is hostile, and screenshots are the main case.

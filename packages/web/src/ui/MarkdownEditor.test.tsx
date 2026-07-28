@@ -123,6 +123,56 @@ describe('MarkdownEditor', () => {
     expect(onChange.mock.calls.flat().join('')).not.toContain('![');
   });
 
+  it('selects a freshly inserted image, so its alt field is there to fill in', async () => {
+    const { container } = render(
+      <MarkdownEditor value={'Intro\n\nOutro'} onChange={() => {}} upload={async () => uploaded} />,
+    );
+    const file = new File([new Uint8Array([1])], 'hero.png', { type: 'image/png' });
+    await userEvent.upload(container.querySelector('input[type=file]')!, file);
+    expect(await screen.findByLabelText('Alt text')).toHaveValue('');
+  });
+
+  it('describes a freshly inserted image without leaving the editor', async () => {
+    let latest = '';
+    const { container } = render(
+      <MarkdownEditor value={'Intro'} onChange={(v) => (latest = v)} upload={async () => uploaded} />,
+    );
+    const file = new File([new Uint8Array([1])], 'hero.png', { type: 'image/png' });
+    await userEvent.upload(container.querySelector('input[type=file]')!, file);
+    await userEvent.type(await screen.findByLabelText('Alt text'), 'Sunset');
+    await waitFor(() => expect(latest).toContain('Sunset'));
+    expect(latest).toContain('![Sunset](/assets/d4)');
+  });
+
+  it('offers no alt text field until an image is selected', () => {
+    render(<MarkdownEditor value={'just prose'} onChange={() => {}} />);
+    expect(screen.queryByLabelText('Alt text')).toBeNull();
+  });
+
+  it('shows the alt text of the selected image', () => {
+    render(<MarkdownEditor value={'![A blue cover](/assets/d4)'} onChange={() => {}} />);
+    expect(screen.getByLabelText('Alt text')).toHaveValue('A blue cover');
+  });
+
+  it('writes edited alt text into the markdown', async () => {
+    let latest = '';
+    render(<MarkdownEditor value={'![](/assets/d4)'} onChange={(v) => (latest = v)} />);
+    await userEvent.type(screen.getByLabelText('Alt text'), 'Sunset');
+    await waitFor(() => expect(latest).toContain('Sunset'));
+    expect(latest).toContain('![Sunset](/assets/d4)');
+  });
+
+  it('round-trips alt text through a reload', async () => {
+    let latest = '';
+    const { unmount } = render(<MarkdownEditor value={'![](/assets/d4)'} onChange={(v) => (latest = v)} />);
+    await userEvent.type(screen.getByLabelText('Alt text'), 'Sunset');
+    await waitFor(() => expect(latest).toContain('Sunset'));
+    unmount();
+
+    render(<MarkdownEditor value={latest} onChange={() => {}} />);
+    expect(screen.getByLabelText('Alt text')).toHaveValue('Sunset');
+  });
+
   it('is not editable in read-only mode and hides the toolbar (preview reuse)', () => {
     const { container } = render(<MarkdownEditor value={'plain text'} onChange={() => {}} readOnly />);
     expect(container.querySelector('.ProseMirror')?.getAttribute('contenteditable')).toBe('false');

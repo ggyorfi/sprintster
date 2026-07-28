@@ -3,6 +3,7 @@ import { useEditor, useEditorState, EditorContent, type Editor } from '@tiptap/r
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
 import Image from '@tiptap/extension-image';
+import { NodeSelection } from '@tiptap/pm/state';
 import { assetUrl, storedAssetUrl, type UploadedAsset } from '../api/assets.js';
 import { useAssetUpload } from './useAssetUpload.js';
 import styles from './MarkdownEditor.module.css';
@@ -33,7 +34,22 @@ function ImageButton({ editor, upload }: { editor: Editor; upload: (file: File) 
   async function onFile(file: File | undefined) {
     const asset = await select(file);
     if (asset === null) return;
-    editor.chain().focus().setImage({ src: assetUrl(asset.hash), alt: '' }).run();
+    editor
+      .chain()
+      .focus()
+      .setImage({ src: assetUrl(asset.hash), alt: '' })
+      // Leave the new image selected, so its alt field appears without the author having to know to click it.
+      .command(({ tr, dispatch }) => {
+        if (dispatch === undefined) return true;
+        for (let pos = tr.selection.from; pos >= 0; pos -= 1) {
+          if (tr.doc.nodeAt(pos)?.type.name === 'image') {
+            tr.setSelection(NodeSelection.create(tr.doc, pos));
+            break;
+          }
+        }
+        return true;
+      })
+      .run();
   }
 
   return (
@@ -63,6 +79,33 @@ function ImageButton({ editor, upload }: { editor: Editor; upload: (file: File) 
         </span>
       )}
     </>
+  );
+}
+
+// Alt text lives in the markdown, so it has to be authorable; a prompt on insert would be hostile when pasting screenshots.
+function AltTextRow({ editor }: { editor: Editor }) {
+  const s = useEditorState({
+    editor,
+    selector: ({ editor }) => {
+      const live = editor !== null && !editor.isDestroyed;
+      const selected = live && editor.isActive('image');
+      return { selected, alt: selected ? String(editor.getAttributes('image')['alt'] ?? '') : '' };
+    },
+  });
+
+  if (!s.selected) return null;
+
+  return (
+    <label className={styles.altRow}>
+      <span className={styles.altLabel}>Alt text</span>
+      <input
+        type="text"
+        className={styles.altInput}
+        value={s.alt}
+        placeholder="Describe the image"
+        onChange={(e) => editor.commands.updateAttributes('image', { alt: e.target.value })}
+      />
+    </label>
   );
 }
 
@@ -162,6 +205,7 @@ export function MarkdownEditor({ label, value, onChange, readOnly = false, uploa
       {label !== undefined && <span className={styles.label}>{label}</span>}
       <div className={styles.editor}>
         {editor !== null && !readOnly && <Toolbar editor={editor} upload={upload} />}
+        {editor !== null && !readOnly && <AltTextRow editor={editor} />}
         <EditorContent editor={editor} />
       </div>
     </div>
