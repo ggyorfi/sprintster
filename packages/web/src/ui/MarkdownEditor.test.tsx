@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MarkdownEditor } from './MarkdownEditor.js';
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe('MarkdownEditor', () => {
   it('renders markdown formatted in place', () => {
@@ -38,6 +42,36 @@ describe('MarkdownEditor', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Heading 1' }));
     await waitFor(() => expect(latest).not.toBe(''));
     expect(latest).toContain('![A blue cover](/assets/abc123)');
+  });
+
+  it('stores an asset reference root-relative even when the API base URL is a full origin', async () => {
+    vi.stubEnv('VITE_API_URL', 'https://app.example.com');
+    let latest = '';
+    const { container } = render(
+      <MarkdownEditor
+        value={'Intro\n\n![A blue cover](https://app.example.com/assets/abc123)\n\nOutro'}
+        onChange={(v) => (latest = v)}
+      />,
+    );
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('https://app.example.com/assets/abc123');
+    await userEvent.click(screen.getByRole('button', { name: 'Heading 1' }));
+    await waitFor(() => expect(latest).not.toBe(''));
+    expect(latest).toContain('![A blue cover](/assets/abc123)');
+    expect(latest).not.toContain('app.example.com');
+  });
+
+  it('leaves a URL that is not ours untouched, including a data URL', async () => {
+    let latest = '';
+    render(
+      <MarkdownEditor
+        value={'![a](data:image/png;base64,iVBOR)\n\n![b](https://elsewhere.example/p.png)\n\nTail'}
+        onChange={(v) => (latest = v)}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Heading 1' }));
+    await waitFor(() => expect(latest).not.toBe(''));
+    expect(latest).toContain('![a](data:image/png;base64,iVBOR)');
+    expect(latest).toContain('![b](https://elsewhere.example/p.png)');
   });
 
   it('is not editable in read-only mode and hides the toolbar (preview reuse)', () => {

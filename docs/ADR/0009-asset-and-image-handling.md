@@ -26,6 +26,11 @@ everything.
 resolves against the API base only at render. An absolute URL in stored content
 would make the content itself environment-specific.
 
+The normalisation is deliberately narrow: it strips our own configured API base,
+whether that is a full origin or a proxied path prefix, and nothing else. A URL
+pointing anywhere but our asset route is content, not an asset reference, and is
+left exactly as the author wrote it.
+
 **The stored form is plain CommonMark**, `![alt](/assets/<hash>)`. No HTML, no
 custom syntax, no dimension metadata: consumers parse bodies with ordinary
 markdown tooling, and real dimensions are read from the blob.

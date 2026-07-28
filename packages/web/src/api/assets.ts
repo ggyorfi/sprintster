@@ -1,4 +1,4 @@
-import { resolveApiBaseUrl } from './config.js';
+import { resolveApiBaseUrl, type ApiEnv } from './config.js';
 
 export interface UploadedAsset {
   hash: string;
@@ -18,4 +18,10 @@ export async function uploadAsset(file: File): Promise<UploadedAsset> {
 
 export function assetUrl(hash: string): string {
   return `${resolveApiBaseUrl()}/assets/${hash}`;
+}
+
+// Exact inverse of assetUrl: stored content keeps our asset references root-relative, so a body is not tied to the environment it was authored in. Any other URL is content, and passes through untouched.
+export function storedAssetUrl(src: string, env?: ApiEnv): string {
+  const base = resolveApiBaseUrl(env);
+  return src.startsWith(`${base}/assets/`) ? src.slice(base.length) : src;
 }

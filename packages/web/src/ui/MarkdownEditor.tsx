@@ -3,7 +3,18 @@ import { useEditor, useEditorState, EditorContent, type Editor } from '@tiptap/r
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
 import Image from '@tiptap/extension-image';
+import { storedAssetUrl } from '../api/assets.js';
 import styles from './MarkdownEditor.module.css';
+
+// Serialising is the one path every edit goes through, so it is where the root-relative rule is enforced rather than assumed.
+const AssetImage = Image.extend({
+  renderMarkdown: (node) => {
+    const src = storedAssetUrl(String(node.attrs?.['src'] ?? ''));
+    const alt = String(node.attrs?.['alt'] ?? '');
+    const title = String(node.attrs?.['title'] ?? '');
+    return title === '' ? `![${alt}](${src})` : `![${alt}](${src} "${title}")`;
+  },
+}).configure({ inline: false, allowBase64: false, resize: false });
 
 export interface MarkdownEditorProps {
   label?: string;
@@ -82,7 +93,7 @@ export function MarkdownEditor({ label, value, onChange, readOnly = false }: Mar
   onChangeRef.current = onChange;
 
   const editor = useEditor({
-    extensions: [StarterKit, Markdown, Image.configure({ inline: false, allowBase64: false, resize: false })],
+    extensions: [StarterKit, Markdown, AssetImage],
     content: value,
     contentType: 'markdown',
     editable: !readOnly,

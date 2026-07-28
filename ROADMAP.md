@@ -116,9 +116,13 @@ change.
    alt text intact. The test fails against today's editor.
 
 2. **Normalise the URL on serialise.** `agreed`. Extend the node to override
-   `renderMarkdown` so a recognised API origin is stripped back to
-   `/assets/<hash>`, and decide what it does with a `data:` URL, which the
-   node's own `allowBase64` option does not stop on the markdown path.
+   `renderMarkdown` so the configured API base, whether a full origin or a
+   proxied path prefix, is stripped back to `/assets/<hash>`. The rule is narrow
+   on purpose: only our own asset URLs are rewritten. Any other URL, including a
+   `data:` URL and a link to someone else's image, is content and passes through
+   untouched. Rewriting it would be the same destruction of an author's content
+   that step 1 just fixed; a `data:` URL is instead avoided at the point of
+   insert, where we upload rather than inline (step 5).
    *Done when:* with a non-empty API base URL configured, the editor displays
    the image and the serialised markdown still reads `/assets/<hash>`, asserted
    on the stored string rather than on the DOM, including for a node whose `src`

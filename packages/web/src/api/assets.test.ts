@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { uploadAsset, assetUrl } from './assets.js';
+import { uploadAsset, assetUrl, storedAssetUrl } from './assets.js';
 
 const uploaded = { hash: 'd4', filename: 'hero.png', contentType: 'image/png', size: 30 };
 
@@ -32,5 +32,32 @@ describe('uploadAsset', () => {
 describe('assetUrl', () => {
   it('builds the /assets/:hash path', () => {
     expect(assetUrl('d4')).toBe('/assets/d4');
+  });
+});
+
+describe('storedAssetUrl', () => {
+  it('strips a full origin, so a body authored against a remote daemon is not tied to it', () => {
+    const env = { VITE_API_URL: 'https://app.example.com' };
+    expect(storedAssetUrl('https://app.example.com/assets/d4', env)).toBe('/assets/d4');
+  });
+
+  it('strips a proxied path prefix', () => {
+    expect(storedAssetUrl('/api/assets/d4', { VITE_API_URL: '/api' })).toBe('/assets/d4');
+  });
+
+  it('leaves an already root-relative reference alone', () => {
+    expect(storedAssetUrl('/assets/d4', {})).toBe('/assets/d4');
+    expect(storedAssetUrl('/assets/d4', { VITE_API_URL: '/api' })).toBe('/assets/d4');
+  });
+
+  it('is the exact inverse of assetUrl', () => {
+    expect(storedAssetUrl(assetUrl('d4'))).toBe('/assets/d4');
+  });
+
+  it('passes through a URL that is not ours: it is content, not an asset reference', () => {
+    const env = { VITE_API_URL: 'https://app.example.com' };
+    expect(storedAssetUrl('https://elsewhere.example/photo.png', env)).toBe('https://elsewhere.example/photo.png');
+    expect(storedAssetUrl('data:image/png;base64,iVBOR', env)).toBe('data:image/png;base64,iVBOR');
+    expect(storedAssetUrl('https://app.example.com/other/d4', env)).toBe('https://app.example.com/other/d4');
   });
 });
