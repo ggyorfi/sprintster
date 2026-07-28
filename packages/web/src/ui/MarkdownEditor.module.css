@@ -137,3 +137,15 @@
   background: none;
   padding: 0;
 }
+
+.editor :global(.ProseMirror img) {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.5em 0;
+  border-radius: var(--radius);
+}
+
+.editor :global(.ProseMirror img.ProseMirror-selectednode) {
+  box-shadow: 0 0 0 3px var(--ring);
+}

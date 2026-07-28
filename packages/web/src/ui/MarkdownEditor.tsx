@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useEditor, useEditorState, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
+import Image from '@tiptap/extension-image';
 import styles from './MarkdownEditor.module.css';
 
 export interface MarkdownEditorProps {
@@ -81,7 +82,7 @@ export function MarkdownEditor({ label, value, onChange, readOnly = false }: Mar
   onChangeRef.current = onChange;
 
   const editor = useEditor({
-    extensions: [StarterKit, Markdown],
+    extensions: [StarterKit, Markdown, Image.configure({ inline: false, allowBase64: false, resize: false })],
     content: value,
     contentType: 'markdown',
     editable: !readOnly,

@@ -21,6 +21,25 @@ describe('MarkdownEditor', () => {
     await waitFor(() => expect(bold).toHaveAttribute('aria-pressed', 'true'));
   });
 
+  it('renders a stored markdown image', () => {
+    const { container } = render(
+      <MarkdownEditor value={'Intro\n\n![A blue cover](/assets/abc123)\n\nOutro'} onChange={() => {}} />,
+    );
+    const img = container.querySelector('img');
+    expect(img?.getAttribute('src')).toBe('/assets/abc123');
+    expect(img?.getAttribute('alt')).toBe('A blue cover');
+  });
+
+  it('keeps an existing image when unrelated text is edited', async () => {
+    let latest = '';
+    render(
+      <MarkdownEditor value={'Intro\n\n![A blue cover](/assets/abc123)\n\nOutro'} onChange={(v) => (latest = v)} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Heading 1' }));
+    await waitFor(() => expect(latest).not.toBe(''));
+    expect(latest).toContain('![A blue cover](/assets/abc123)');
+  });
+
   it('is not editable in read-only mode and hides the toolbar (preview reuse)', () => {
     const { container } = render(<MarkdownEditor value={'plain text'} onChange={() => {}} readOnly />);
     expect(container.querySelector('.ProseMirror')?.getAttribute('contenteditable')).toBe('false');

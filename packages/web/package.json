@@ -20,6 +20,7 @@
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/lang-markdown": "^6.5.1",
     "@sprintster/engine": "workspace:*",
+    "@tiptap/extension-image": "^3.29.0",
     "@tiptap/markdown": "^3.28.0",
     "@tiptap/pm": "^3.28.0",
     "@tiptap/react": "^3.28.0",

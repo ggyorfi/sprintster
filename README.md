@@ -24,6 +24,9 @@ Full docs live in [`docs/`](docs/README.md):
 - [Views and lists](docs/views-and-lists.md): forms and list screens.
 - [CLI (`s8r`)](docs/cli.md): the commands that run your app.
 
+The docs describe what exists today. [Roadmap](ROADMAP.md) covers what we have
+decided to build next, and why.
+
 ## License
 
 sprintster is licensed under **AGPL-3.0-only WITH a runtime and output
