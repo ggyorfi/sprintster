@@ -253,9 +253,17 @@ function checkAssets(config: Config): void {
         `'assets' names unknown object '${named}'; define that object, or point 'assets' at an existing one. See ${ASSETS_DOC}`,
       );
     }
-    if (!obj.properties.some((p) => p.type === 'image')) {
+    const files = obj.properties.filter((p) => p.type === 'image');
+    if (files.length === 0) {
       throw new Error(
         `'assets' object '${named}' has no image property; an asset object needs one to hold its file. See ${ASSETS_DOC}`,
+      );
+    }
+    if (files.length > 1) {
+      throw new Error(
+        `'assets' object '${named}' has ${files.length} image properties ` +
+          `(${files.map((p) => `'${p.name}'`).join(', ')}); it must have exactly one, so /assets/<id> knows which file to ` +
+          `serve. See ${ASSETS_DOC}`,
       );
     }
     return;

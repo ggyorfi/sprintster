@@ -3,7 +3,7 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { appConfig, objectRoute, type BlobApi, type ObjectConfig, type PluginObjectApi } from '@sprintster/engine';
 import { healthRoute } from './routes/health.js';
 import { createObjectRoute } from './routes/object.js';
-import { createAssetRoute } from './routes/asset.js';
+import { createAssetRoute, type AssetHashResolver } from './routes/asset.js';
 
 export interface MountedObject {
   api: PluginObjectApi<{ id: string }>;
@@ -20,6 +20,26 @@ export interface AppDeps {
 function looksLikeFile(path: string): boolean {
   const last = path.slice(path.lastIndexOf('/') + 1);
   return last.includes('.');
+}
+
+// The nominated assets object holds its file in exactly one image property (loadConfig enforces that), so /assets/<id> reads the hash from there.
+function assetHashResolver(deps: AppDeps): AssetHashResolver | undefined {
+  const named = appConfig.assets;
+  if (named === undefined) return undefined;
+  const mounted = deps.apis.find((d) => d.obj.name === named);
+  const file = mounted?.obj.properties.find((p) => p.type === 'image');
+  if (mounted === undefined || file === undefined) return undefined;
+  const lifecycle = mounted.obj.lifecycle;
+  const removedField = lifecycle !== undefined && 'softDelete' in lifecycle ? lifecycle.softDelete : undefined;
+  return async (id) => {
+    const row = (await mounted.api.get(id)) as Record<string, unknown> | null;
+    if (row === null) return null;
+    if (removedField !== undefined && row[removedField] === true) return null;
+    const value = row[file.name];
+    if (value === null || typeof value !== 'object') return null;
+    const hash = (value as { hash?: unknown }).hash;
+    return typeof hash === 'string' ? hash : null;
+  };
 }
 
 // A path whose first segment is a mounted API namespace can never be a client-side route.
@@ -44,7 +64,7 @@ export function createApp(deps: AppDeps): Hono {
   }
   const apiRoots = new Set(['health', 'config', ...deps.apis.map(({ obj }) => objectRoute(obj))]);
   if (deps.blobApi !== undefined) {
-    app.route('/assets', createAssetRoute(deps.blobApi));
+    app.route('/assets', createAssetRoute(deps.blobApi, assetHashResolver(deps)));
     apiRoots.add('assets');
   }
   app.use('/*', async (c, next) => {

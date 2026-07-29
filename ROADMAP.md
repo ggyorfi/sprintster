@@ -114,7 +114,7 @@ never collected, so we tolerate them and never emit them.
       of the docs; that docs section exists; and a config that asks for neither
       loads unchanged.
 
-- [ ] **2. Serve an asset URL.** After 1. `GET /assets/<id>` serves the blob
+- [x] **2. Serve an asset URL.** After 1. `GET /assets/<id>` serves the blob
       that record currently holds. The response cannot be `immutable`, since the
       point is that it changes, so it carries `ETag` set to the content hash and
       a short `max-age`: an unchanged image answers `304` without resending

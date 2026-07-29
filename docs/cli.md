@@ -48,6 +48,13 @@ configured for the `dev` environment).
   SVG is not accepted, because blobs are served from the app's own origin and an
   SVG opened directly would run its scripts there. The limits live in the
   daemon, so they apply to every client and not only to the bundled GUI.
+- `GET /assets/:id`: the file the [asset](./objects-and-properties.md#assets)
+  with that id currently holds, when the config names an `assets` object. Unlike
+  the hash URL it is not immutable, since replacing the asset's file changes what
+  it serves, so it carries a short `max-age` and an `ETag` set to the content
+  hash: an unchanged image answers `304`. `HEAD` returns the same `ETag` with no
+  body, which is the cheapest way for a build to learn an asset's current hash
+  before caching the bytes under the immutable `/assets/:hash` URL.
 - The type of an upload is read from its leading bytes, never from the
   `Content-Type` the client puts on the multipart part. A valid image is
   therefore accepted whether or not the client bothered to declare a type, and

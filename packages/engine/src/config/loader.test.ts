@@ -518,6 +518,17 @@ describe('loadConfig: assets', () => {
     expect(() => loadConfig(raw)).toThrow(/has no image property/);
   });
 
+  it('refuses an assets object with more than one image property, since /assets/<id> must know which to serve', () => {
+    const raw = clone();
+    raw.objects.push({
+      ...assetObject,
+      properties: [...assetObject.properties, { name: 'thumbnail', type: 'image', title: 'Thumbnail' }],
+    });
+    raw.assets = 'asset';
+    expect(() => loadConfig(raw)).toThrow(/has 2 image properties/);
+    expect(() => loadConfig(raw)).toThrow(/'file', 'thumbnail'/);
+  });
+
   it('keeps the assets name on the loaded config', () => {
     const raw = clone();
     raw.objects.push(assetObject);
