@@ -25,7 +25,23 @@ Full docs live in [`docs/`](docs/README.md):
 - [CLI (`s8r`)](docs/cli.md): the commands that run your app.
 
 The docs describe what exists today. [Roadmap](ROADMAP.md) covers what we have
-decided to build next, and why.
+decided to build next, and why, and [`docs/ADR/`](docs/ADR/) records the
+decisions the architecture rests on.
+
+## Working on sprintster itself
+
+```
+pnpm install
+pnpm build      # required before the first pnpm test
+pnpm test
+```
+
+Packages import each other through their published entry points, which resolve
+to `dist/`. That directory is not committed, so a fresh clone has to build once
+before the test suites can resolve `@sprintster/engine`. Rebuild whenever you
+change something another package imports, or its tests will run against the last
+build. (The `s8r dev` path does not need this: it resolves workspace imports
+straight to TypeScript source.)
 
 ## License
 

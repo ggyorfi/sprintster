@@ -55,6 +55,18 @@ the in-prose image have genuinely different stored shapes, but identical upload,
 error and validation behaviour. Limits are fixed and enforced server-side, so
 they also apply to clients talking to the API directly.
 
+**What counts as an acceptable upload is one function in the engine**
+(`assetUploadProblem`): at most 10 MB, and PNG, JPEG, GIF, WebP or AVIF. The
+daemon enforces it and answers `413` or `400`; the widgets call the same function
+first only to avoid sending a file we already know will be refused. There is no
+per-property override, so a limit cannot differ between two fields by accident.
+
+**SVG is not accepted.** Blobs are served from the application's own origin with
+their stored content type, so an SVG opened directly would execute its scripts
+there, against the app's session. That is a stored cross-site-scripting shape,
+and excluding the format is cheaper than defending it with headers or a
+sandboxed origin. Revisit only alongside a decision about how blobs are served.
+
 **References are indexed as events.** An engine-side extractor maps a property
 value to the hashes it references, exhaustively over property types. Writes
 append `AssetReferenced` and `AssetDereferenced` facts to a stream keyed by the

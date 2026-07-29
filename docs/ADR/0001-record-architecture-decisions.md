@@ -27,7 +27,7 @@ Without documented decisions, we risk:
 We will use **Architecture Decision Records (ADRs)** to document significant architectural decisions.
 
 We will:
-- Store ADRs in `/docs/adr/` directory
+- Store ADRs in the `docs/ADR/` directory
 - Use the Michael Nygard format (simple 4-section structure)
 - Number ADRs sequentially (0001, 0002, etc.)
 - Use markdown for easy reading and version control

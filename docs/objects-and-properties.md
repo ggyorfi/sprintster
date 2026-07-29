@@ -157,7 +157,7 @@ Every property has these common fields:
 | `id` | string | Primary key. `"strategy": "uuid"` (client-minted) or `"sequence"` (server-allocated number). Usually `system: true`. |
 | `text` | string | Single or multi-line (see `rows` in a view). |
 | `code` | string | Source code editor with highlighting. `"language"`: e.g. `markdown`, `html`, `css`, `json`, `plaintext`. |
-| `markdown` | string | Rich Markdown editor; stores raw CommonMark. `"editor"`: `wysiwyg`, `source`, or `combo` (default). |
+| `markdown` | string | Rich Markdown editor; stores raw CommonMark, and may contain [images](#images-in-a-markdown-body). `"editor"`: `wysiwyg`, `source`, or `combo` (default). |
 | `enum` | string | One of `"values": ["a", "b"]`. Renders as a select. |
 | `money` | string | Integer minor units as a string (e.g. pence). `"currency": "GBP"`. |
 | `integer` | number | Whole number. |
@@ -170,6 +170,40 @@ Every property has these common fields:
 | `image` | object | Uploaded image reference: `{ hash, filename, contentType, size, width?, height?, alt? }`. Bytes stored on the filesystem; see [blobs](./configuration.md#blobs). |
 | `object` | object | A nested group: `"properties": [ ... ]`. |
 | `array` | array | A repeating group of items: `"item": { "properties": [ ... ] }`. Honors `minItems`/`maxItems`. |
+
+### Images in a markdown body
+
+An `image` property holds one image as a field. To put images *inside* prose, use
+a `markdown` property: the rich editor can insert them, and they are stored as
+ordinary CommonMark.
+
+```markdown
+![A blue cover](/assets/a2a08d0b4b53676425...)
+```
+
+Authors insert one with the toolbar's image button, or by pasting or dropping a
+file into the editor. Any of those uploads the file to
+[`POST /assets`](./cli.md#what-the-daemon-serves) and inserts the reference at
+the cursor. Content addressing means the same file uploaded twice is one blob,
+so there is nothing to deduplicate. A newly inserted image is selected, and an
+Alt text field appears above the editor for describing it; alt text is stored in
+the markdown itself and left empty until written, which is correct for a
+decorative image.
+
+Two guarantees for anything that consumes these bodies:
+
+- **The URL is always root-relative**, `/assets/<hash>`, never absolute. It is
+  normalised on save, so a body authored against a dev daemon does not carry
+  that host into your database. Resolve it against your API base when rendering.
+- **The markdown is plain CommonMark.** No HTML `img`, no custom syntax, and no
+  width, height or title metadata. Parse bodies with ordinary markdown tooling
+  and read real dimensions from the blob if you need them.
+
+A URL that is not one of our asset references, an external image or a `data:`
+URL, is treated as content and left exactly as written.
+
+Editing markdown as text, in source mode or in the TUI, preserves images
+untouched. Inserting is a web-only affordance; the terminal has no image picker.
 
 Example fields:
 

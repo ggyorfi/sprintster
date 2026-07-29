@@ -3,43 +3,46 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ComboEditor } from './ComboEditor.js';
 
+// ComboEditor lazy-loads both editors; a cold import can exceed waitFor's 1s default when the whole workspace suite runs at once.
+const LAZY = { timeout: 5000 };
+
 describe('ComboEditor', () => {
   it('opens in the rich (wysiwyg) editor by default', async () => {
     const { container } = render(<ComboEditor label="Body" value={'# Hi'} onChange={() => {}} />);
     expect(screen.getByText('Body')).toBeInTheDocument();
-    await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull());
+    await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull(), LAZY);
     expect(container.querySelector('.cm-editor')).toBeNull();
   });
 
   it('toggles to source and back over the same value', async () => {
     const { container } = render(<ComboEditor value={'# Hi'} onChange={() => {}} />);
-    await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull());
+    await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull(), LAZY);
     await userEvent.click(screen.getByRole('tab', { name: 'Source' }));
-    await waitFor(() => expect(container.querySelector('.cm-editor')).not.toBeNull());
+    await waitFor(() => expect(container.querySelector('.cm-editor')).not.toBeNull(), LAZY);
     expect(container.querySelector('.ProseMirror')).toBeNull();
     expect(container.querySelector('.cm-content')?.textContent).toContain('# Hi');
     await userEvent.click(screen.getByRole('tab', { name: 'Rich' }));
-    await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull());
+    await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull(), LAZY);
     expect(container.querySelector('.cm-editor')).toBeNull();
   });
 
   it('keeps images through a round trip between the two editors', async () => {
     const body = 'Intro\n\n![A blue cover](/assets/abc123)\n\nOutro';
     const { container } = render(<ComboEditor value={body} onChange={() => {}} />);
-    await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull());
+    await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull(), LAZY);
 
     await userEvent.click(screen.getByRole('tab', { name: 'Source' }));
-    await waitFor(() => expect(container.querySelector('.cm-editor')).not.toBeNull());
+    await waitFor(() => expect(container.querySelector('.cm-editor')).not.toBeNull(), LAZY);
     expect(container.querySelector('.cm-content')?.textContent).toContain('![A blue cover](/assets/abc123)');
 
     await userEvent.click(screen.getByRole('tab', { name: 'Rich' }));
-    await waitFor(() => expect(container.querySelector('img')).not.toBeNull());
+    await waitFor(() => expect(container.querySelector('img')).not.toBeNull(), LAZY);
     expect(container.querySelector('img')?.getAttribute('src')).toBe('/assets/abc123');
   });
 
   it('respects defaultMode=source', async () => {
     const { container } = render(<ComboEditor value={'x'} onChange={() => {}} defaultMode="source" />);
-    await waitFor(() => expect(container.querySelector('.cm-editor')).not.toBeNull());
+    await waitFor(() => expect(container.querySelector('.cm-editor')).not.toBeNull(), LAZY);
     expect(container.querySelector('.ProseMirror')).toBeNull();
   });
 });
