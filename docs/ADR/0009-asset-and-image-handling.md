@@ -4,7 +4,11 @@ Date: 2026-07-28
 
 ## Status
 
-Accepted. Implementation is tracked in [ROADMAP.md](../../ROADMAP.md).
+Accepted, except for the in-body URL form, which is superseded by
+[ADR 10](./0010-body-images-reference-the-asset-record.md): stored markdown now
+references the asset record rather than the blob hash. Everything else here
+stands, including the root-relative rule, the plain-CommonMark rule, the node
+choice, and the upload limits.
 
 ## Context
 

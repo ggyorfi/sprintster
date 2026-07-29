@@ -157,7 +157,7 @@ Every property has these common fields:
 | `id` | string | Primary key. `"strategy": "uuid"` (client-minted) or `"sequence"` (server-allocated number). Usually `system: true`. |
 | `text` | string | Single or multi-line (see `rows` in a view). |
 | `code` | string | Source code editor with highlighting. `"language"`: e.g. `markdown`, `html`, `css`, `json`, `plaintext`. |
-| `markdown` | string | Rich Markdown editor; stores raw CommonMark, and may contain [images](#images-in-a-markdown-body). `"editor"`: `wysiwyg`, `source`, or `combo` (default). |
+| `markdown` | string | Rich Markdown editor; stores raw CommonMark. `"editor"`: `wysiwyg`, `source`, or `combo` (default). `"images": true` allows [in-body images](#images-in-a-markdown-body) and requires an [assets](#assets) object. |
 | `enum` | string | One of `"values": ["a", "b"]`. Renders as a select. |
 | `money` | string | Integer minor units as a string (e.g. pence). `"currency": "GBP"`. |
 | `integer` | number | Whole number. |
@@ -202,6 +202,15 @@ Two guarantees for anything that consumes these bodies:
 A URL that is not one of our asset references, an external image or a `data:`
 URL, is treated as content and left exactly as written.
 
+**A body image points at bytes, not at a record.** That is what makes the
+markdown portable, and it has one consequence worth knowing before you rely on
+it. If you keep pictures as records of their own and attach them with `ref` or
+`refs`, uploading a replacement file updates every one of those attachments,
+because they point at the record. Bodies do not follow: they hold the old
+content hash and keep showing the old image until someone re-inserts it. For the
+same reason, when two records happen to hold the same file, a body cannot say
+which of them it meant.
+
 Editing markdown as text, in source mode or in the TUI, preserves images
 untouched. Inserting is a web-only affordance; the terminal has no image picker.
 
@@ -215,6 +224,61 @@ Example fields:
 { "name": "tags",      "type": "refs", "target": "tag" }
 { "name": "slug",      "type": "text", "validation": { "required": true, "unique": true, "caseInsensitive": true } }
 ```
+
+## Assets
+
+An `image` property holds a file inline on the record that uses it. That is the
+right shape for a one-off, a logo on a settings singleton, and the wrong one as
+soon as a picture is shared: two records using the same file each carry their
+own copy of its alt text, and editing one does not touch the other.
+
+For anything shared, give pictures an object of their own. There is no built-in
+asset type: an asset is an ordinary object that holds its file in an `image`
+property, plus whatever else the project wants, and records attach one with
+`ref` or `refs`.
+
+```jsonc
+{
+  "assets": "asset",
+  "objects": [
+    {
+      "name": "asset",
+      "title": "Asset", "titlePlural": "Assets",
+      "route": "media",
+      "lifecycle": { "softDelete": "removed" },
+      "properties": [
+        { "name": "id",    "type": "id", "strategy": "uuid", "system": true },
+        { "name": "file",  "type": "image",    "title": "File" },
+        { "name": "title", "type": "text",     "title": "Title" },
+        { "name": "alt",   "type": "text",     "title": "Alt text", "nullable": true },
+        { "name": "removed", "type": "boolean", "system": true }
+      ],
+      "lists": [ /* ... */ ]
+    }
+  ]
+}
+```
+
+Note the explicit `"route"`. The daemon reserves `assets` for serving files, so
+an object whose label slugs to that has to be given a different path. Loading a
+config without one fails with a message saying so.
+
+### The `assets` declaration
+
+`"assets"` names the object that in-body image URLs resolve against. It is a
+pointer, not a shape: the object stays entirely yours, and the only thing the
+declaration buys is that `/assets/<id>` knows where to look.
+
+It is required as soon as any `markdown` property asks for images:
+
+```jsonc
+{ "name": "body", "type": "markdown", "images": true }
+```
+
+`images` is off by default. A property that asks for it while no `assets` object
+is named is a configuration error, not an editor that quietly lacks a button, so
+the mistake surfaces at load rather than when an author goes looking for the
+control.
 
 ## Validation
 

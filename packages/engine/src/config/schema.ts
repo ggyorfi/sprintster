@@ -33,7 +33,11 @@ export type PropertyConfig =
   | (PropertyBase & { type: 'id'; strategy: 'uuid' | 'sequence' })
   | (PropertyBase & { type: 'text' })
   | (PropertyBase & { type: 'code'; language?: string | undefined })
-  | (PropertyBase & { type: 'markdown'; editor?: 'wysiwyg' | 'source' | 'combo' | undefined })
+  | (PropertyBase & {
+      type: 'markdown';
+      editor?: 'wysiwyg' | 'source' | 'combo' | undefined;
+      images?: boolean | undefined;
+    })
   | (PropertyBase & { type: 'enum'; values: string[] })
   | (PropertyBase & { type: 'money'; currency: string })
   | (PropertyBase & { type: 'integer' })
@@ -61,7 +65,12 @@ const IdProperty = z.object({ ...baseProperty, type: z.literal('id'), strategy: 
 const TextProperty = z.object({ ...baseProperty, type: z.literal('text') }).strict();
 const CodeProperty = z.object({ ...baseProperty, type: z.literal('code'), language: z.string().min(1).optional() }).strict();
 const MarkdownProperty = z
-  .object({ ...baseProperty, type: z.literal('markdown'), editor: z.enum(['wysiwyg', 'source', 'combo']).optional() })
+  .object({
+    ...baseProperty,
+    type: z.literal('markdown'),
+    editor: z.enum(['wysiwyg', 'source', 'combo']).optional(),
+    images: z.boolean().optional(),
+  })
   .strict();
 const EnumProperty = z.object({ ...baseProperty, type: z.literal('enum'), values: z.array(z.string()).min(1) }).strict();
 const MoneyProperty = z.object({ ...baseProperty, type: z.literal('money'), currency: z.string().min(1) }).strict();
@@ -286,6 +295,7 @@ export const ConfigSchema = z
     version: z.literal('1'),
     theme: ThemeConfig.default(() => ThemeConfig.parse({})),
     objects: z.array(ObjectConfig),
+    assets: z.string().min(1).optional(),
     plugins: z.array(PluginEntry).default([]),
   })
   .strict();

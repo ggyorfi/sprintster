@@ -8,10 +8,13 @@ export function loadConfig(raw: unknown): Config {
   return { ...config, objects: config.objects.map((o) => ({ ...o, route: objectRoute(o) })) };
 }
 
+const ASSETS_DOC = 'docs/objects-and-properties.md#assets';
+
 function validateSemantics(config: Config): void {
   const objectNames = config.objects.map((o) => o.name);
   assertUnique(objectNames, 'object name');
   checkRoutes(config);
+  checkAssets(config);
   const knownObjects = new Set(objectNames);
   const objectsByName = new Map(config.objects.map((o) => [o.name, o]));
   for (const obj of config.objects) {
@@ -46,7 +49,8 @@ function checkRoutes(config: Config): void {
     }
     if (RESERVED_ROUTES.has(route)) {
       throw new Error(
-        `object '${obj.name}' route '${route}' is reserved by the daemon (${[...RESERVED_ROUTES].join(', ')})`,
+        `object '${obj.name}' route '${route}' is reserved by the daemon ` +
+          `(${[...RESERVED_ROUTES].join(', ')}); give it an explicit 'route'`,
       );
     }
     const owner = ownerByRoute.get(route);
@@ -236,6 +240,35 @@ function checkLifecycle(obj: ObjectConfig): void {
   const field = 'softDelete' in obj.lifecycle ? obj.lifecycle.softDelete : obj.lifecycle.statusField;
   if (!obj.properties.some((p) => p.name === field)) {
     throw new Error(`lifecycle field '${field}' is not a property of object '${obj.name}'`);
+  }
+}
+
+// In-body images resolve /assets/<id> against one nominated object, so asking for them without naming it cannot work.
+function checkAssets(config: Config): void {
+  const named = config.assets;
+  if (named !== undefined) {
+    const obj = config.objects.find((o) => o.name === named);
+    if (obj === undefined) {
+      throw new Error(
+        `'assets' names unknown object '${named}'; define that object, or point 'assets' at an existing one. See ${ASSETS_DOC}`,
+      );
+    }
+    if (!obj.properties.some((p) => p.type === 'image')) {
+      throw new Error(
+        `'assets' object '${named}' has no image property; an asset object needs one to hold its file. See ${ASSETS_DOC}`,
+      );
+    }
+    return;
+  }
+  for (const obj of config.objects) {
+    for (const prop of obj.properties) {
+      if (prop.type === 'markdown' && prop.images === true) {
+        throw new Error(
+          `property '${obj.name}.${prop.name}' asks for in-body images, but no 'assets' object is named; ` +
+            `define an asset object and set 'assets' to its name. See ${ASSETS_DOC}`,
+        );
+      }
+    }
   }
 }
 

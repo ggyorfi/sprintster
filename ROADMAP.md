@@ -14,297 +14,302 @@ the file says what is actually done rather than what was planned. A step still
 carrying a tag (`in progress`, `blocked`, `open question`) needs something other
 than time before it can be ticked.
 
+Shipped and removed from this file: image handling in the markdown widgets. Its
+decisions are recorded in
+[ADR 9](./docs/ADR/0009-asset-and-image-handling.md), the authoring contract in
+[objects and properties](./docs/objects-and-properties.md#images-in-a-markdown-body).
+
 ---
 
-## Epic: image handling in the widgets
+## What we are not building
 
-**Goal.** An author can put an image into any content our widgets edit, without
-leaving the editor and without knowing what a content hash is, and the image
-survives every round trip through both frontends.
+The sprintster-cms team asked for an asset object layer over the blob store: a
+media library, with assets carrying their own title, alt, credit and licence.
 
-**Why now.** The sprintster-cms team cannot exercise their in-body image
-pipeline against real content, because nothing in our editors can produce it.
-Their build step resolves in-body image references, processes them, and rewrites
-the URL, and today it can only be tested against fabricated seed data.
+We are not building an asset object, in the engine or as a plugin. Not every
+application wants a media library, and the ones that do will not want the same
+one, so anything asset-shaped in the engine would be wrong for somebody.
 
-**What we found while scoping it.** The gap is not only a missing affordance.
-`MarkdownEditor` (`packages/web/src/ui/MarkdownEditor.tsx:84`) loads
-`StarterKit`, which has no image node, so an existing markdown image is
-destroyed on edit rather than preserved. Feeding
-`Intro\n\n![A blue cover](/assets/abc123)\n\nOutro` to the editor renders no
-`img` element at all, and one keystroke serialises the body back as
-`Intro\n\nA blue cover\n\nOutro`: the image collapses to its alt text as bare
-prose. `ComboEditor` opens in WYSIWYG by default
-(`packages/web/src/ui/ComboEditor.tsx:18`), so this happens to an author who
-opens a post and edits an unrelated paragraph.
+We also found we do not need to. An asset is an ordinary config-defined object
+with an `image` property and whatever other fields a project wants. The defect
+in `image` was never the type: it is that used inline on a post, the metadata is
+copied per record, so two posts using one picture hold two independent alt
+texts. Used as a field on an object of its own, the same type holds that
+metadata exactly once. `ref` and `refs` to that object already work, and so does
+referential integrity.
 
-The mechanism, for whoever picks this up: `@tiptap/markdown` registers per-node
-handlers by reading `markdownTokenName`, `parseMarkdown` and `renderMarkdown`
-off each extension, and its fallback parser handles `paragraph`, `heading`,
-`text`, `html`, `escape` and `space` but has no `image` case. An unhandled token
-falls to a default branch that descends into the token's children, and for a
-marked image token those children are the alt text. Hence the collapse.
+One qualification, added after we decided that body images reference the asset
+record ([ADR 10](./docs/ADR/0010-body-images-reference-the-asset-record.md)):
+the engine does acquire a config-level pointer naming which object body image
+URLs resolve against. That is a pointer, not a shape, and the object stays
+entirely the project's. It is still a coupling we had refused, so it is written
+down here rather than glossed.
 
-That reorders the work: the preservation bug is step 1 and ships on its own,
-ahead of any insert UI.
+So the project declares the asset object; we supply capabilities that are not
+about assets at all:
 
-### The rule that governs all of it
+| they described | what it actually is |
+|---|---|
+| media library screen | a list display mode with thumbnails |
+| asset picker | a ref picker for targets that carry an image |
+| upload inside the picker | create the target record inline |
+| bulk upload | create many records from many files |
+| where is this used | reverse references, for every object |
 
-**Stored content holds `/assets/<hash>`, root-relative, always.** `assetUrl()`
-(`packages/web/src/api/assets.ts:19`) prefixes `resolveApiBaseUrl()`, which is
-empty when the daemon hosts the bundle but a full origin whenever `VITE_API_URL`
-is set. If that value reaches stored content, bodies authored against a dev
-daemon carry `http://127.0.0.1:3030/...` into the database and every page
-generated from them points at someone's laptop. Rendering may resolve the URL
-however it likes; only the stored string is constrained.
+Each is worth having for products, people and venues as much as for pictures.
+That is also the discipline this rests on: any capability that only makes sense
+for an asset library should be refused rather than generalised, or we pay a
+generality tax for a single user.
 
-The stored form is plain CommonMark, `![alt](/assets/<hash>)`. Not an HTML
-`img`, not a custom node syntax, and no width, height or title metadata encoded
-into the URL. Consumers parse bodies with ordinary markdown tooling, and real
-dimensions are read from the blob by whoever needs them, consistent with
-`readImageSize` already being best-effort
-(`packages/web/src/ui/ImageField.tsx:37`).
+Plugins keep a job here, just not this one. An alternative asset *backend*, S3
+or Cloudinary behind `PluginObjectApi`, fits the existing mechanism. The UI does
+not: plugin contexts reach the daemon, CLI and TUI
+(`engine/src/plugin/types.ts:52-70`) and there is no web registry.
 
-### Decisions
+---
 
-**The node.** We adopt `@tiptap/extension-image` at 3.28.0. Verified against its
-published source: it ships a working `parseMarkdown` (mapping `token.href`,
-`token.text` and `token.title` onto the node) and a `renderMarkdown` that emits
-exactly `![alt](src)`, or `![alt](src "title")` when a title is set. So the
-round trip works without us writing those handlers, which is why step 1 is as
-small as it is.
+## Epic: body images reference the asset record
 
-We configure it `inline: false`, `allowBase64: false`, `resize: false`. Only the
-last does exactly what its name suggests: width and height attributes exist on
-the node but are never serialised, so no dimensions enter the document.
+**Goal.** Replacing the file behind a picture updates prose as well as
+attachments, and a body image names exactly one record.
 
-The other two do less than they look like, measured rather than assumed.
-`inline: false` does not force an image onto its own line: markdown position is
-preserved on a round trip, so an image inside a sentence stays inside it.
-`allowBase64: false` only governs the HTML paste rule, so a `data:` URL already
-present in markdown parses and round-trips fine. Neither hurts preservation,
-where reproducing the author's content is what we want, but it means step 2's
-override is the only thing that can keep a `data:` URL out of storage.
+**Why.** See [ADR 10](./docs/ADR/0010-body-images-reference-the-asset-record.md).
+A body holding a blob hash points at bytes, so a replacement reaches every `ref`
+and `refs` attachment and silently misses prose, and when two records hold one
+blob a body cannot say which it meant.
 
-**We extend it anyway, to own `renderMarkdown`.** Overriding the serialiser
-gives us one choke point where an absolute URL is normalised back to
-`/assets/<hash>` before it can reach storage. Enforcing there beats trusting
-every upstream path to produce the right thing.
+**What it costs.** A stored body stops being self-resolving outside its
+database: a hash meant something anywhere the blob store existed, an id does
+not. That contradicts an explicit sprintster-cms requirement and they have to
+agree to it. The image button also becomes opt-in rather than implicit, which
+changes behaviour we shipped; with no project in production yet that costs
+nothing but the documentation.
 
-**Title is never authored.** We do not surface it, so it stays null and never
-serialises, and output stays the plain `![alt](/assets/<hash>)` the CMS asked
-for. We do not strip it either: an imported body that legitimately has one round
-trips unchanged.
+**Nothing degrades silently.** A config that asks for in-body images without an
+asset object is a load error, not an editor that quietly lacks a button. The
+`image` property is deliberately not gated this way: an asset object *is* an
+ordinary object with an `image` property, so gating it would make it require
+itself. Uploading bytes into a field needs no asset object, and that is what
+lets you define one.
 
-**The two image paths share a hook, not a widget.** `ImageField` writes
-structured JSON into the row and prose writes a bare hash into a string, so the
-stored shapes genuinely differ. What they share is the upload call, busy and
-error state, and file validation. One hook, two widgets. Without that, step 6's
-three failure behaviours get written twice and drift.
-
-**Upload limits are fixed for now.** One sensible limit, enforced server-side so
-it also applies to anything talking to the API directly. No new `PropertyConfig`
-surface yet; per-property overrides can be added later without a breaking
-change.
+**One form in content, one at the transport layer.** After step 4 the only asset
+URL that appears in stored content is `/assets/<id>`. `/assets/<hash>` remains,
+untouched, as the content-addressed route: it is what the `image` property
+renders from (`web/src/ui/ImageField.tsx:81`), and the only URL that can be
+cached forever, which is not
+removable because an asset object is itself an object with an `image` property.
+A legacy hash URL in an old body keeps resolving indefinitely, since blobs are
+never collected, so we tolerate them and never emit them.
 
 ### Steps
 
-- [x] **1. Stop destroying images.** Add the image node so
-      `![alt](/assets/<hash>)` parses, renders and serialises unchanged. Ships
-      alone, before any insert UI, because it is a correctness fix on existing
-      content.
-      *Done when:* a test opens a body containing an image, edits unrelated text,
-      and asserts the emitted markdown still contains the original image with its
-      alt text intact. The test fails against today's editor.
+- [x] **1. Config names the asset object, and images are opt in.** A top-level
+      declaration naming which object body image URLs resolve against, and an
+      `images` flag on a `markdown` property, off by default. `loadConfig`
+      rejects a named object that does not exist or carries no image property,
+      and rejects any property asking for images while no asset object is
+      named.
+      *Done when:* each of those three bad configs fails to load with a message
+      naming the offender, saying what to define, and linking the assets section
+      of the docs; that docs section exists; and a config that asks for neither
+      loads unchanged.
 
-- [x] **2. Normalise the URL on serialise.** Extend the node to override
-      `renderMarkdown` so the configured API base, whether a full origin or a
-      proxied path prefix, is stripped back to `/assets/<hash>`. The rule is narrow
-      on purpose: only our own asset URLs are rewritten. Any other URL, including a
-      `data:` URL and a link to someone else's image, is content and passes through
-      untouched. Rewriting it would be the same destruction of an author's content
-      that step 1 just fixed; a `data:` URL is instead avoided at the point of
-      insert, where we upload rather than inline (step 5).
-      *Done when:* with a non-empty API base URL configured, the editor displays
-      the image and the serialised markdown still reads `/assets/<hash>`, asserted
-      on the stored string rather than on the DOM, including for a node whose `src`
-      was set absolute; and a `data:` URL has defined, tested behaviour.
+- [ ] **2. Serve an asset URL.** After 1. `GET /assets/<id>` serves the blob
+      that record currently holds. The response cannot be `immutable`, since the
+      point is that it changes, so it carries `ETag` set to the content hash and
+      a short `max-age`: an unchanged image answers `304` without resending
+      bytes, and a replacement is picked up on the next revalidation.
+      *Done when:* it serves the current blob, follows a replacement, answers
+      `304` to a matching `If-None-Match`, 404s for an unknown or removed
+      record, and the existing `SHA256` guard still lets static files under
+      `/assets` fall through. `HEAD` answers the same `ETag` with no body: a
+      generator uses it to learn an asset's current hash without downloading it,
+      then caches the bytes under the `immutable` `/assets/<hash>` URL.
 
-- [x] **3. Insert from the toolbar.** A file picker in the WYSIWYG toolbar
-      that uploads through the shared hook and inserts at the cursor. Content
-      addressing means the same file uploaded twice yields one blob and there is
-      nothing to deduplicate.
-      *Done when:* an author inserts an image without leaving the editor, and the
-      row read back from the API contains the root-relative markdown.
+- [ ] **3. Insert creates an asset.** After 2. On a markdown property that asks
+      for images, the button, paste and drop upload the blob, create the asset
+      record, and write `![](/assets/<id>)`.
+      *Done when:* inserting produces an asset reference and a record carrying
+      the blob; on a property that did not ask for images there is no button and
+      a pasted image falls through to the editor rather than failing.
 
-- [x] **4. Alt text, authorable in place.** Insert with empty alt (valid
-      CommonMark, and correct for decorative images) and let a selected image be
-      given alt text in place. We are deliberately not prompting on insert: a modal
-      on every paste is hostile, and screenshots are the main case.
-      *Done when:* alt text can be set and changed after insert, and round-trips
-      through save and reload.
-
-- [x] **5. Paste and drag.** After 3 and 4. The same upload path bound to
-      paste and drop. Paste is the interaction authors actually reach for.
-      *Done when:* pasting an image and dropping a file both produce the same
-      markdown as the toolbar path, and pasting the same image twice results in one
-      blob.
-
-- [x] **6. Failure and limits.** Three cases, now decided. **Over-size or
-      wrong-type**: one definition in the engine (`assetUploadProblem`, 10 MB,
-      PNG/JPEG/GIF/WebP/AVIF), enforced by the daemon with 413 or 400 so it
-      binds anything talking to the API, and checked again in the shared hook
-      only to avoid sending a file we know will be refused. SVG is excluded
-      deliberately: blobs are served from the app's own origin, so an SVG opened
-      directly would run its scripts there. **Missing blob**: the image is marked
-      `data-missing` and styled as a labelled placeholder rather than left as a
-      broken icon. **Progress**: no. `fetch` cannot report upload progress
-      without moving to XHR, and at a 10 MB ceiling the busy state is enough;
-      revisit only if the limit rises.
-      *Done when:* each of those three cases has defined behaviour and a test, and
-      the size and type limits are enforced by the daemon rather than only by the
-      widgets.
-
-- [x] **7. Confirm the lossless paths stay lossless.** Source mode
-      (`CodeEditor`) and the TUI edit markdown as text and should preserve images
-      for free. We are not building TUI insert: it is a poor fit for a terminal and
-      source editing remains available there.
-      *Done when:* a test pins that a body with images survives a source-mode and a
-      TUI edit unchanged.
+- [ ] **4. Migrate existing bodies.** After 3. A documented command rewriting
+      `/assets/<hash>` in stored markdown to the asset reference, where a record
+      holds those bytes.
+      *Done when:* running it twice is the same as running it once, a body whose
+      hash no record holds is left alone and reported, and the rewrite is a
+      normal event rather than an edit behind the log.
 
 ---
 
-## Epic: asset reference index
+## Epic: reference index and safe removal
 
-**Goal.** Answer "which objects are using this asset?" as an indexed lookup
-rather than a scan, so an asset management UI can show, for any blob, every
-object that references it.
+**Goal.** Answer "what references this?" as an indexed read rather than a scan,
+for every object, and refuse to remove something while the answer is not empty.
 
-**Why.** We want an aggregate view over assets: what we are storing and what is
-using it. Every question that view asks is the reverse of the reference
-direction we store today, and none of them is currently answerable without
-reading everything.
+**Why.** `findBacklinks` (`engine/src/engine/backlinks.ts:43`) already answers
+the question for `ref` and `refs`, but by loading every row of every referencing
+object. That is acceptable behind a detail panel and far too slow as a guard on
+every removal or behind a library screen. It also cannot see in-body images at
+all, since those live as a URL inside a markdown string rather than in a `ref`
+field.
 
-**Why it is hard today.** Nothing indexes the reverse direction, and asset
-references are stored in two different shapes:
-
-- an `image` property holds structured JSON in the row, with the hash as a field
-- prose holds a bare hash inside a markdown string, as `/assets/<hash>`
-
-The engine has no projection or read-model layer: state is folded from events on
-read (`packages/engine/src/entity-api/factory.ts:40`). So answering the question
-today means folding every object of every type and inspecting each value, and
-for prose it additionally means parsing markdown. That is a full scan per
-question, and it gets worse with every object added.
+**Why it is hard.** State is folded from events on read
+(`engine/src/entity-api/factory.ts:40`) and there is no projection layer, so the
+reverse direction is a full scan by construction.
 
 ### Design
 
-Maintain the reverse index as events, in the store we already have.
-
 The engine gains one extractor: given a property config and a stored value,
-return the asset hashes it references. It is an exhaustive switch over
-`PropertyConfig['type']` with no `default:` branch, matching the convention in
-`config/compile.ts` and `engine/view.ts`, so every property type we add later is
-a compile error until it declares whether it can carry an asset. `image` returns
-its hash field; `markdown`, `text` and `code` match `/assets/<64 hex>`; most
-types return nothing.
+return what it references. An exhaustive switch over `PropertyConfig['type']`
+with no `default:` branch, matching `config/compile.ts` and `engine/view.ts`, so
+a new property type is a compile error until it declares its stance. `ref` and
+`refs` yield target ids, `markdown`, `text` and `code` yield the asset ids in the
+`/assets/<id>` URLs they contain, `image` yields its blob hash, and most types
+yield nothing.
 
-On write, the object write path derives the hashes a record references before
-and after the change and appends `AssetReferenced` and `AssetDereferenced` facts
-to a stream keyed by the hash, the way `BlobUploaded` is already keyed by hash
-(`packages/engine/src/blobs/api.ts:6`).
-
-The query then becomes a single `findByStream(partitionId, '__asset_ref', hash)`
-folded to the current referrer set. That is one indexed read: the sqlite schema
-carries `UNIQUE (partition_id, stream_type, stream_id, stream_version)`
-(`packages/storage-sqlite/src/store.ts:23`), which is exactly the prefix this
-lookup needs.
-
-Putting the extractor in the engine rather than in a consumer is the point.
-There is then one definition of "an asset reference", shared by both frontends,
-by the index, and by anything we later build on it, and our URL shape stays
-ours.
+On write, the object write path derives what a record referenced before and
+after the change, and appends `Referenced` and `Dereferenced` facts to a stream
+keyed by the referenced thing, the way `BlobUploaded` is keyed by hash
+(`engine/src/blobs/api.ts:6`). The query is then a single `findByStream` folded
+to the current referrer set: one indexed read against
+`UNIQUE (partition_id, stream_type, stream_id, stream_version)`
+(`storage-sqlite/src/store.ts:23`).
 
 ### Decisions
 
-**A reference identifies object, id and property.** So the UI can say "cover of
-Post X" rather than only "used by Post X". It costs nothing at write time, and
-it is the field that is painful to add retrospectively: doing it later means
-backfilling already-written events or introducing a second event version.
+**A body image is an ordinary reference.** Since bodies carry the asset id, the
+extractor reads `/assets/<id>` out of markdown and yields a target id, exactly
+like `ref` does. No hash matching, and no ambiguity about which record a body
+meant. Legacy `/assets/<hash>` bodies are resolvable but are not references, and
+stop existing once the migration has run.
 
-**References are deduplicated per property.** A body using the same image twice
-is one reference. The fold stays a set rather than a count, and editing one of
-two occurrences away does not have to decrement anything.
+**A reference identifies object, id and property.** So a report can say "cover
+of Post X" rather than only "used by Post X". Free at write time, and painful to
+add later.
+
+**References are deduplicated per property.** One body using the same image
+twice is one reference. The fold stays a set rather than a count.
 
 **The index is derived, not authoritative.** Derived means reconstructible from
-the object log, not unstored: we still persist it as events, because that is
-what makes the lookup indexed. What it buys is that when the extractor is wrong,
-and it will be at least once on a new property type or a markdown edge case, we
-rebuild rather than carry corrupt state forever. Changing the extractor is then
-routine instead of a migration.
+the object log, not unstored: we persist it because that is what makes the
+lookup indexed. When the extractor is wrong, and it will be at least once, we
+rebuild rather than carry corrupt state. Rebuilds are a documented manual
+command, and the backfill is the repair tool rather than just the upgrade path.
 
-**Rebuilds are a documented manual command.** An operator runs the backfill
-after an upgrade that changes extraction. That keeps startup predictable, and
-the idempotence requirement in step 4 is what makes running it safe. The backfill
-is the repair tool, not just the upgrade path.
+**Removal is refused while references exist, engine-wide.** Consistent with
+`ref` writes already rejecting a removed target: the engine treats removed
+records as unreferenceable, so letting one be removed out from under live
+references was the inconsistency. This is a **breaking change** for any existing
+app that relies on removing a referenced record, and it needs calling out in the
+release notes rather than only here.
 
-**Garbage collection is a non-goal.** Not "not yet": the index cannot answer the
-question deletion needs. It answers what references an asset *now*. The event log
-still contains the hash in older `FieldChanged` payloads, so replay, audit and
-export all touch that history, and any future point-in-time read would resolve a
-blob we had deleted. There is no such read today
-(`packages/engine/src/entity-api/factory.ts:40` folds a stream to head and
-nothing else), which is exactly why the constraint is easy to forget.
-
-So deleting blobs is not gated on this index at all. It is gated on a retention
-policy for historical references, and on deciding whether an old event may
-resolve to a missing blob. Neither is in scope here.
-
-The practical consequence for the UI: it may show that nothing currently
-references an asset, because that is a useful signal for spotting a failed
-upload or a wrong file, but it presents that as usage information and offers no
-delete action. An unreferenced blob is harmless today anyway: `ImageField`'s
-Remove already orphans blobs and re-upload is idempotent, so orphans are
-bounded.
+**Garbage collection stays a non-goal.** Not "not yet": this index cannot answer
+the question deletion needs. It reports what references something *now*, while
+the event log still holds the hash in older payloads, so replay, audit and
+export all touch that history. Deleting blobs is gated on a retention policy for
+historical references, not on this index. A view may report that nothing
+currently references an asset, as information, and offer no delete.
 
 ### Steps
 
-- [ ] **1. Extractor.** The exhaustive `PropertyConfig['type']` switch from
-      a stored value to referenced hashes, in the engine.
-      *Done when:* it is covered per property type, including a markdown body with
-      several images, one with the same image twice, and one with none, and adding
-      a property type without handling it fails to compile.
+- [ ] **1. Extractor.** The exhaustive `PropertyConfig['type']` switch from a
+      stored value to what it references, in the engine.
+      *Done when:* covered per property type, including a markdown body with
+      several asset references, one referencing the same asset twice, one with
+      none, a body still holding a legacy hash URL, and a `refs` field with
+      several targets; and adding a property type without handling it fails to
+      compile.
 
 - [ ] **2. Reverse index on write.** After 1. Derive the before and after
-      hash sets on create, update and remove, and append the difference as facts to
-      the hash-keyed stream, each carrying object, id and property.
+      reference sets on create, update and remove, and append the difference as
+      facts carrying object, id and property.
       *Done when:* creating, editing and removing records leaves the folded
-      referrer set correct, including replacing an image with another, editing a
-      body down to no images at all, and an asset used by two properties of the
-      same record.
+      referrer set correct, including replacing one reference with another,
+      editing a body down to no images, and one record referencing the same
+      target from two properties.
 
-- [ ] **3. Query API.** After 2. One engine call from hash to referring
-      objects, and a daemon route exposing it.
-      *Done when:* the route answers with the referring objects and properties for
-      a hash, and with an empty set for an unreferenced one, against a fixture with
-      several object types.
+- [ ] **3. Query API.** After 2. One engine call from a target (id or blob hash)
+      to its referrers, and a daemon route exposing it.
+      *Done when:* the route answers with referring objects and properties, and
+      an empty set for something unreferenced, against a fixture spanning
+      `ref`, `refs` and a markdown body.
 
-- [ ] **4. Backfill.** After 2. Existing data has no index events, and a
-      changed extractor needs a rebuild. A documented command that walks existing
-      records and emits the facts, safe to run more than once.
-      *Done when:* running it twice over a populated store yields the same referrer
-      sets as running it once, and running it after an extractor change corrects
-      entries written by the old one.
+- [ ] **4. Backfill.** After 2. Existing data carries no index events, and a
+      changed extractor needs a rebuild. A documented command, safe to run more
+      than once.
+      *Done when:* running it twice over a populated store yields the same
+      referrer sets as running it once, and running it after an extractor change
+      corrects entries written by the old one.
 
-- [ ] **5. Asset management UI.** `open question`, after 3. The aggregate view this
-      epic exists to serve.
-      *Done when:* scoped. We have not designed it yet, and the payload decided
-      above is what it has to work with.
+- [ ] **5. Refuse removal while referenced.** After 3. Removal answers `409`
+      naming what still points at the record.
+      *Done when:* removing a referenced record is refused with its referrers
+      listed, removing an unreferenced one still works, and the existing
+      soft-delete tests are updated to reflect the new rule rather than worked
+      around.
 
 ### Still open
 
-- **The postgres index.** The "indexed lookup" claim rests on the unique
-  constraint, which the sqlite adapter creates in its DDL but the postgres
-  adapter does not: it assumes an externally managed schema. Before we call the
-  query performant on postgres, we need to say what that schema must provide.
-- **Step 5's scope**, above.
+- **No exit for a required reference.** Removal is refused while anything points
+  at a record, and a non-nullable `ref` cannot be detached, so the only way past
+  the guard is repointing or deleting every referrer by hand. A detach flow
+  (dropping `refs` elements, nulling nullable refs) or a reassign flow would
+  close it, and both are cheap once step 3 can list referrers in one read. We
+  are deliberately shipping the guard first and judging from use whether either
+  is worth building, rather than designing for a friction we have not felt.
+- **The postgres index.** The indexed-read claim rests on the unique constraint,
+  which the sqlite adapter creates in its DDL and the postgres adapter does not:
+  it assumes an externally managed schema. Before calling the query performant on
+  postgres we need to say what that schema must provide.
+
+---
+
+## Epic: visual collection views
+
+**Goal.** Pick, browse and create records that carry an image without a text
+typeahead over a display field.
+
+**Why.** `RefPicker` matches on a display string, which is unusable for
+pictures, and a list is a table of text. An author who cannot see what they are
+picking will paste images into the body instead, which is the friction that made
+in-body images the only workable path in the first place.
+
+None of this is asset-specific: a grid of products or of people is the same
+capability pointed somewhere else.
+
+### Steps
+
+- [ ] **1. List display mode.** A list may render as a grid of cards with a
+      thumbnail drawn from an image property, rather than as a table. Declared
+      in config alongside `columns`.
+      *Done when:* a list config selects the grid mode and renders thumbnails,
+      search and sort still work, and an object with no image property cannot
+      declare it (rejected in `loadConfig`, not at render).
+
+- [ ] **2. Visual ref picker.** After 1. When a `ref` or `refs` target carries
+      an image, the picker shows thumbnails with search rather than a typeahead.
+      *Done when:* picking works from the grid for both `ref` and `refs`,
+      `refs` ordering is preserved, and a target with no image falls back to
+      today's picker.
+
+- [ ] **3. Create the target inline.** After 2. The picker can create a new
+      target record without leaving the record being edited, including
+      uploading its file.
+      *Done when:* an author attaches a picture that did not exist yet without
+      navigating away, the new record satisfies its required fields, and
+      cancelling creates nothing.
+
+- [ ] **4. Create many records from many files.** After 3. Multi-select from the
+      list view, one record per file.
+      *Done when:* selecting several files creates a record for each, a failure
+      partway leaves the successful ones created and reports the rest, and
+      identical files still produce one blob.
+
+### Still open
+
+- **What a grid card shows** beyond the thumbnail, and how much of that is
+  config rather than convention. Worth designing against a real config before
+  committing to schema.
+- **Whether "create the target inline" needs its own view config**, or can
+  derive its form from the target's existing create view.

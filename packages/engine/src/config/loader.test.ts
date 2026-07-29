@@ -461,3 +461,67 @@ describe('loadConfig: command (transition) validation', () => {
     expect(() => loadConfig(bad)).toThrow(/statusField/i);
   });
 });
+
+describe('loadConfig: assets', () => {
+  const assetObject = {
+    name: 'asset',
+    title: 'Asset',
+    titlePlural: 'Assets',
+    // 'assets' is reserved by the daemon for the blob route, so an asset object needs an explicit one.
+    route: 'media',
+    lifecycle: { softDelete: 'removed' },
+    properties: [
+      { name: 'id', type: 'id', strategy: 'uuid', system: true },
+      { name: 'file', type: 'image', title: 'File' },
+      { name: 'removed', type: 'boolean', system: true },
+    ],
+    lists: [{ name: 'default', title: 'Assets', columns: [{ property: 'id', label: 'ID', width: 10 }] }],
+  };
+
+  function withBody(images: boolean | undefined) {
+    const raw = clone();
+    const prop: Record<string, unknown> = { name: 'body', type: 'markdown', title: 'Body' };
+    if (images !== undefined) prop['images'] = images;
+    raw.objects[0].properties.push(prop);
+    return raw;
+  }
+
+  it('loads a config that asks for neither assets nor in-body images', () => {
+    expect(() => loadConfig(withBody(undefined))).not.toThrow();
+    expect(() => loadConfig(withBody(false))).not.toThrow();
+  });
+
+  it('refuses in-body images when no assets object is named, and says what to define', () => {
+    expect(() => loadConfig(withBody(true))).toThrow(/asks for in-body images/);
+    expect(() => loadConfig(withBody(true))).toThrow(/set 'assets' to its name/);
+    expect(() => loadConfig(withBody(true))).toThrow(/objects-and-properties\.md#assets/);
+  });
+
+  it('accepts in-body images once an assets object is named', () => {
+    const raw = withBody(true);
+    raw.objects.push(assetObject);
+    raw.assets = 'asset';
+    expect(() => loadConfig(raw)).not.toThrow();
+  });
+
+  it('refuses an assets name that matches no object', () => {
+    const raw = clone();
+    raw.assets = 'nope';
+    expect(() => loadConfig(raw)).toThrow(/names unknown object 'nope'/);
+    expect(() => loadConfig(raw)).toThrow(/objects-and-properties\.md#assets/);
+  });
+
+  it('refuses an assets object with no image property to hold the file', () => {
+    const raw = clone();
+    raw.objects.push({ ...assetObject, properties: assetObject.properties.filter((p) => p.type !== 'image') });
+    raw.assets = 'asset';
+    expect(() => loadConfig(raw)).toThrow(/has no image property/);
+  });
+
+  it('keeps the assets name on the loaded config', () => {
+    const raw = clone();
+    raw.objects.push(assetObject);
+    raw.assets = 'asset';
+    expect(loadConfig(raw).assets).toBe('asset');
+  });
+});

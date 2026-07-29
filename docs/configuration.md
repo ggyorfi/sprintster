@@ -69,6 +69,13 @@ as immutable files sharded by content hash, so they are cheap to back up and
 never overwritten. The event log only stores a reference plus metadata, never
 the bytes.
 
+The directory only grows. Nothing deletes bytes: an upload is a recorded fact,
+and a file stays on disk after every record referencing it is gone, because the
+event history still names that hash. Size the volume for total uploads over the
+life of the project rather than for what is currently in use, and note that it
+must be backed up alongside the database. Restoring one without the other leaves
+records pointing at files that are not there.
+
 ## Data and events
 
 State is never stored directly. Every create, update, or remove appends an
