@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MAX_ASSET_BYTES } from '@sprintster/engine';
 import { ImageField, parseImageValue } from './ImageField.js';
+import { pngFile, pngFileOfSize, pdfFile } from '../test-files.js';
 
 const uploaded = { hash: 'd4', filename: 'hero.png', contentType: 'image/png', size: 30 };
 const assetUrl = (h: string): string => `/assets/${h}`;
@@ -23,7 +24,7 @@ describe('ImageField', () => {
     const onChange = vi.fn();
     const upload = makeUpload();
     const { container } = render(<ImageField label="Hero" value="" onChange={onChange} upload={upload} assetUrl={assetUrl} />);
-    const file = new File([new Uint8Array([1, 2, 3])], 'hero.png', { type: 'image/png' });
+    const file = pngFile();
     await userEvent.upload(container.querySelector('input[type=file]')!, file);
     expect(upload).toHaveBeenCalledWith(file);
     expect(onChange).toHaveBeenCalledWith(JSON.stringify(uploaded));
@@ -81,7 +82,7 @@ describe('ImageField failure cases', () => {
     const { container } = render(
       <ImageField label="Hero" value="" onChange={() => {}} upload={upload} assetUrl={assetUrl} />,
     );
-    const big = new File([new Uint8Array(MAX_ASSET_BYTES + 1)], 'huge.png', { type: 'image/png' });
+    const big = pngFileOfSize(MAX_ASSET_BYTES + 1);
     await userEvent.upload(container.querySelector('input[type=file]')!, big);
     expect(screen.getByRole('alert')).toHaveTextContent(/over the 10 MB limit/);
     expect(upload).not.toHaveBeenCalled();
@@ -92,10 +93,10 @@ describe('ImageField failure cases', () => {
     const { container } = render(
       <ImageField label="Hero" value="" onChange={() => {}} upload={upload} assetUrl={assetUrl} />,
     );
-    const pdf = new File(['x'], 'notes.pdf', { type: 'application/pdf' });
+    const pdf = pdfFile();
     // applyAccept: false, because the point is to test our check rather than the browser's accept filter.
     await userEvent.upload(container.querySelector('input[type=file]')!, pdf, { applyAccept: false });
-    expect(screen.getByRole('alert')).toHaveTextContent(/application\/pdf/);
+    expect(screen.getByRole('alert')).toHaveTextContent(/unrecognised image data/);
     expect(upload).not.toHaveBeenCalled();
   });
 

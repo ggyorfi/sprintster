@@ -3,10 +3,11 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MAX_ASSET_BYTES } from '@sprintster/engine';
 import { MarkdownEditor } from './MarkdownEditor.js';
+import { pngFile, pngFileOfSize, svgFile } from '../test-files.js';
 
 const uploaded = { hash: 'd4', filename: 'hero.png', contentType: 'image/png', size: 30 };
 
-const imageFile = () => new File([new Uint8Array([1, 2, 3])], 'hero.png', { type: 'image/png' });
+const imageFile = () => pngFile();
 
 // jsdom has no DataTransfer, and the handlers only read .files off the event.
 function transferEvent(type: 'paste' | 'drop', files: File[]): Event {
@@ -102,7 +103,7 @@ describe('MarkdownEditor', () => {
     let latest = '';
     const upload = vi.fn(async (_file: File) => uploaded);
     const { container } = render(<MarkdownEditor value={'Intro'} onChange={(v) => (latest = v)} upload={upload} />);
-    const file = new File([new Uint8Array([1, 2, 3])], 'hero.png', { type: 'image/png' });
+    const file = pngFile();
     await userEvent.upload(container.querySelector('input[type=file]')!, file);
     expect(upload).toHaveBeenCalledWith(file);
     await waitFor(() => expect(latest).toContain('!['));
@@ -115,7 +116,7 @@ describe('MarkdownEditor', () => {
     const { container } = render(
       <MarkdownEditor value={'Intro'} onChange={(v) => (latest = v)} upload={async () => uploaded} />,
     );
-    const file = new File([new Uint8Array([1])], 'hero.png', { type: 'image/png' });
+    const file = pngFile();
     await userEvent.upload(container.querySelector('input[type=file]')!, file);
     await waitFor(() => expect(latest).toContain('!['));
     expect(container.querySelector('img')?.getAttribute('src')).toBe('https://app.example.com/assets/d4');
@@ -134,7 +135,7 @@ describe('MarkdownEditor', () => {
         }}
       />,
     );
-    const file = new File([new Uint8Array([1])], 'hero.png', { type: 'image/png' });
+    const file = pngFile();
     await userEvent.upload(container.querySelector('input[type=file]')!, file);
     expect(await screen.findByRole('alert')).toHaveTextContent('upload failed (500)');
     expect(onChange.mock.calls.flat().join('')).not.toContain('![');
@@ -144,7 +145,7 @@ describe('MarkdownEditor', () => {
     const { container } = render(
       <MarkdownEditor value={'Intro\n\nOutro'} onChange={() => {}} upload={async () => uploaded} />,
     );
-    const file = new File([new Uint8Array([1])], 'hero.png', { type: 'image/png' });
+    const file = pngFile();
     await userEvent.upload(container.querySelector('input[type=file]')!, file);
     expect(await screen.findByLabelText('Alt text')).toHaveValue('');
   });
@@ -154,7 +155,7 @@ describe('MarkdownEditor', () => {
     const { container } = render(
       <MarkdownEditor value={'Intro'} onChange={(v) => (latest = v)} upload={async () => uploaded} />,
     );
-    const file = new File([new Uint8Array([1])], 'hero.png', { type: 'image/png' });
+    const file = pngFile();
     await userEvent.upload(container.querySelector('input[type=file]')!, file);
     await userEvent.type(await screen.findByLabelText('Alt text'), 'Sunset');
     await waitFor(() => expect(latest).toContain('Sunset'));
@@ -233,7 +234,7 @@ describe('MarkdownEditor', () => {
   it('refuses an over-size file without sending it', async () => {
     const upload = vi.fn(async (_file: File) => uploaded);
     const { container } = render(<MarkdownEditor value={'Intro'} onChange={() => {}} upload={upload} />);
-    const big = new File([new Uint8Array(MAX_ASSET_BYTES + 1)], 'huge.png', { type: 'image/png' });
+    const big = pngFileOfSize(MAX_ASSET_BYTES + 1);
     await userEvent.upload(container.querySelector('input[type=file]')!, big);
     expect(await screen.findByRole('alert')).toHaveTextContent(/over the 10 MB limit/);
     expect(upload).not.toHaveBeenCalled();
@@ -242,8 +243,8 @@ describe('MarkdownEditor', () => {
   it('refuses a wrong file type without sending it', async () => {
     const upload = vi.fn(async (_file: File) => uploaded);
     const { container } = render(<MarkdownEditor value={'Intro'} onChange={() => {}} upload={upload} />);
-    paste(container.querySelector('.ProseMirror')!, [new File(['x'], 'a.svg', { type: 'image/svg+xml' })]);
-    expect(await screen.findByRole('alert')).toHaveTextContent(/image\/svg\+xml/);
+    paste(container.querySelector('.ProseMirror')!, [svgFile()]);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/SVG is not accepted/);
     expect(upload).not.toHaveBeenCalled();
   });
 

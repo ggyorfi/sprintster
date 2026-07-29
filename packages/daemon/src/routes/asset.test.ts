@@ -6,6 +6,15 @@ import { createBlobApi, InMemoryBlobStore, InMemoryEventStore, MAX_ASSET_BYTES }
 import { createApp } from '../app.js';
 
 const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
+const ascii = (t: string): number[] => Array.from(t, (c) => c.charCodeAt(0));
+const webp = new Uint8Array([...ascii('RIFF'), 0x1a, 0, 0, 0, ...ascii('WEBP'), ...ascii('VP8 ')]);
+const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10"/></svg>');
+const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]);
+const pngOfSize = (n: number): Uint8Array => {
+  const bytes = new Uint8Array(n);
+  bytes.set(png.subarray(0, 8));
+  return bytes;
+};
 
 function buildApp() {
   const events = new InMemoryEventStore();
@@ -61,7 +70,7 @@ describe('POST /assets', () => {
 describe('POST /assets limits (the API is where they are enforced, not the widgets)', () => {
   it('refuses a file over the size limit with 413', async () => {
     const { app } = buildApp();
-    const big = new Uint8Array(MAX_ASSET_BYTES + 1);
+    const big = pngOfSize(MAX_ASSET_BYTES + 1);
     const res = await app.request('/assets', upload(big, 'image/png'));
     expect(res.status).toBe(413);
     expect((await res.json()) as { code: string }).toMatchObject({ code: 'too_large' });
@@ -69,20 +78,41 @@ describe('POST /assets limits (the API is where they are enforced, not the widge
 
   it('accepts a file exactly on the limit', async () => {
     const { app } = buildApp();
-    const exact = new Uint8Array(MAX_ASSET_BYTES);
+    const exact = pngOfSize(MAX_ASSET_BYTES);
     expect((await app.request('/assets', upload(exact, 'image/png'))).status).toBe(201);
   });
 
-  it('refuses a type that is not an accepted image with 400', async () => {
+  it('refuses bytes that are not an accepted image with 400', async () => {
     const { app } = buildApp();
-    const res = await app.request('/assets', upload(png, 'application/pdf', 'notes.pdf'));
+    const res = await app.request('/assets', upload(pdf, 'image/png', 'notes.pdf'));
     expect(res.status).toBe(400);
-    expect(((await res.json()) as { message: string }).message).toMatch(/application\/pdf/);
+    expect(((await res.json()) as { message: string }).message).toMatch(/unrecognised image data/);
   });
 
-  it('refuses SVG, which would run its scripts on our own origin', async () => {
+  it('refuses SVG however it is labelled, which is what the exclusion is worth', async () => {
     const { app } = buildApp();
-    expect((await app.request('/assets', upload(png, 'image/svg+xml', 'x.svg'))).status).toBe(400);
+    for (const label of ['image/svg+xml', 'image/png', 'application/octet-stream']) {
+      const res = await app.request('/assets', upload(svg, label, 'x.svg'));
+      expect([label, res.status]).toEqual([label, 400]);
+      expect(((await res.json()) as { message: string }).message).toMatch(/SVG is not accepted/);
+    }
+  });
+
+  it('accepts a valid image whose type the client did not declare', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/assets', upload(webp, 'application/octet-stream', 't.webp'));
+    expect(res.status).toBe(201);
+    expect(((await res.json()) as { contentType: string }).contentType).toBe('image/webp');
+  });
+
+  it('stores the type the bytes say, not the one the client claimed', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/assets', upload(webp, 'image/jpeg', 'lying.jpg'));
+    expect(res.status).toBe(201);
+    const { hash, contentType } = (await res.json()) as { hash: string; contentType: string };
+    expect(contentType).toBe('image/webp');
+    const served = await app.request(`/assets/${hash}`);
+    expect(served.headers.get('content-type')).toBe('image/webp');
   });
 });
 
@@ -94,6 +124,7 @@ describe('GET /assets/:hash', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('image/png');
     expect(res.headers.get('cache-control')).toContain('immutable');
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
     expect(Array.from(new Uint8Array(await res.arrayBuffer()))).toEqual(Array.from(png));
   });
 

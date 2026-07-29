@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { assetUploadProblem } from '@sprintster/engine';
+import { assetUploadProblem, ASSET_HEADER_BYTES } from '@sprintster/engine';
 import type { UploadedAsset } from '../api/assets.js';
 
 export interface AssetUpload {
@@ -16,7 +16,8 @@ export function useAssetUpload(upload: ((file: File) => Promise<UploadedAsset>) 
   async function select(file: File | undefined): Promise<UploadedAsset | null> {
     if (file === undefined || upload === undefined) return null;
     // The daemon is what enforces this; checking here only saves sending a file we already know it will refuse.
-    const problem = assetUploadProblem(file.size, file.type === '' ? null : file.type);
+    const header = new Uint8Array(await file.slice(0, ASSET_HEADER_BYTES).arrayBuffer());
+    const problem = assetUploadProblem(file.size, header);
     if (problem !== null) {
       setError(problem);
       return null;

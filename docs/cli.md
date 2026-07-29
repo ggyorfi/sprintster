@@ -43,11 +43,18 @@ configured for the `dev` environment).
 - `POST /assets` and `GET /assets/:hash`: image upload and serving. The `:hash`
   is always a sha256 (64 lowercase hex characters); any other `/assets/*` path
   falls through to static serving. An upload must be a PNG, JPEG, GIF, WebP or
-  AVIF of at most 10 MB: a larger one is refused with `413 too_large` and any
-  other type with `400 bad_request`, both naming the problem in `message`. SVG
-  is not accepted, because blobs are served from the app's own origin and an SVG
-  opened directly would run its scripts there. The limits live in the daemon, so
-  they apply to every client and not only to the bundled GUI.
+  AVIF of at most 10 MB: a larger one is refused with `413 too_large` and
+  anything else with `400 bad_request`, both naming the problem in `message`.
+  SVG is not accepted, because blobs are served from the app's own origin and an
+  SVG opened directly would run its scripts there. The limits live in the
+  daemon, so they apply to every client and not only to the bundled GUI.
+- The type of an upload is read from its leading bytes, never from the
+  `Content-Type` the client puts on the multipart part. A valid image is
+  therefore accepted whether or not the client bothered to declare a type, and
+  mislabelling a file cannot get it past the allow list. The `contentType` in
+  the response and on `GET /assets/:hash` is the detected one, so it always
+  describes the bytes being served. Responses also carry
+  `X-Content-Type-Options: nosniff`.
 - `GET /health`: a liveness probe reporting the engine version.
 - The built web GUI (if present), served as a single-page app. Its bundle files
   are served from `/_app/`, kept out of `/assets/` so they cannot collide with
