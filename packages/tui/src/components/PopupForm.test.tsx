@@ -68,6 +68,41 @@ describe('PopupForm layout (create mode)', () => {
     expect(frame.indexOf('Save')).toBeLessThan(frame.indexOf('Tab next'));
   });
 
+  it('keeps images in a markdown body through a terminal edit (no insert here, but nothing is lost)', async () => {
+    const markdownField: ViewFieldSpec = {
+      path: 'body',
+      property: { name: 'body', title: 'Body', type: 'markdown' },
+      label: 'Body',
+      placeholder: '',
+      rows: 1,
+      group: null,
+      editable: true,
+      derivedFromRef: null,
+      defaultInput: '',
+    };
+    const body = 'Intro\n\n![A blue cover](/assets/abc123)\n\nOutro';
+    const onSubmit = vi.fn();
+    const { stdin } = render(
+      <PopupForm
+        title="Edit"
+        mode="edit"
+        fields={[markdownField]}
+        initial={{ body }}
+        onSubmit={onSubmit}
+        onCancel={() => {}}
+      />,
+    );
+    stdin.write('!');
+    await tick();
+    stdin.write('\t');
+    await tick();
+    stdin.write('\r');
+    await tick();
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0]![0]['body']).toBe('Intro\n\n![A blue cover](/assets/abc123)\n\nOutro!');
+  });
+
   it('edits a markdown field in the multiline text editor (long content wraps, not clipped)', () => {
     const markdownField: ViewFieldSpec = {
       path: 'body',

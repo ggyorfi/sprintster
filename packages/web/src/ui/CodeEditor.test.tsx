@@ -17,6 +17,12 @@ describe('codeExtensions', () => {
 });
 
 describe('CodeEditor', () => {
+  it('shows a markdown image verbatim, since source mode edits plain text', () => {
+    const body = 'Intro\n\n![A blue cover](/assets/abc123)\n\nOutro';
+    const { container } = render(<CodeEditor value={body} onChange={() => {}} language="markdown" />);
+    expect(container.querySelector('.cm-content')?.textContent).toContain('![A blue cover](/assets/abc123)');
+  });
+
   it('renders its label and a CodeMirror editor showing the initial value', () => {
     const { container } = render(<CodeEditor label="Snippet" value="hello world" onChange={() => {}} />);
     expect(screen.getByText('Snippet')).toBeInTheDocument();

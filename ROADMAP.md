@@ -165,7 +165,7 @@ change.
       the size and type limits are enforced by the daemon rather than only by the
       widgets.
 
-- [ ] **7. Confirm the lossless paths stay lossless.** Source mode
+- [x] **7. Confirm the lossless paths stay lossless.** Source mode
       (`CodeEditor`) and the TUI edit markdown as text and should preserve images
       for free. We are not building TUI insert: it is a poor fit for a terminal and
       source editing remains available there.

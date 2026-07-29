@@ -140,6 +140,23 @@ describe('image web-boundary encoding', () => {
   });
 });
 
+describe('markdown web-boundary encoding', () => {
+  const body = 'Intro\n\n![A blue cover](/assets/abc123)\n\nOutro';
+  const mdProp = { name: 'body', type: 'markdown' } as PropertyConfig;
+
+  it('carries a body with images across the form boundary unchanged', () => {
+    expect(toInput(mdProp, body)).toBe(body);
+    expect(toStorage(mdProp, body)).toBe(body);
+  });
+
+  it('leaves an image reference alone whatever its URL shape', () => {
+    for (const url of ['/assets/abc123', 'https://elsewhere.example/p.png', 'data:image/png;base64,iVBOR']) {
+      const one = `![a](${url})`;
+      expect(toStorage(mdProp, toInput(mdProp, one))).toBe(one);
+    }
+  });
+});
+
 describe('datetime web-boundary encoding', () => {
   const dtProp = { name: 'publishedAt', type: 'datetime', nullable: true } as PropertyConfig;
   const required = { name: 'publishedAt', type: 'datetime' } as PropertyConfig;

@@ -23,6 +23,20 @@ describe('ComboEditor', () => {
     expect(container.querySelector('.cm-editor')).toBeNull();
   });
 
+  it('keeps images through a round trip between the two editors', async () => {
+    const body = 'Intro\n\n![A blue cover](/assets/abc123)\n\nOutro';
+    const { container } = render(<ComboEditor value={body} onChange={() => {}} />);
+    await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull());
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Source' }));
+    await waitFor(() => expect(container.querySelector('.cm-editor')).not.toBeNull());
+    expect(container.querySelector('.cm-content')?.textContent).toContain('![A blue cover](/assets/abc123)');
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Rich' }));
+    await waitFor(() => expect(container.querySelector('img')).not.toBeNull());
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('/assets/abc123');
+  });
+
   it('respects defaultMode=source', async () => {
     const { container } = render(<ComboEditor value={'x'} onChange={() => {}} defaultMode="source" />);
     await waitFor(() => expect(container.querySelector('.cm-editor')).not.toBeNull());
