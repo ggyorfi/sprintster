@@ -76,7 +76,12 @@ export function ImageField({ label, value, onChange, upload, assetUrl, readOnly 
 
       {image !== null && (
         <div className={styles.preview}>
-          <img className={styles.thumb} src={assetUrl(image.hash)} alt={image.alt ?? ''} />
+          <img
+            className={styles.thumb}
+            src={assetUrl(image.hash)}
+            alt={image.alt ?? ''}
+            onError={(e) => e.currentTarget.setAttribute('data-missing', 'true')}
+          />
           <div className={styles.meta}>
             <span className={styles.filename}>{image.filename}</span>
             {!readOnly && (

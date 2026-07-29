@@ -150,11 +150,17 @@ change.
       markdown as the toolbar path, and pasting the same image twice results in one
       blob.
 
-- [ ] **6. Failure and limits.** Today `ImageField` surfaces an upload error
-      as text (`packages/web/src/ui/ImageField.tsx:116`) and that is the whole
-      story. Implement, in the shared hook: what an over-size or wrong-type upload
-      does, what the editor shows for a hash whose blob is missing, and whether
-      uploads report progress.
+- [x] **6. Failure and limits.** Three cases, now decided. **Over-size or
+      wrong-type**: one definition in the engine (`assetUploadProblem`, 10 MB,
+      PNG/JPEG/GIF/WebP/AVIF), enforced by the daemon with 413 or 400 so it
+      binds anything talking to the API, and checked again in the shared hook
+      only to avoid sending a file we know will be refused. SVG is excluded
+      deliberately: blobs are served from the app's own origin, so an SVG opened
+      directly would run its scripts there. **Missing blob**: the image is marked
+      `data-missing` and styled as a labelled placeholder rather than left as a
+      broken icon. **Progress**: no. `fetch` cannot report upload progress
+      without moving to XHR, and at a 10 MB ceiling the busy state is enough;
+      revisit only if the limit rises.
       *Done when:* each of those three cases has defined behaviour and a test, and
       the size and type limits are enforced by the daemon rather than only by the
       widgets.

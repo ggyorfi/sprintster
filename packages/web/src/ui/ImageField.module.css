@@ -79,3 +79,11 @@
   color: var(--red);
   font-size: 12px;
 }
+
+.thumb[data-missing] {
+  border: 1px dashed var(--red-bd);
+  background: var(--red-bg);
+  color: var(--red);
+  font-size: 12px;
+  padding: 8px;
+}

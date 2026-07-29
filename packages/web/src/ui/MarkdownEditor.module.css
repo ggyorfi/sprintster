@@ -150,6 +150,16 @@
   box-shadow: 0 0 0 3px var(--ring);
 }
 
+.editor :global(.ProseMirror img[data-missing]) {
+  min-width: 120px;
+  min-height: 60px;
+  padding: 8px;
+  border: 1px dashed var(--red-bd);
+  background: var(--red-bg);
+  color: var(--red);
+  font-size: 12px;
+}
+
 .altRow {
   display: flex;
   align-items: center;

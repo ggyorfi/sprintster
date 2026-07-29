@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MAX_ASSET_BYTES } from '@sprintster/engine';
 import { MarkdownEditor } from './MarkdownEditor.js';
 
 const uploaded = { hash: 'd4', filename: 'hero.png', contentType: 'image/png', size: 30 };
@@ -227,6 +228,31 @@ describe('MarkdownEditor', () => {
     paste(box, [imageFile()]);
     await waitFor(() => expect(latest.match(/!\[]\(/g)?.length).toBe(2));
     expect(latest.match(/\/assets\/d4/g)).toHaveLength(2);
+  });
+
+  it('refuses an over-size file without sending it', async () => {
+    const upload = vi.fn(async (_file: File) => uploaded);
+    const { container } = render(<MarkdownEditor value={'Intro'} onChange={() => {}} upload={upload} />);
+    const big = new File([new Uint8Array(MAX_ASSET_BYTES + 1)], 'huge.png', { type: 'image/png' });
+    await userEvent.upload(container.querySelector('input[type=file]')!, big);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/over the 10 MB limit/);
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it('refuses a wrong file type without sending it', async () => {
+    const upload = vi.fn(async (_file: File) => uploaded);
+    const { container } = render(<MarkdownEditor value={'Intro'} onChange={() => {}} upload={upload} />);
+    paste(container.querySelector('.ProseMirror')!, [new File(['x'], 'a.svg', { type: 'image/svg+xml' })]);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/image\/svg\+xml/);
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it('marks an image whose blob has gone, instead of leaving a broken icon', async () => {
+    const { container } = render(<MarkdownEditor value={'![Gone](/assets/missing)'} onChange={() => {}} />);
+    const img = container.querySelector('img')!;
+    expect(img.hasAttribute('data-missing')).toBe(false);
+    fireEvent.error(img);
+    await waitFor(() => expect(img.getAttribute('data-missing')).toBe('true'));
   });
 
   it('is not editable in read-only mode and hides the toolbar (preview reuse)', () => {

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MAX_ASSET_BYTES } from '@sprintster/engine';
 import { ImageField, parseImageValue } from './ImageField.js';
 
 const uploaded = { hash: 'd4', filename: 'hero.png', contentType: 'image/png', size: 30 };
@@ -71,5 +72,40 @@ describe('parseImageValue', () => {
     expect(parseImageValue('')).toBeNull();
     expect(parseImageValue('not json')).toBeNull();
     expect(parseImageValue('123')).toBeNull();
+  });
+});
+
+describe('ImageField failure cases', () => {
+  it('refuses an over-size file without sending it', async () => {
+    const upload = makeUpload();
+    const { container } = render(
+      <ImageField label="Hero" value="" onChange={() => {}} upload={upload} assetUrl={assetUrl} />,
+    );
+    const big = new File([new Uint8Array(MAX_ASSET_BYTES + 1)], 'huge.png', { type: 'image/png' });
+    await userEvent.upload(container.querySelector('input[type=file]')!, big);
+    expect(screen.getByRole('alert')).toHaveTextContent(/over the 10 MB limit/);
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it('refuses a wrong file type without sending it', async () => {
+    const upload = makeUpload();
+    const { container } = render(
+      <ImageField label="Hero" value="" onChange={() => {}} upload={upload} assetUrl={assetUrl} />,
+    );
+    const pdf = new File(['x'], 'notes.pdf', { type: 'application/pdf' });
+    // applyAccept: false, because the point is to test our check rather than the browser's accept filter.
+    await userEvent.upload(container.querySelector('input[type=file]')!, pdf, { applyAccept: false });
+    expect(screen.getByRole('alert')).toHaveTextContent(/application\/pdf/);
+    expect(upload).not.toHaveBeenCalled();
+  });
+
+  it('marks the preview when the blob has gone', () => {
+    const { container } = render(
+      <ImageField label="Hero" value={JSON.stringify(uploaded)} onChange={() => {}} upload={makeUpload()} assetUrl={assetUrl} />,
+    );
+    const img = container.querySelector('img')!;
+    expect(img.hasAttribute('data-missing')).toBe(false);
+    fireEvent.error(img);
+    expect(img.getAttribute('data-missing')).toBe('true');
   });
 });

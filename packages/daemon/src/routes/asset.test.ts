@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { createBlobApi, InMemoryBlobStore, InMemoryEventStore } from '@sprintster/engine';
+import { createBlobApi, InMemoryBlobStore, InMemoryEventStore, MAX_ASSET_BYTES } from '@sprintster/engine';
 import { createApp } from '../app.js';
 
 const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
@@ -55,6 +55,34 @@ describe('POST /assets', () => {
     const form = new FormData();
     form.append('notfile', 'oops');
     expect((await app.request('/assets', { method: 'POST', body: form })).status).toBe(400);
+  });
+});
+
+describe('POST /assets limits (the API is where they are enforced, not the widgets)', () => {
+  it('refuses a file over the size limit with 413', async () => {
+    const { app } = buildApp();
+    const big = new Uint8Array(MAX_ASSET_BYTES + 1);
+    const res = await app.request('/assets', upload(big, 'image/png'));
+    expect(res.status).toBe(413);
+    expect((await res.json()) as { code: string }).toMatchObject({ code: 'too_large' });
+  });
+
+  it('accepts a file exactly on the limit', async () => {
+    const { app } = buildApp();
+    const exact = new Uint8Array(MAX_ASSET_BYTES);
+    expect((await app.request('/assets', upload(exact, 'image/png'))).status).toBe(201);
+  });
+
+  it('refuses a type that is not an accepted image with 400', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/assets', upload(png, 'application/pdf', 'notes.pdf'));
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { message: string }).message).toMatch(/application\/pdf/);
+  });
+
+  it('refuses SVG, which would run its scripts on our own origin', async () => {
+    const { app } = buildApp();
+    expect((await app.request('/assets', upload(png, 'image/svg+xml', 'x.svg'))).status).toBe(400);
   });
 });
 

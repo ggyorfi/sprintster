@@ -237,6 +237,18 @@ export function MarkdownEditor({ label, value, onChange, readOnly = false, uploa
     editor.setEditable(!readOnly);
   }, [editor, readOnly]);
 
+  // An image whose blob has gone shows as a labelled placeholder rather than a broken icon. Load errors do not bubble, so capture.
+  useEffect(() => {
+    const dom = editor?.view.dom;
+    if (dom === undefined) return;
+    const mark = (event: Event) => {
+      const target = event.target;
+      if (target instanceof HTMLImageElement) target.setAttribute('data-missing', 'true');
+    };
+    dom.addEventListener('error', mark, true);
+    return () => dom.removeEventListener('error', mark, true);
+  }, [editor]);
+
   useEffect(() => {
     if (!editor) return;
     if (value !== editor.getMarkdown()) {

@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { Hono } from 'hono';
-import { isApiError, type BlobApi } from '@sprintster/engine';
+import { assetUploadProblem, isApiError, MAX_ASSET_BYTES, type BlobApi } from '@sprintster/engine';
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -16,8 +16,12 @@ export function createAssetRoute(blobApi: BlobApi): Hono {
         return c.json({ code: 'bad_request', message: 'expected a multipart field named "file"' }, 400);
       }
       const bytes = new Uint8Array(await field.arrayBuffer());
-      if (bytes.byteLength === 0) return c.json({ code: 'bad_request', message: 'empty upload' }, 400);
       const contentType = field.type === '' ? null : field.type;
+      const problem = assetUploadProblem(bytes.byteLength, contentType);
+      if (problem !== null) {
+        const tooLarge = bytes.byteLength > MAX_ASSET_BYTES;
+        return c.json({ code: tooLarge ? 'too_large' : 'bad_request', message: problem }, tooLarge ? 413 : 400);
+      }
       const ref = await blobApi.upload(bytes, contentType);
       return c.json({ hash: ref.hash, size: ref.size, contentType, filename: field.name }, 201);
     } catch (err) {
