@@ -26,6 +26,22 @@ server, or when you only want the web GUI.
 s8r daemon [--env <name>]
 ```
 
+### `s8r migrate-assets`
+
+Rewrites `/assets/<hash>` URLs in markdown bodies to the
+[asset](./objects-and-properties.md#assets) records holding those files. Bodies
+written before the project had an asset object point at bytes, so replacing a
+file never reached them; after this they point at the record and do.
+
+```
+s8r migrate-assets [--env <name>] [--dry-run]
+```
+
+Safe to run more than once: a rewritten body has no hash left to match. A hash
+that no asset holds is left alone and reported, as is one held by more than one
+asset, since nothing can say which was meant. Each rewrite is an ordinary update
+event, so it appears in the record's history like any other edit.
+
 ### `s8r`
 
 With no arguments, opens just the terminal UI against a running daemon (as

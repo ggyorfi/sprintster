@@ -9,6 +9,7 @@ export * from './blobs/store.js';
 export * from './blobs/api.js';
 export * from './blobs/limits.js';
 export * from './entity-api/factory.js';
+export * from './engine/asset-urls.js';
 export * from './engine/diff.js';
 export * from './engine/backlinks.js';
 export * from './engine/list.js';

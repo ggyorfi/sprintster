@@ -133,7 +133,7 @@ never collected, so we tolerate them and never emit them.
       the blob; on a property that did not ask for images there is no button and
       a pasted image falls through to the editor rather than failing.
 
-- [ ] **4. Migrate existing bodies.** After 3. A documented command rewriting
+- [x] **4. Migrate existing bodies.** After 3. A documented command rewriting
       `/assets/<hash>` in stored markdown to the asset reference, where a record
       holds those bytes.
       *Done when:* running it twice is the same as running it once, a body whose

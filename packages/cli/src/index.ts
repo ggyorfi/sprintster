@@ -3,6 +3,7 @@ import { defineCommand, runMain } from 'citty';
 import { version } from '@sprintster/engine';
 import { devCommand } from './commands/dev.js';
 import { daemonCommand } from './commands/daemon.js';
+import { migrateAssetsCommand } from './commands/migrate-assets.js';
 import { loadProjectConfig, projectConfigPath, selectEnvironment } from './project-config.js';
 import { startTui } from './runtime.js';
 
@@ -24,6 +25,7 @@ async function main(): Promise<void> {
     subCommands: {
       dev: devCommand,
       daemon: daemonCommand,
+      'migrate-assets': migrateAssetsCommand,
     },
   });
   await runMain(root);
