@@ -158,4 +158,14 @@ describe('GET /assets/:id', () => {
     expect(res.status).toBe(200);
     expect(await res.text()).toContain('not really');
   });
+
+  it('publishes the assets name on /config, so the web knows where to create records', async () => {
+    const { app } = build();
+    const body = (await (await app.request('/config')).json()) as { assets?: string };
+    expect(body.assets).toBe('asset');
+
+    const { app: bare } = build({ assets: false });
+    const bareBody = (await (await bare.request('/config')).json()) as { assets?: string };
+    expect(bareBody.assets).toBeUndefined();
+  });
 });

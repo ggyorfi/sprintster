@@ -1,7 +1,7 @@
 import { lazy, Suspense } from 'react';
 import type { PropertyConfig, ViewFieldSpec } from '@sprintster/engine';
 import { TextField, Select, RefPicker, ImageField, type SelectOption } from '../ui/index.js';
-import { uploadAsset, assetUrl } from '../api/assets.js';
+import { uploadAsset, assetUrl, attachAsset } from '../api/assets.js';
 import styles from './Field.module.css';
 
 // Lazy so the heavy editor dependencies (CodeMirror, TipTap) only load when a code/markdown field is actually rendered.
@@ -84,14 +84,16 @@ export function Field({ spec, value, onChange, refOptions, display }: FieldProps
       );
     case 'markdown': {
       const mode = property.editor ?? 'combo';
+      // Images are opt in per property, and loadConfig has already refused the config if one asks without an assets object.
+      const attach = property.images === true ? attachAsset : undefined;
       return (
         <Suspense fallback={<div className={styles.loading}>Loading editor…</div>}>
           {mode === 'source' ? (
             <CodeEditor label={label} value={value} onChange={onChange} language="markdown" placeholder={placeholder} />
           ) : mode === 'wysiwyg' ? (
-            <MarkdownEditor label={label} value={value} onChange={onChange} upload={uploadAsset} />
+            <MarkdownEditor label={label} value={value} onChange={onChange} attach={attach} />
           ) : (
-            <ComboEditor label={label} value={value} onChange={onChange} upload={uploadAsset} />
+            <ComboEditor label={label} value={value} onChange={onChange} attach={attach} />
           )}
         </Suspense>
       );

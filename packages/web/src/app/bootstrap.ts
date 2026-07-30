@@ -4,6 +4,7 @@ interface ServerConfig {
   version?: string;
   theme?: unknown;
   objects?: unknown;
+  assets?: string;
 }
 
 /*
@@ -20,7 +21,13 @@ export async function loadServerConfig(baseUrl: string, fetchImpl: typeof fetch 
     const raw = (await res.json()) as ServerConfig;
     if (!Array.isArray(raw.objects)) return false;
     setAppConfig(
-      loadConfig({ version: raw.version ?? '1', theme: raw.theme ?? {}, objects: raw.objects, plugins: [] }),
+      loadConfig({
+        version: raw.version ?? '1',
+        theme: raw.theme ?? {},
+        objects: raw.objects,
+        plugins: [],
+        ...(raw.assets === undefined ? {} : { assets: raw.assets }),
+      }),
     );
     return true;
   } catch {

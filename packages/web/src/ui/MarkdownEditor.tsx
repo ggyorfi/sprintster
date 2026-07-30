@@ -4,7 +4,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
 import Image from '@tiptap/extension-image';
 import { NodeSelection } from '@tiptap/pm/state';
-import { assetUrl, storedAssetUrl, type UploadedAsset } from '../api/assets.js';
+import { assetUrl, storedAssetUrl } from '../api/assets.js';
 import { useAssetUpload, type AssetUpload } from './useAssetUpload.js';
 import styles from './MarkdownEditor.module.css';
 
@@ -23,7 +23,7 @@ export interface MarkdownEditorProps {
   value: string;
   onChange: (value: string) => void;
   readOnly?: boolean;
-  upload?: ((file: File) => Promise<UploadedAsset>) | undefined;
+  attach?: ((file: File) => Promise<{ id: string }>) | undefined;
 }
 
 function imageFilesOf(data: DataTransfer | null): File[] {
@@ -32,13 +32,13 @@ function imageFilesOf(data: DataTransfer | null): File[] {
 }
 
 // The node holds a displayable src; the serialiser is what makes it root-relative again, so insert can use the resolved URL.
-function insertImage(editor: Editor, hash: string, at: number | null) {
+function insertImage(editor: Editor, assetId: string, at: number | null) {
   editor
     .chain()
     .focus()
     // Collapse past whatever is selected, so inserting next to a selected image adds one rather than replacing it.
     .setTextSelection(at ?? editor.state.selection.to)
-    .setImage({ src: assetUrl(hash), alt: '' })
+    .setImage({ src: assetUrl(assetId), alt: '' })
     // Leave the new image selected, so its alt field appears without the author having to know to click it.
     .command(({ tr, dispatch }) => {
       if (dispatch === undefined) return true;
@@ -53,14 +53,14 @@ function insertImage(editor: Editor, hash: string, at: number | null) {
     .run();
 }
 
-function ImageButton({ editor, uploader }: { editor: Editor; uploader: AssetUpload }) {
+function ImageButton({ editor, uploader }: { editor: Editor; uploader: AssetUpload<{ id: string }> }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { busy, error, select } = uploader;
 
   async function onFile(file: File | undefined) {
     const asset = await select(file);
     if (asset === null) return;
-    insertImage(editor, asset.hash, null);
+    insertImage(editor, asset.id, null);
   }
 
   return (
@@ -120,7 +120,7 @@ function AltTextRow({ editor }: { editor: Editor }) {
   );
 }
 
-function Toolbar({ editor, uploader }: { editor: Editor; uploader: AssetUpload | null }) {
+function Toolbar({ editor, uploader }: { editor: Editor; uploader: AssetUpload<{ id: string }> | null }) {
   const s = useEditorState({
     editor,
     // The editor can be torn down mid-render (React strict/concurrent, combo toggles); guard against a destroyed instance.
@@ -187,11 +187,11 @@ function Toolbar({ editor, uploader }: { editor: Editor; uploader: AssetUpload |
 }
 
 // WYSIWYG markdown editor: markdown shortcuts format in place, value stays a raw markdown string.
-export function MarkdownEditor({ label, value, onChange, readOnly = false, upload }: MarkdownEditorProps) {
+export function MarkdownEditor({ label, value, onChange, readOnly = false, attach }: MarkdownEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  const uploader = useAssetUpload(upload);
+  const uploader = useAssetUpload(attach);
   const uploadRef = useRef(uploader);
   uploadRef.current = uploader;
   const editorRef = useRef<Editor | null>(null);
@@ -201,7 +201,7 @@ export function MarkdownEditor({ label, value, onChange, readOnly = false, uploa
     for (const file of files) {
       const asset = await uploadRef.current.select(file);
       const editor = editorRef.current;
-      if (asset !== null && editor !== null) insertImage(editor, asset.hash, at);
+      if (asset !== null && editor !== null) insertImage(editor, asset.id, at);
     }
   }
 
@@ -260,7 +260,7 @@ export function MarkdownEditor({ label, value, onChange, readOnly = false, uploa
     <div className={styles.field}>
       {label !== undefined && <span className={styles.label}>{label}</span>}
       <div className={styles.editor}>
-        {editor !== null && !readOnly && <Toolbar editor={editor} uploader={upload === undefined ? null : uploader} />}
+        {editor !== null && !readOnly && <Toolbar editor={editor} uploader={attach === undefined ? null : uploader} />}
         {editor !== null && !readOnly && <AltTextRow editor={editor} />}
         <EditorContent editor={editor} />
       </div>

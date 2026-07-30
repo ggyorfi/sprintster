@@ -57,6 +57,7 @@ export function createApp(deps: AppDeps): Hono {
       version: appConfig.version,
       theme: appConfig.theme,
       objects: deps.apis.map((d) => d.obj),
+      ...(appConfig.assets === undefined ? {} : { assets: appConfig.assets }),
     }),
   );
   for (const { api, obj } of deps.apis) {

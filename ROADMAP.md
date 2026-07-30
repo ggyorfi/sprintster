@@ -126,7 +126,7 @@ never collected, so we tolerate them and never emit them.
       generator uses it to learn an asset's current hash without downloading it,
       then caches the bytes under the `immutable` `/assets/<hash>` URL.
 
-- [ ] **3. Insert creates an asset.** After 2. On a markdown property that asks
+- [x] **3. Insert creates an asset.** After 2. On a markdown property that asks
       for images, the button, paste and drop upload the blob, create the asset
       record, and write `![](/assets/<id>)`.
       *Done when:* inserting produces an asset reference and a record carrying

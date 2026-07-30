@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { uploadAsset, assetUrl, storedAssetUrl } from './assets.js';
+import { loadConfig, setAppConfig } from '@sprintster/engine';
+import { uploadAsset, assetUrl, storedAssetUrl, attachAsset } from './assets.js';
 
 const uploaded = { hash: 'd4', filename: 'hero.png', contentType: 'image/png', size: 30 };
 
@@ -59,5 +60,71 @@ describe('storedAssetUrl', () => {
     expect(storedAssetUrl('https://elsewhere.example/photo.png', env)).toBe('https://elsewhere.example/photo.png');
     expect(storedAssetUrl('data:image/png;base64,iVBOR', env)).toBe('data:image/png;base64,iVBOR');
     expect(storedAssetUrl('https://app.example.com/other/d4', env)).toBe('https://app.example.com/other/d4');
+  });
+});
+
+describe('attachAsset', () => {
+  const withAssets = () =>
+    setAppConfig(
+      loadConfig({
+        version: '1',
+        assets: 'asset',
+        objects: [
+          {
+            name: 'asset',
+            title: 'Asset',
+            titlePlural: 'Assets',
+            route: 'media',
+            lifecycle: { softDelete: 'removed' },
+            properties: [
+              { name: 'id', type: 'id', strategy: 'uuid', system: true },
+              { name: 'file', type: 'image', title: 'File' },
+              { name: 'removed', type: 'boolean', system: true },
+            ],
+            lists: [{ name: 'default', title: 'Assets', columns: [{ property: 'id', label: 'ID', width: 10 }] }],
+          },
+        ],
+      }),
+    );
+
+  afterEach(() => setAppConfig(loadConfig({ version: '1', objects: [] })));
+
+  const file = () => new File([new Uint8Array([1, 2, 3])], 'hero.png', { type: 'image/png' });
+
+  it('uploads the bytes, then creates the asset record holding them', async () => {
+    withAssets();
+    const calls: Array<{ url: string; init: RequestInit | undefined }> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        calls.push({ url, init });
+        if (url.endsWith('/assets')) return new Response(JSON.stringify(uploaded), { status: 201 });
+        return new Response(JSON.stringify({ id: 'x' }), { status: 201 });
+      }),
+    );
+
+    const { id } = await attachAsset(file());
+    expect(id).toMatch(/[0-9a-f-]{36}/);
+    expect(calls[0]!.url).toContain('/assets');
+    expect(calls[1]!.url).toContain('/media');
+    expect(JSON.parse(String(calls[1]!.init!.body))).toEqual({ id, file: uploaded });
+  });
+
+  it('refuses when the config names no assets object, rather than writing a dangling URL', async () => {
+    setAppConfig(loadConfig({ version: '1', objects: [] }));
+    await expect(attachAsset(file())).rejects.toThrow(/no assets object/);
+  });
+
+  it('surfaces the server message when the record cannot be created', async () => {
+    withAssets();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url.endsWith('/assets')
+          ? new Response(JSON.stringify(uploaded), { status: 201 })
+          : new Response(JSON.stringify({ code: 'bad_request', message: 'title is required' }), { status: 400 }),
+      ),
+    );
+    await expect(attachAsset(file())).rejects.toThrow(/title is required/);
   });
 });
