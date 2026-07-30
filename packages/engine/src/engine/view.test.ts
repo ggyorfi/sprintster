@@ -19,6 +19,7 @@ const withArray: ObjectConfig = {
   name: 'person',
   title: 'Person',
   titlePlural: 'People',
+  route: 'people',
   lifecycle: { softDelete: 'removed' },
   properties: [
     { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -76,6 +77,7 @@ const withRefs: ObjectConfig = {
   name: 'post',
   title: 'Post',
   titlePlural: 'Posts',
+  route: 'posts',
   lifecycle: { softDelete: 'removed' },
   properties: [
     { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -110,6 +112,7 @@ const withImage: ObjectConfig = {
   name: 'page',
   title: 'Page',
   titlePlural: 'Pages',
+  route: 'pages',
   lifecycle: { softDelete: 'removed' },
   properties: [
     { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -202,6 +205,7 @@ const withView: ObjectConfig = {
   name: 'thing',
   title: 'Thing',
   titlePlural: 'Things',
+  route: 'things',
   lifecycle: { softDelete: 'removed' },
   properties: [
     { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -296,6 +300,7 @@ describe('viewFields editability composition', () => {
     name: 'thing',
     title: 'Thing',
     titlePlural: 'Things',
+    route: 'things',
     lifecycle: { softDelete: 'removed' },
     properties: [
       { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -344,6 +349,7 @@ describe('viewFields dotted ref traversal', () => {
     name: 'contact',
     title: 'Contact',
     titlePlural: 'Contacts',
+    route: 'contacts',
     lifecycle: { softDelete: 'removed' },
     properties: [
       { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -357,6 +363,7 @@ describe('viewFields dotted ref traversal', () => {
     name: 'thing',
     title: 'Thing',
     titlePlural: 'Things',
+    route: 'things',
     lifecycle: { softDelete: 'removed' },
     properties: [
       { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -399,6 +406,7 @@ describe('assembleValues', () => {
       name: 'thing',
       title: 'Thing',
       titlePlural: 'Things',
+      route: 'things',
       lifecycle: { softDelete: 'removed' },
       properties: [
         { name: 'id', type: 'id', strategy: 'uuid', system: true },

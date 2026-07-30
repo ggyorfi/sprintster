@@ -26,6 +26,7 @@ describe('collectPluginObjects', () => {
     name: 'contact',
     title: 'Contact',
     titlePlural: 'Contacts',
+    route: 'contacts',
     lifecycle: { softDelete: 'removed' },
     properties: [
       { name: 'id', type: 'id', strategy: 'uuid', system: true },

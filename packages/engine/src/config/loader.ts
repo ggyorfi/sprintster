@@ -4,8 +4,7 @@ import { objectRoute, slugify, RESERVED_ROUTES } from './route.js';
 export function loadConfig(raw: unknown): Config {
   const config = ConfigSchema.parse(raw);
   validateSemantics(config);
-  // Resolve every route up front so `/config` consumers never re-derive the slug rule.
-  return { ...config, objects: config.objects.map((o) => ({ ...o, route: objectRoute(o) })) };
+  return config;
 }
 
 const ASSETS_DOC = 'docs/objects-and-properties.md#assets';
@@ -36,21 +35,13 @@ function validateSemantics(config: Config): void {
 function checkRoutes(config: Config): void {
   const ownerByRoute = new Map<string, string>();
   for (const obj of config.objects) {
-    if (obj.route !== undefined && slugify(obj.route) !== obj.route) {
-      throw new Error(
-        `object '${obj.name}' route '${obj.route}' is not a slug; use '${slugify(obj.route)}'`,
-      );
-    }
-    const route = objectRoute(obj);
-    if (route === '') {
-      throw new Error(
-        `object '${obj.name}' titlePlural '${obj.titlePlural}' slugs to nothing; give it an explicit 'route'`,
-      );
+    const route = obj.route;
+    if (slugify(route) !== route) {
+      throw new Error(`object '${obj.name}' route '${route}' is not a slug; use '${slugify(route)}'`);
     }
     if (RESERVED_ROUTES.has(route)) {
       throw new Error(
-        `object '${obj.name}' route '${route}' is reserved by the daemon ` +
-          `(${[...RESERVED_ROUTES].join(', ')}); give it an explicit 'route'`,
+        `object '${obj.name}' route '${route}' is reserved by the daemon (${[...RESERVED_ROUTES].join(', ')})`,
       );
     }
     const owner = ownerByRoute.get(route);

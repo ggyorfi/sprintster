@@ -12,6 +12,7 @@ setAppConfig(
         name: 'settings',
         title: 'Site Setting',
         titlePlural: 'Site Settings',
+        route: 'site-settings',
         singleton: true,
         properties: [
           { name: 'id', type: 'id', strategy: 'uuid', system: true },

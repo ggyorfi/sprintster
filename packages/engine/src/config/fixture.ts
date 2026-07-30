@@ -5,6 +5,7 @@ const fixtureClientObject = {
   name: 'client',
   title: 'Client',
   titlePlural: 'Clients',
+  route: 'clients',
   lifecycle: { softDelete: 'removed' },
   properties: [
     { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -83,6 +84,7 @@ const statusObject = {
   name: 'widget',
   title: 'Widget',
   titlePlural: 'Widgets',
+  route: 'widgets',
   lifecycle: { statusField: 'status' },
   properties: [
     { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -122,6 +124,7 @@ const memoObject = {
   name: 'memo',
   title: 'Memo',
   titlePlural: 'Memos',
+  route: 'memos',
   lifecycle: { softDelete: 'removed' },
   properties: [
     { name: 'id', type: 'id', strategy: 'uuid', system: true },

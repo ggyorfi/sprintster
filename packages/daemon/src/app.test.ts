@@ -267,6 +267,7 @@ describe('plugin-style read-only api (only list/get/requireGet)', () => {
     name: 'note',
     title: 'Note',
     titlePlural: 'Notes',
+    route: 'notes',
     lifecycle: { softDelete: 'removed' },
     properties: [
       { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -359,6 +360,7 @@ describe('externally-backed object: status / sync / refresh routes', () => {
     name: 'thing',
     title: 'Thing',
     titlePlural: 'Things',
+    route: 'things',
     lifecycle: { softDelete: 'removed' },
     properties: [
       { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -486,6 +488,7 @@ describe('object route paths', () => {
       name: 'settings',
       title: 'Site Setting',
       titlePlural: 'Site Settings',
+      route: 'site-settings',
       lifecycle: { softDelete: 'removed' },
       properties: [
         { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -496,30 +499,26 @@ describe('object route paths', () => {
     };
   }
 
-  it('mounts a multi-word label as a hyphenated slug', async () => {
+  it('mounts the declared route', async () => {
     const app = mount(objWith({}));
     expect((await app.request('/site-settings')).status).toBe(200);
+  });
+
+  it('mounts whatever route is declared, whatever the label says', async () => {
+    const app = mount(objWith({ route: 'config-panel' }));
+    expect((await app.request('/config-panel')).status).toBe(200);
+    expect((await app.request('/site-settings')).status).toBe(404);
+  });
+
+  it('does not move when the label is renamed, which is why the route is declared', async () => {
+    const app = mount(objWith({ title: 'Beállítás', titlePlural: 'Beállítások' }));
+    expect((await app.request('/site-settings')).status).toBe(200);
+    expect((await app.request('/beallitasok')).status).toBe(404);
   });
 
   it('does not mount the raw label with a space in it', async () => {
     const app = mount(objWith({}));
     expect((await app.request('/site settings')).status).toBe(404);
     expect((await app.request('/site%20settings')).status).toBe(404);
-  });
-
-  it('folds an accented label to ASCII', async () => {
-    const app = mount(objWith({ titlePlural: 'Beállítások' }));
-    expect((await app.request('/beallitasok')).status).toBe(200);
-  });
-
-  it('leaves a single-word label unchanged', async () => {
-    const app = mount(objWith({ name: 'page', title: 'Page', titlePlural: 'Pages' }));
-    expect((await app.request('/pages')).status).toBe(200);
-  });
-
-  it('honours an explicit route override', async () => {
-    const app = mount(objWith({ route: 'config-panel' }));
-    expect((await app.request('/config-panel')).status).toBe(200);
-    expect((await app.request('/site-settings')).status).toBe(404);
   });
 });

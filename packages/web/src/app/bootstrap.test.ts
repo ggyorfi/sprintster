@@ -16,7 +16,14 @@ afterEach(() => {
 
 describe('loadServerConfig', () => {
   it('injects the daemon config so plugin-contributed objects become available', async () => {
-    const contactLike = { ...fixtureAppRaw.objects[0], name: 'contact', title: 'Contact', titlePlural: 'Contacts' };
+    // Spreading an object now copies its route as well, so a clone needs its own.
+    const contactLike = {
+      ...fixtureAppRaw.objects[0],
+      name: 'contact',
+      title: 'Contact',
+      titlePlural: 'Contacts',
+      route: 'contacts',
+    };
     const serverConfig = {
       version: '1',
       theme: fixtureAppRaw.theme,

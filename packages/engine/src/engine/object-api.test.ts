@@ -375,6 +375,7 @@ describe('createObjectApi: refs (multi-value) existence check', () => {
     name: 'tag',
     title: 'Tag',
     titlePlural: 'Tags',
+    route: 'tags',
     lifecycle: { softDelete: 'removed' },
     properties: [
       { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -387,6 +388,7 @@ describe('createObjectApi: refs (multi-value) existence check', () => {
     name: 'post',
     title: 'Post',
     titlePlural: 'Posts',
+    route: 'posts',
     lifecycle: { softDelete: 'removed' },
     properties: [
       { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -452,6 +454,7 @@ describe('createObjectApi: field-level unique validation', () => {
     name: 'page',
     title: 'Page',
     titlePlural: 'Pages',
+    route: 'pages',
     lifecycle: { softDelete: 'removed' },
     properties: [
       { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -563,6 +566,7 @@ describe('createObjectApi: case-insensitive unique', () => {
     name: 'page',
     title: 'Page',
     titlePlural: 'Pages',
+    route: 'pages',
     lifecycle: { softDelete: 'removed' },
     properties: [
       { name: 'id', type: 'id', strategy: 'uuid', system: true },

@@ -29,6 +29,7 @@ function config() {
         name: 'post',
         title: 'Post',
         titlePlural: 'Posts',
+        route: 'posts',
         lifecycle: { softDelete: 'removed' },
         properties: [
           { name: 'id', type: 'id', strategy: 'uuid', system: true },

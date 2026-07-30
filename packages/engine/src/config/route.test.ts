@@ -49,11 +49,13 @@ describe('slugify', () => {
 });
 
 describe('objectRoute', () => {
-  it('derives the route from titlePlural', () => {
-    expect(objectRoute({ titlePlural: 'Site Settings' })).toBe('site-settings');
+  it('returns the declared route, never a value derived from a label', () => {
+    expect(objectRoute({ route: 'config-panel' })).toBe('config-panel');
   });
+});
 
-  it('prefers an explicit route over the label', () => {
-    expect(objectRoute({ titlePlural: 'Site Settings', route: 'config-panel' })).toBe('config-panel');
+describe('slugify is no longer what decides a route', () => {
+  it('stays available for scaffolding a suggestion from a label', () => {
+    expect(slugify('Site Settings')).toBe('site-settings');
   });
 });

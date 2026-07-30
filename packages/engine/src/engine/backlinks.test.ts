@@ -6,6 +6,7 @@ const tag: ObjectConfig = {
   name: 'tag',
   title: 'Tag',
   titlePlural: 'Tags',
+  route: 'tags',
   lifecycle: { softDelete: 'removed' },
   properties: [
     { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -19,6 +20,7 @@ const post: ObjectConfig = {
   name: 'post',
   title: 'Post',
   titlePlural: 'Posts',
+  route: 'posts',
   lifecycle: { softDelete: 'removed' },
   properties: [
     { name: 'id', type: 'id', strategy: 'uuid', system: true },

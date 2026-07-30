@@ -11,6 +11,7 @@ lifecycle, a set of **properties** (fields), one or more **list** screens, and
   "name": "post",
   "title": "Post",
   "titlePlural": "Posts",
+  "route": "posts",
   "lifecycle": { "softDelete": "removed" },
   "properties": [ /* fields */ ],
   "lists": [ /* table screens */ ],
@@ -23,7 +24,7 @@ lifecycle, a set of **properties** (fields), one or more **list** screens, and
 |---|---|---|
 | `name` | yes | Unique machine name (used in event names). |
 | `title` / `titlePlural` | yes | Display names. |
-| `route` | no | HTTP path segment; defaults to the slug of `titlePlural` (see below). |
+| `route` | yes | HTTP path segment, declared not derived (see below). |
 | `singleton` | no | Exactly one record, forever (see below). |
 | `lifecycle` | yes | How records are retired, unless `singleton` (see below). |
 | `properties` | yes | The fields (at least one). |
@@ -33,28 +34,32 @@ lifecycle, a set of **properties** (fields), one or more **list** screens, and
 
 ## Route
 
-Each object is served by the daemon under a path derived from `titlePlural`:
-lowercased, accents folded to ASCII, runs of whitespace, underscores and
-punctuation collapsed to a single `-`, anything left outside `[a-z0-9-]`
-dropped.
-
-| `titlePlural` | path |
-|---|---|
-| `Posts` | `/posts` |
-| `Site Settings` | `/site-settings` |
-| `Beállítások` | `/beallitasok` |
-
-Set `route` explicitly when the label and the URL should differ. The value must
-already be a slug.
+Every object declares the path the daemon serves it under. It is required, and it
+is never derived from anything:
 
 ```jsonc
-{ "titlePlural": "Site Settings", "route": "config-panel" }   // served at /config-panel
+{ "name": "post", "title": "Post", "titlePlural": "Posts", "route": "posts" }
 ```
 
-Routes are resolved when the config loads, so `GET /config` reports the
-resolved `route` on every object: a client never has to re-derive it. Loading
-fails if two objects resolve to the same path, if a label slugs to nothing, or
-if a route collides with `health`, `config` or `assets`.
+The route and the labels are independent on purpose. `title` and `titlePlural`
+are display strings you are meant to change freely; a route is a URL contract
+that other things depend on: stored links, API clients, and the
+`/assets/<id>` references inside markdown bodies. Deriving one from the other
+would make renaming a heading a breaking change to your API, silently.
+
+The value must already be a slug: lowercase, digits and hyphens only. Loading
+fails if it is not, if two objects declare the same route, or if it collides with
+the daemon's own `health`, `config` or `assets`.
+
+```jsonc
+{ "titlePlural": "Site Settings", "route": "site-settings" }
+{ "titlePlural": "Beállítások",   "route": "beallitasok"   }
+{ "titlePlural": "Assets",        "route": "media"         }   // 'assets' is reserved
+```
+
+`GET /config` reports the route on every object, so a client never has to guess
+it, and projects scaffolded by `create-sprintster` come with routes already
+written.
 
 ## Singleton
 
@@ -68,6 +73,7 @@ form is its entire UI. Its `lists` are unused and default to empty.
   "name": "settings",
   "title": "Site Setting",
   "titlePlural": "Site Settings",
+  "route": "site-settings",
   "singleton": true,
   "properties": [
     { "name": "id", "type": "id", "strategy": "uuid", "system": true },

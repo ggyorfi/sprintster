@@ -14,6 +14,7 @@ export function slugify(text: string): string {
     .replace(/^-|-$/g, '');
 }
 
-export function objectRoute(obj: Pick<ObjectConfig, 'titlePlural' | 'route'>): string {
-  return obj.route ?? slugify(obj.titlePlural);
+// Declared, never derived: a route is a URL contract, and deriving it from a label made renaming the label a breaking change.
+export function objectRoute(obj: Pick<ObjectConfig, 'route'>): string {
+  return obj.route;
 }

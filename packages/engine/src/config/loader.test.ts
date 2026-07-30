@@ -107,6 +107,7 @@ describe('loadConfig: unique validation guard', () => {
           name: 'page',
           title: 'Page',
           titlePlural: 'Pages',
+          route: 'pages',
           lifecycle: { softDelete: 'removed' },
           properties: [
             { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -173,6 +174,7 @@ describe('loadConfig: code and markdown property options', () => {
           name: 'page',
           title: 'Page',
           titlePlural: 'Pages',
+          route: 'pages',
           lifecycle: { softDelete: 'removed' },
           properties: [{ name: 'id', type: 'id', strategy: 'uuid', system: true }, ...props, { name: 'removed', type: 'boolean', system: true }],
           lists: [],
@@ -203,6 +205,7 @@ describe('loadConfig: singleton objects', () => {
           name: 'settings',
           title: 'Settings',
           titlePlural: 'Settings',
+          route: 'settings',
           singleton: true,
           properties: props,
           views: [{ name: 'default', title: 'Settings', fields: names.map((n) => ({ property: n })) }],
@@ -252,6 +255,7 @@ describe('loadConfig: singleton objects', () => {
           name: 'thing',
           title: 'Thing',
           titlePlural: 'Things',
+          route: 'things',
           properties: [{ name: 'id', type: 'id', strategy: 'uuid', system: true }],
           lists: [],
         },
@@ -270,6 +274,7 @@ describe('loadConfig: refs target validation', () => {
           name: 'post',
           title: 'Post',
           titlePlural: 'Posts',
+          route: 'posts',
           lifecycle: { softDelete: 'removed' },
           properties: [
             { name: 'id', type: 'id', strategy: 'uuid', system: true },
@@ -307,11 +312,10 @@ describe('loadConfig: object routes', () => {
     };
   }
 
-  it('resolves a route on every object', () => {
-    const config = loadConfig(
-      rawWithObjects({ name: 'settings', title: 'Site Setting', titlePlural: 'Site Settings' }),
-    );
-    expect(config.objects[0]?.route).toBe('site-settings');
+  it('refuses an object that declares no route, rather than inventing one from its label', () => {
+    expect(() =>
+      loadConfig(rawWithObjects({ name: 'settings', title: 'Site Setting', titlePlural: 'Site Settings' })),
+    ).toThrow();
   });
 
   it('keeps an explicit route', () => {
@@ -322,26 +326,24 @@ describe('loadConfig: object routes', () => {
   });
 
   it('is idempotent across a reload of its own output', () => {
-    const once = loadConfig(rawWithObjects({ name: 'settings', title: 'Site Setting', titlePlural: 'Site Settings' }));
+    const once = loadConfig(
+      rawWithObjects({ name: 'settings', title: 'Site Setting', titlePlural: 'Site Settings', route: 'site-settings' }),
+    );
     expect(loadConfig(once).objects[0]?.route).toBe('site-settings');
   });
 
-  it('rejects two objects that slug to the same route', () => {
-    expect(() =>
-      loadConfig(
-        rawWithObjects(
-          { name: 'settings', title: 'Site Setting', titlePlural: 'Site Settings' },
-          { name: 'siteSettings', title: 'Site-Setting', titlePlural: 'Site-Settings' },
-        ),
-      ),
-    ).toThrow(/duplicate object route 'site-settings'/);
+  it('leaves the route alone when the label changes, which is the point of declaring it', () => {
+    const config = loadConfig(
+      rawWithObjects({ name: 'post', title: 'Article', titlePlural: 'Articles', route: 'posts' }),
+    );
+    expect(config.objects[0]?.route).toBe('posts');
   });
 
-  it('rejects an explicit route colliding with a derived one', () => {
+  it('rejects two objects declaring the same route', () => {
     expect(() =>
       loadConfig(
         rawWithObjects(
-          { name: 'page', title: 'Page', titlePlural: 'Pages' },
+          { name: 'page', title: 'Page', titlePlural: 'Pages', route: 'pages' },
           { name: 'article', title: 'Article', titlePlural: 'Articles', route: 'pages' },
         ),
       ),
@@ -351,18 +353,6 @@ describe('loadConfig: object routes', () => {
   it.each(['health', 'config', 'assets'])('rejects the daemon-reserved route %s', (route) => {
     expect(() => loadConfig(rawWithObjects({ name: 'thing', title: 'Thing', titlePlural: 'Things', route }))).toThrow(
       /reserved by the daemon/,
-    );
-  });
-
-  it('rejects a reserved route reached by slugifying the label', () => {
-    expect(() => loadConfig(rawWithObjects({ name: 'setting', title: 'Config', titlePlural: 'Config' }))).toThrow(
-      /reserved by the daemon/,
-    );
-  });
-
-  it('rejects a label that slugs to nothing', () => {
-    expect(() => loadConfig(rawWithObjects({ name: 'thing', title: 'Thing', titlePlural: '...' }))).toThrow(
-      /slugs to nothing/,
     );
   });
 
@@ -414,6 +404,7 @@ describe('loadConfig: command (transition) validation', () => {
           name: 'thing',
           title: 'Thing',
           titlePlural: 'Things',
+          route: 'things',
           lifecycle: { statusField: 'status' },
           properties: [
             { name: 'id', type: 'id', strategy: 'uuid', system: true },

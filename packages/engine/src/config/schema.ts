@@ -210,7 +210,7 @@ export const ObjectConfig = z
     name: z.string().min(1),
     title: z.string(),
     titlePlural: z.string(),
-    route: z.string().min(1).optional(),
+    route: z.string().min(1),
     singleton: z.boolean().optional(),
     lifecycle: Lifecycle.optional(),
     properties: z.array(PropertyConfigSchema).min(1),

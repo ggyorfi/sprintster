@@ -10,6 +10,7 @@ const userObject = {
   name: 'user',
   title: 'User',
   titlePlural: 'Users',
+  route: 'users',
   lifecycle: { softDelete: 'removed' },
   properties: [
     { name: 'id', type: 'id', strategy: 'uuid', system: true },
