@@ -11,7 +11,7 @@ Accepted
 ## Context
 
 zod validates shape. It cannot express that a `ref` points at an object that
-exists, that a view names a real property, that two objects do not slug to the
+exists, that a view names a real property, that two objects do not claim the
 same route, or that a singleton declares no lifecycle.
 
 Since behaviour is derived from config (ADR 2), a config that parses but is
@@ -25,10 +25,11 @@ it. That has been the recurring failure mode of this project.
 runs `validateSemantics`. Every cross-object and cross-field invariant goes
 there, not into the schema.
 
-`loadConfig` also resolves each object's `route`, so every object reaching the
-runtime carries one and nothing downstream re-derives it. Duplicate routes, a
-label that slugs to nothing, and the daemon-reserved `health`, `config` and
-`assets` are all rejected at load.
+`loadConfig` also validates each object's `route`: it must already be a slug, it
+must be unique, and it must not be one of the daemon-reserved `health`, `config`
+and `assets`. Routes were originally derived from `titlePlural` and resolved
+here; [ADR 11](./0011-routes-are-declared-not-derived.md) made them declared, so
+this is now validation only.
 
 ## Consequences
 

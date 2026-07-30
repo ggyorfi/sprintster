@@ -265,9 +265,10 @@ property, plus whatever else the project wants, and records attach one with
 }
 ```
 
-Note the explicit `"route"`. The daemon reserves `assets` for serving files, so
-an object whose label slugs to that has to be given a different path. Loading a
-config without one fails with a message saying so.
+Note the `"route"`. Every object declares one, but this is the one case where the
+obvious value is taken: the daemon reserves `assets` for serving files, so an
+asset object has to be served somewhere else. Loading a config that claims it
+fails with a message saying so.
 
 ### The `assets` declaration
 
