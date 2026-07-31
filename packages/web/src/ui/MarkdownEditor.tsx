@@ -33,6 +33,7 @@ function imageFilesOf(data: DataTransfer | null): File[] {
 
 // The node holds a displayable src; the serialiser is what makes it root-relative again, so insert can use the resolved URL.
 function insertImage(editor: Editor, assetId: string, at: number | null) {
+  if (editor.isDestroyed) return;
   editor
     .chain()
     .focus()
@@ -114,7 +115,9 @@ function AltTextRow({ editor }: { editor: Editor }) {
         className={styles.altInput}
         value={s.alt}
         placeholder="Describe the image"
-        onChange={(e) => editor.commands.updateAttributes('image', { alt: e.target.value })}
+        onChange={(e) => {
+          if (!editor.isDestroyed) editor.commands.updateAttributes('image', { alt: e.target.value });
+        }}
       />
     </label>
   );
@@ -156,7 +159,9 @@ function Toolbar({ editor, uploader }: { editor: Editor; uploader: AssetUpload<{
       title={name}
       disabled={disabled}
       onMouseDown={(e) => e.preventDefault()}
-      onClick={run}
+      onClick={() => {
+        if (!editor.isDestroyed) run();
+      }}
     >
       {glyph}
     </button>
@@ -233,7 +238,7 @@ export function MarkdownEditor({ label, value, onChange, readOnly = false, attac
   editorRef.current = editor;
 
   useEffect(() => {
-    if (!editor) return;
+    if (editor === null || editor.isDestroyed) return;
     editor.setEditable(!readOnly);
   }, [editor, readOnly]);
 
@@ -251,7 +256,8 @@ export function MarkdownEditor({ label, value, onChange, readOnly = false, attac
   }, [editor]);
 
   useEffect(() => {
-    if (!editor) return;
+    // destroy() nulls commandManager, so `commands` throws on a torn-down editor just as `view.dom` does.
+    if (editor === null || editor.isDestroyed) return;
     if (value !== editor.getMarkdown()) {
       editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
     }
