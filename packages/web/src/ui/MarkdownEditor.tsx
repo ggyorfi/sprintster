@@ -239,8 +239,9 @@ export function MarkdownEditor({ label, value, onChange, readOnly = false, attac
 
   // An image whose blob has gone shows as a labelled placeholder rather than a broken icon. Load errors do not bubble, so capture.
   useEffect(() => {
-    const dom = editor?.view.dom;
-    if (dom === undefined) return;
+    // isDestroyed, not a null check: tiptap's `view` is a proxy that throws for `dom` while the view is gone.
+    if (editor === null || editor.isDestroyed) return;
+    const dom = editor.view.dom;
     const mark = (event: Event) => {
       const target = event.target;
       if (target instanceof HTMLImageElement) target.setAttribute('data-missing', 'true');

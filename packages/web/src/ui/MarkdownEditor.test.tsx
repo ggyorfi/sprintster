@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { lazy, Suspense } from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MAX_ASSET_BYTES } from '@sprintster/engine';
@@ -260,5 +261,18 @@ describe('MarkdownEditor', () => {
     const { container } = render(<MarkdownEditor value={'plain text'} onChange={() => {}} readOnly />);
     expect(container.querySelector('.ProseMirror')?.getAttribute('contenteditable')).toBe('false');
     expect(screen.queryByRole('button', { name: 'Bold' })).toBeNull();
+  });
+
+  // The shipping shape: Field and ComboEditor both load this lazily, so the passive effect
+  // flush can land after useEditor's 1ms scheduleDestroy has already torn the view down.
+  it('mounts when loaded lazily behind Suspense, with the editor view torn down between render and effect', async () => {
+    const Lazy = lazy(() => Promise.resolve({ default: MarkdownEditor }));
+    const { container } = render(
+      <Suspense fallback={<div>loading</div>}>
+        <Lazy value={'Intro\n\n![A blue cover](/assets/a1)\n\nOutro'} onChange={() => {}} />
+      </Suspense>,
+    );
+    await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull());
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('/assets/a1');
   });
 });
