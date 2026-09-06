@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { loadConfig, setAppConfig } from '@sprintster/engine';
-import { uploadAsset, assetUrl, storedAssetUrl, attachAsset } from './assets.js';
+import { uploadAsset, assetUrl, storedAssetUrl, displayedAssetUrl, attachAsset } from './assets.js';
 
 const uploaded = { hash: 'd4', filename: 'hero.png', contentType: 'image/png', size: 30 };
 
@@ -126,5 +126,25 @@ describe('attachAsset', () => {
       ),
     );
     await expect(attachAsset(file())).rejects.toThrow(/title is required/);
+  });
+});
+
+describe('displayedAssetUrl', () => {
+  it('prefixes a stored reference with the API base, so an existing body previews under a mount point', () => {
+    expect(displayedAssetUrl('/assets/d4', { VITE_API_URL: '/api' })).toBe('/api/assets/d4');
+    expect(displayedAssetUrl('/assets/d4', { VITE_API_URL: 'https://app.example.com' })).toBe(
+      'https://app.example.com/assets/d4',
+    );
+  });
+
+  it('round-trips with storedAssetUrl', () => {
+    const env = { VITE_API_URL: '/api' };
+    expect(storedAssetUrl(displayedAssetUrl('/assets/d4', env), env)).toBe('/assets/d4');
+  });
+
+  it('passes through a URL that is not ours', () => {
+    expect(displayedAssetUrl('https://elsewhere.example/photo.png', { VITE_API_URL: '/api' })).toBe(
+      'https://elsewhere.example/photo.png',
+    );
   });
 });

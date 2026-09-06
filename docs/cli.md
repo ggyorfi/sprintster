@@ -82,7 +82,11 @@ configured for the `dev` environment).
 - The built web GUI (if present), served as a single-page app. Its bundle files
   are served from `/_app/`, kept out of `/assets/` so they cannot collide with
   blob URLs. Paths with a file extension 404 when missing; extensionless paths
-  fall back to `index.html` so client-side routes work.
+  fall back to `index.html` so client-side routes work. The GUI can also be
+  mounted under a prefix by another server: serve its shell at that path with a
+  trailing slash and forward everything under it to the daemon with the prefix
+  stripped, and the bundle follows the mount point for its assets and API calls
+  ([ADR 12](./ADR/0012-web-gui-mountable-under-any-base-path.md)).
 
 ### Unmatched paths
 

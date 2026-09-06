@@ -27,6 +27,11 @@ export function storedAssetUrl(src: string, env?: ApiEnv): string {
   return src.startsWith(`${base}/assets/`) ? src.slice(base.length) : src;
 }
 
+// Inverse of storedAssetUrl for loading: a stored root-relative reference is displayed from wherever the API is mounted.
+export function displayedAssetUrl(src: string, env?: ApiEnv): string {
+  return src.startsWith('/assets/') ? `${resolveApiBaseUrl(env)}${src}` : src;
+}
+
 // A body image points at the asset record, not at the bytes, so inserting one has to create that record.
 export async function attachAsset(file: File): Promise<{ id: string }> {
   const name = appConfig.assets;

@@ -275,4 +275,15 @@ describe('MarkdownEditor', () => {
     await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull());
     expect(container.querySelector('img')?.getAttribute('src')).toBe('/assets/a1');
   });
+  it('previews a stored root-relative reference from the API base, so an existing body shows its images under a mount point', async () => {
+    vi.stubEnv('VITE_API_URL', 'https://app.example.com');
+    let latest = '';
+    const { container } = render(
+      <MarkdownEditor value={'Intro\n\n![A blue cover](/assets/abc123)\n\nOutro'} onChange={(v) => (latest = v)} />,
+    );
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('https://app.example.com/assets/abc123');
+    await userEvent.click(screen.getByRole('button', { name: 'Heading 1' }));
+    await waitFor(() => expect(latest).not.toBe(''));
+    expect(latest).toContain('![A blue cover](/assets/abc123)');
+  });
 });

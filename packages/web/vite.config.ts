@@ -5,6 +5,8 @@ const DAEMON_URL = process.env['SPRINTSTER_DAEMON_URL'] ?? 'http://127.0.0.1:393
 
 export default defineConfig({
   plugins: [react()],
+  // Relative, so the shell can be mounted under any path; the bundle reads its mount point from its own URL (api/config.ts).
+  base: './',
   // Not 'assets': the daemon mounts the blob endpoint at /assets/:hash.
   build: { assetsDir: '_app' },
   server: {

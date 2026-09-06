@@ -4,12 +4,18 @@ import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
 import Image from '@tiptap/extension-image';
 import { NodeSelection } from '@tiptap/pm/state';
-import { assetUrl, storedAssetUrl } from '../api/assets.js';
+import { assetUrl, storedAssetUrl, displayedAssetUrl } from '../api/assets.js';
 import { useAssetUpload, type AssetUpload } from './useAssetUpload.js';
 import styles from './MarkdownEditor.module.css';
 
 // Serialising is the one path every edit goes through, so it is where the root-relative rule is enforced rather than assumed.
 const AssetImage = Image.extend({
+  parseMarkdown: (token, helpers) =>
+    helpers.createNode('image', {
+      src: displayedAssetUrl(String(token['href'] ?? '')),
+      title: token['title'],
+      alt: token['text'],
+    }),
   renderMarkdown: (node) => {
     const src = storedAssetUrl(String(node.attrs?.['src'] ?? ''));
     const alt = String(node.attrs?.['alt'] ?? '');

@@ -262,6 +262,17 @@ currently references an asset, as information, and offer no delete.
   which the sqlite adapter creates in its DDL and the postgres adapter does not:
   it assumes an externally managed schema. Before calling the query performant on
   postgres we need to say what that schema must provide.
+- **Collecting unreferenced blobs.** Nothing removes a blob that no record
+  points at any more, and a replaced image leaves its predecessor behind. A
+  collector is downstream of step 3, which is why the target there is an id
+  *or a blob hash*: reachability has to be computed over every property of
+  every object, since content addressing means an unrelated record may share
+  the same bytes with nothing to signal it. Two things to settle before
+  building one. Whether reachability means the current fold or every version in
+  history, since collecting on the current fold makes a replacement
+  irreversible and breaks stored URLs. And that a collected blob can no longer
+  be re-derived, so anything rebuilt from source after a collection is not
+  reproducible.
 
 ---
 
@@ -306,6 +317,13 @@ capability pointed somewhere else.
       partway leaves the successful ones created and reports the rest, and
       identical files still produce one blob.
 
+- [ ] **5. Insert an existing record into a body.** After 2. On a markdown
+      property with images enabled, the author can insert a reference to a
+      record that already exists, not only upload a new file.
+      *Done when:* inserting from the picker writes a reference to the chosen
+      record and creates no new record, the same record can be inserted twice in
+      one body, and upload on drop still works unchanged.
+
 ### Still open
 
 - **What a grid card shows** beyond the thumbnail, and how much of that is
@@ -313,3 +331,8 @@ capability pointed somewhere else.
   committing to schema.
 - **Whether "create the target inline" needs its own view config**, or can
   derive its form from the target's existing create view.
+- **Whether records should also dedup by content hash**, so two uploads of one
+  file share a record rather than sharing only the blob. Not while removal
+  cannot say what a record is used for: sharing a blob is invisible and
+  harmless, sharing a record is invisible and not. Revisit after the reference
+  index.
