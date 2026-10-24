@@ -2,6 +2,7 @@ import { loadConfig, setAppConfig } from '@sprintster/engine';
 
 interface ServerConfig {
   version?: string;
+  title?: string;
   theme?: unknown;
   objects?: unknown;
   assets?: string;
@@ -23,6 +24,7 @@ export async function loadServerConfig(baseUrl: string, fetchImpl: typeof fetch 
     setAppConfig(
       loadConfig({
         version: raw.version ?? '1',
+        ...(raw.title === undefined ? {} : { title: raw.title }),
         theme: raw.theme ?? {},
         objects: raw.objects,
         plugins: [],

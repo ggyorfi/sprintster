@@ -9,6 +9,10 @@ import styles from './App.module.css';
 
 const MAINTENANCE = '__maintenance__';
 
+export function appTitle(): string {
+  return appConfig.title ?? 'sprintster';
+}
+
 function readCtx(objects: ReadonlyArray<ObjectConfig>): string {
   const ctx = new URLSearchParams(window.location.search).get('ctx');
   if (ctx === MAINTENANCE) return ctx;
@@ -42,7 +46,7 @@ export function App() {
     <div className={styles.app}>
       <aside className={styles.rail}>
         <div className={styles.brand}>
-          <span className={styles.logo}>T</span> Tutor CRM
+          <span className={styles.logo}>{appTitle().charAt(0).toUpperCase()}</span> {appTitle()}
         </div>
         <nav className={styles.nav}>
           {objects.map((o) => (

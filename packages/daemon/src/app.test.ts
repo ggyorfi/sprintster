@@ -9,6 +9,10 @@ import {
   fixtureStatusObject,
   fixtureRefClientObject,
   fixtureMemoObject,
+  fixtureAppRaw,
+  appConfig,
+  loadConfig,
+  setAppConfig,
   type ObjectConfig,
   type PluginObjectApi,
 } from '@sprintster/engine';
@@ -68,6 +72,18 @@ describe('createApp', () => {
     expect(body.objects.map((o) => o.name)).toContain('client');
     expect(body.theme).toBeDefined();
     expect(body.plugins).toBeUndefined();
+  });
+
+  it('GET /config carries the app title only when one is configured', async () => {
+    const { app } = buildApp();
+    expect((await (await app.request('/config')).json()) as { title?: string }).not.toHaveProperty('title');
+    const previous = appConfig;
+    setAppConfig(loadConfig({ ...fixtureAppRaw, title: 'Harbour CMS' }));
+    try {
+      expect(((await (await app.request('/config')).json()) as { title?: string }).title).toBe('Harbour CMS');
+    } finally {
+      setAppConfig(previous);
+    }
   });
 });
 

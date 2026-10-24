@@ -55,6 +55,7 @@ export function createApp(deps: AppDeps): Hono {
   app.get('/config', (c) =>
     c.json({
       version: appConfig.version,
+      ...(appConfig.title === undefined ? {} : { title: appConfig.title }),
       theme: appConfig.theme,
       objects: deps.apis.map((d) => d.obj),
       ...(appConfig.assets === undefined ? {} : { assets: appConfig.assets }),

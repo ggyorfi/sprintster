@@ -293,6 +293,7 @@ export type PluginEntry = z.infer<typeof PluginEntry>;
 export const ConfigSchema = z
   .object({
     version: z.literal('1'),
+    title: z.string().min(1).optional(),
     theme: ThemeConfig.default(() => ThemeConfig.parse({})),
     objects: z.array(ObjectConfig),
     assets: z.string().min(1).optional(),

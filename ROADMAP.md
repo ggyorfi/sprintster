@@ -142,6 +142,81 @@ never collected, so we tolerate them and never emit them.
 
 ---
 
+## Epic: run on Cloudflare (next)
+
+**Goal.** One sprintster app deploys to a Cloudflare account, the free plan
+included, with the same config, the same HTTP API and the same web GUI it has
+under Node.
+
+**Why.** A Node host plus a database is the biggest cost of running a small app.
+A Durable Object with SQLite storage and R2 for blobs is close to zero for one
+app, and on Cloudflare the Durable Object also gives each app its own database.
+
+**Why it is cheap.** The engine has no Node-only imports, and storage already
+sits behind `EventStore` (`engine/src/events/store.ts:29`) and `BlobStore`
+(`engine/src/blobs/store.ts:12`). The Durable Object SQL API (`sql.exec`) is
+synchronous, like better-sqlite3, so the new store follows `storage-sqlite`
+closely. The daemon is a Hono app, and Hono runs on Workers.
+
+**What is in the way.** Verified in the code:
+
+- `daemon/src/app.ts:2` imports `serveStatic` from `@hono/node-server` at the
+  top level, for the web GUI. Bundling the daemon for Workers pulls in Node
+  modules even when no GUI is served.
+- `appConfig` is a module-level global set once at boot
+  (`engine/src/config/app-config.ts:7`). That is fine for one app per Worker.
+  It rules out more than one app in one isolate.
+
+**Scope.** Single tenant only: one Worker and one Durable Object per app.
+Hosting many apps on one deployment is a separate, private product built on
+these packages. Only engine changes that are generic and useful outside it
+land here, the per-app config below being the likely one.
+
+### Steps
+
+- [ ] **1. Daemon free of Node at import.** The static handler for the web GUI
+      is passed in through `AppDeps` instead of imported, and the Node runtime in
+      `cli/src/runtime.ts` supplies it.
+      *Done when:* `@sprintster/daemon` bundles for the Workers runtime with no
+      Node built-ins, and the Node daemon still serves the GUI.
+
+- [ ] **2. Shared store contract tests.** `storage-sqlite` and
+      `storage-postgres` each carry their own tests today. One suite, run
+      against every `EventStore`.
+      *Done when:* both existing stores pass the shared suite and their
+      duplicated cases are gone.
+
+- [ ] **3. Durable Object event store.** After 2. A `storage-durable-object`
+      package implementing `EventStore` over the Durable Object SQL API, with
+      the same DDL as sqlite, unique constraint included.
+      *Done when:* it passes the shared suite inside the Workers runtime.
+
+- [ ] **4. R2 blob store.** `BlobStore` over an R2 bucket, keyed by hash.
+      *Done when:* a second put of the same bytes stores nothing new, and the
+      content type survives a round trip.
+
+- [ ] **5. Worker entry and deploy.** After 1, 3 and 4. A Worker that routes
+      every request to the app's Durable Object, the web GUI served as Workers
+      static assets, and a documented deploy path from a scaffolded project.
+      *Done when:* a fresh scaffold deploys to a free account, and the GUI and
+      API work at its `workers.dev` URL.
+
+### Still open
+
+- **The CLI and TUI.** Whether they stay local and point at the deployed URL,
+  and how they authenticate there. The daemon has no auth today, which is
+  acceptable on `127.0.0.1` and not on a public URL. Auth may have to come
+  before step 5 ships.
+- **Free plan limits.** 100,000 rows written per day, and a per-object storage
+  cap that Cloudflare's own docs give as 1 GB in one place and 10 GB in another.
+  Each event is at least one row written. Check the current numbers before
+  promising anything about free use.
+- **Per-app config.** Replacing the `appConfig` global with config passed per
+  app. Not needed for single tenant, and a prerequisite for any multi-app host.
+  Whether it lands here depends on whether multi-app hosts share one config.
+
+---
+
 ## Epic: reference index and safe removal
 
 **Goal.** Answer "what references this?" as an indexed read rather than a scan,

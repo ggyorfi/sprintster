@@ -13,6 +13,7 @@ Everything lives in one file: `sprintster.config.json` in your project root
   },
   "app": {
     "version": "1",
+    "title": "My app",
     "objects": [ /* your objects */ ]
   }
 }
@@ -20,7 +21,8 @@ Everything lives in one file: `sprintster.config.json` in your project root
 
 - `configVersion`: always `"1"`.
 - `environments`: named runtime environments (backend + server + blobs).
-- `app`: your application (objects, and an optional `theme`). Covered in
+- `app`: your application (objects, an optional `title` shown by the web GUI
+  and defaulting to `sprintster`, and an optional `theme`). Covered in
   [Objects and properties](./objects-and-properties.md) and
   [Views and lists](./views-and-lists.md).
 

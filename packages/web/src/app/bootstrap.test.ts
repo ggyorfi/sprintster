@@ -37,6 +37,13 @@ describe('loadServerConfig', () => {
     expect(appConfig.objects.map((o) => o.name)).toContain('contact');
   });
 
+  it('carries the app title the daemon serves', async () => {
+    const serverConfig = { version: '1', title: 'Harbour CMS', theme: fixtureAppRaw.theme, objects: fixtureAppRaw.objects };
+    const ok = await loadServerConfig('/api', (async () => jsonResponse(serverConfig)) as unknown as typeof fetch);
+    expect(ok).toBe(true);
+    expect(appConfig.title).toBe('Harbour CMS');
+  });
+
   it('keeps the bundled config when the daemon is unreachable', async () => {
     const fetchMock = async () => {
       throw new Error('down');
