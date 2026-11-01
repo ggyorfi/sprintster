@@ -58,7 +58,9 @@ exception**.
 Full texts: [`LICENSE`](LICENSE) (AGPLv3) and
 [`LICENSE-EXCEPTION`](LICENSE-EXCEPTION).
 
-Source files carry the SPDX identifier:
+The SPDX expression is below. npm only accepts standard exceptions after
+`WITH`, so `package.json` declares `AGPL-3.0-only` and the package ships
+`LICENSE-EXCEPTION` alongside it.
 
 ```
 SPDX-License-Identifier: AGPL-3.0-only WITH LicenseRef-sprintster-runtime-exception

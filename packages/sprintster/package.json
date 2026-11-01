@@ -1,6 +1,7 @@
 {
   "name": "sprintster",
   "version": "0.0.0",
+  "license": "AGPL-3.0-only",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -19,11 +20,13 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE-EXCEPTION"
   ],
   "scripts": {
     "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsup && tsc -p tsconfig.build.json && api-extractor run --local && api-extractor run --local -c api-extractor.cloudflare.json && node scripts/vendor-web.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepack": "node -e \"for (const f of ['LICENSE','LICENSE-EXCEPTION']) require('node:fs').copyFileSync('../../'+f, f)\""
   },
   "dependencies": {
     "@hono/node-server": "^2.0.3",
