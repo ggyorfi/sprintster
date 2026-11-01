@@ -69,6 +69,8 @@ function baseSchema(prop: PropertyConfig): z.ZodTypeAny {
           width: z.number().int().positive().optional(),
           height: z.number().int().positive().optional(),
           alt: z.string().optional(),
+          // A small preview of the same image, stored as its own blob.
+          thumb: z.string().min(1).optional(),
         })
         .strict();
     case 'sequence':

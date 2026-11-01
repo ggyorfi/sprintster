@@ -6,15 +6,42 @@ export interface UploadedAsset {
   filename: string;
   contentType: string;
   size: number;
+  thumb?: string;
+}
+
+const THUMB_SIZE = 160;
+
+// Lists and pickers show this instead of the original. Best effort: without canvas support the image just has no thumbnail.
+async function makeThumbnail(file: File): Promise<Blob | null> {
+  if (typeof createImageBitmap !== 'function' || typeof document === 'undefined') return null;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, THUMB_SIZE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    return await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.8));
+  } catch {
+    return null;
+  }
+}
+
+async function postBlob(blob: Blob, filename: string): Promise<UploadedAsset> {
+  const form = new FormData();
+  form.append('file', blob, filename);
+  const res = await fetch(`${resolveApiBaseUrl()}/assets`, { method: 'POST', body: form });
+  if (!res.ok) throw new Error(`upload failed (${res.status})`);
+  return (await res.json()) as UploadedAsset;
 }
 
 // The engine ApiClient is JSON-only; asset bytes go through a separate multipart POST.
 export async function uploadAsset(file: File): Promise<UploadedAsset> {
-  const form = new FormData();
-  form.append('file', file);
-  const res = await fetch(`${resolveApiBaseUrl()}/assets`, { method: 'POST', body: form });
-  if (!res.ok) throw new Error(`upload failed (${res.status})`);
-  return (await res.json()) as UploadedAsset;
+  const asset = await postBlob(file, file.name);
+  const thumb = await makeThumbnail(file);
+  if (thumb === null) return asset;
+  return { ...asset, thumb: (await postBlob(thumb, 'thumb.webp')).hash };
 }
 
 export function assetUrl(hash: string): string {

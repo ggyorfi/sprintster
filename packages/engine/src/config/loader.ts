@@ -29,6 +29,7 @@ function validateSemantics(config: Config): void {
       checkLifecycle(obj);
       checkCommands(obj);
       checkListActions(obj);
+      checkThumbnails(obj, objectsByName);
     }
   }
 }
@@ -161,6 +162,24 @@ function checkListActions(obj: ObjectConfig): void {
         throw new Error(
           `list action '${obj.name}.${list.name}.${action.hotkey}': view '${action.view}' is not declared on '${obj.name}'`,
         );
+      }
+    }
+  }
+}
+
+function checkThumbnails(obj: ObjectConfig, objectsByName: Map<string, ObjectConfig>): void {
+  for (const list of obj.lists) {
+    for (const col of list.columns) {
+      if (col.thumbnail !== true) continue;
+      const where = `list column '${obj.name}.${list.name}.${col.property}'`;
+      const prop = obj.properties.find((p) => p.name === col.property);
+      if (prop?.type === 'image') continue;
+      if (prop?.type !== 'ref' && prop?.type !== 'refs') {
+        throw new Error(`${where} is a thumbnail; it must be an image property, or a ref or refs to an object with one`);
+      }
+      const target = objectsByName.get(prop.target);
+      if (target !== undefined && !target.properties.some((p) => p.type === 'image')) {
+        throw new Error(`${where} is a thumbnail, but its target '${prop.target}' has no image property`);
       }
     }
   }

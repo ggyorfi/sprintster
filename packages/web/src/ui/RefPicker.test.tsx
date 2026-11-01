@@ -102,3 +102,13 @@ describe('RefPicker reordering (multiple)', () => {
     expect(screen.queryByRole('button', { name: /^Move / })).toBeNull();
   });
 });
+
+describe('RefPicker thumbnails', () => {
+  it('shows an option thumbnail in the list and on the chip', async () => {
+    const withThumbs = [{ value: 'a1', label: 'Mask', thumb: '/assets/t1' }, { value: 'a2', label: 'Gold' }];
+    const { container } = render(<RefPicker label="Images" value='["a1"]' multiple options={withThumbs} onChange={() => {}} />);
+    expect(container.querySelector('img[src="/assets/t1"]')).not.toBeNull();
+    await userEvent.click(screen.getByRole('searchbox'));
+    expect(screen.getByRole('option', { name: 'Gold' }).querySelector('img')).toBeNull();
+  });
+});

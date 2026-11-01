@@ -4,6 +4,21 @@ import userEvent from '@testing-library/user-event';
 import { Modal } from './Modal.js';
 
 describe('Modal', () => {
+  it('is medium unless a width is given', () => {
+    const { rerender } = render(
+      <Modal title="Edit" onClose={() => {}}>
+        <p>body</p>
+      </Modal>,
+    );
+    expect(screen.getByRole('dialog').className).toMatch(/medium/);
+    rerender(
+      <Modal title="Edit" onClose={() => {}} width="large">
+        <p>body</p>
+      </Modal>,
+    );
+    expect(screen.getByRole('dialog').className).toMatch(/large/);
+  });
+
   it('renders title and content in a dialog', () => {
     render(
       <Modal title="Edit client" onClose={() => {}}>

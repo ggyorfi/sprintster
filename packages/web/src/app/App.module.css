@@ -1,6 +1,7 @@
 .app {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  /* minmax(0, ...) lets the content column shrink below its widest row, so a list narrows with the window. */
+  grid-template-columns: 220px minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
 }
@@ -65,6 +66,7 @@
 .main {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   height: 100%;
   min-height: 0;
   overflow: hidden;

@@ -4,7 +4,9 @@ import {
   viewFields,
   formatCell,
   displayText,
+  imagePropertyOf,
   isTranslated,
+  thumbnailHash,
   localeInputKey,
   type ApiClient,
   type ObjectConfig,
@@ -14,6 +16,7 @@ import {
 } from '@sprintster/engine';
 import { Button, parseRefIds, type SelectOption } from '../ui/index.js';
 import { Field } from './Field.js';
+import { assetUrl } from '../api/assets.js';
 import { RepeatingGroup } from './RepeatingGroup.js';
 import { initInputs, readPath, formatError, firstLabelField, type Row } from './resolve.js';
 import styles from './ObjectPanel.module.css';
@@ -68,8 +71,13 @@ export function useObjectForm(
         const list = await api.object<Row>(s.property.target).list();
         const target = resolveObject(s.property.target);
         const labelField = s.property.display ?? (target ? firstLabelField(target) : 'id');
+        const image = imagePropertyOf(target);
+        const thumbOf = (r: Row) => {
+          const hash = image === null ? null : thumbnailHash(r[image]);
+          return hash === null ? undefined : assetUrl(hash);
+        };
         next[s.path] = {
-          options: list.map((r) => ({ value: String(r['id']), label: displayText(r[labelField]) || String(r['id']) })),
+          options: list.map((r) => ({ value: String(r['id']), label: displayText(r[labelField]) || String(r['id']), thumb: thumbOf(r) })),
           rawById: new Map(list.map((r) => [String(r['id']), r])),
         };
       }

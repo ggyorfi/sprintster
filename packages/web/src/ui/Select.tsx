@@ -4,6 +4,7 @@ import styles from './Select.module.css';
 export interface SelectOption {
   value: string;
   label: string;
+  thumb?: string | undefined;
 }
 
 export interface SelectProps {

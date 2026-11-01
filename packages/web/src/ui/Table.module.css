@@ -22,6 +22,7 @@
 
 .td {
   color: var(--text);
+  overflow-wrap: anywhere;
   padding: var(--row-y) 12px;
   border-bottom: 1px solid var(--border);
 }

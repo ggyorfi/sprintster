@@ -43,7 +43,7 @@ export function RefPicker({ label, value, onChange, options, multiple = false, p
   const [active, setActive] = useState(0);
 
   const selectedIds = parseRefIds(value, multiple);
-  const labelById = new Map(options.map((o) => [o.value, o.label]));
+  const byId = new Map(options.map((o) => [o.value, o]));
   const available = options.filter((o) => !selectedIds.includes(o.value));
   const hits = fuzzyFilter(available, query);
 
@@ -96,9 +96,11 @@ export function RefPicker({ label, value, onChange, options, multiple = false, p
       <div className={styles.control}>
         <div className={styles.chips}>
           {selectedIds.map((id, i) => {
-            const text = labelById.get(id) ?? id;
+            const text = byId.get(id)?.label ?? id;
+            const thumb = byId.get(id)?.thumb;
             return (
               <span key={id} className={styles.chip}>
+                {thumb !== undefined && <img className={styles.chipThumb} src={thumb} alt="" />}
                 {multiple && i > 0 && (
                   <button type="button" className={styles.move} aria-label={`Move ${text} left`} onClick={() => move(i, -1)}>
                     {'‹'}
@@ -147,7 +149,10 @@ export function RefPicker({ label, value, onChange, options, multiple = false, p
                 }}
                 onMouseEnter={() => setActive(i)}
               >
-                <Highlighted label={hit.option.label} matches={hit.matches} />
+                {hit.option.thumb !== undefined && <img className={styles.thumb} src={hit.option.thumb} alt="" />}
+                <span>
+                  <Highlighted label={hit.option.label} matches={hit.matches} />
+                </span>
               </li>
             ))}
           </ul>

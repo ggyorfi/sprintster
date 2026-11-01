@@ -151,7 +151,11 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
 
   const activeContext = CONTEXTS[contextIndex];
   const activeObj = activeContext?.obj ?? null;
-  const columns = useMemo(() => (activeObj ? listColumns(activeObj, 'default', resolveObject) : []), [activeObj]);
+  // A terminal cannot draw a thumbnail, so those columns are left out.
+  const columns = useMemo(
+    () => (activeObj ? listColumns(activeObj, 'default', resolveObject).filter((c) => !c.thumbnail) : []),
+    [activeObj],
+  );
   const filter = useMemo(() => (activeObj ? makeFilter<Row>(activeObj) : null), [activeObj]);
   const labelField = useMemo(
     () => (activeObj ? firstLabelField(activeObj) : 'id'),

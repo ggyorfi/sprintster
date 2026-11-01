@@ -1,6 +1,7 @@
 .screen {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   gap: 16px;
   height: 100%;
   min-height: 0;
@@ -29,6 +30,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .muted {

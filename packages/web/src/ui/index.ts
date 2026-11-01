@@ -5,7 +5,7 @@ export { RefPicker, parseRefIds, type RefPickerProps } from './RefPicker.js';
 export { ImageField, parseImageValue, type ImageFieldProps, type ImageValue } from './ImageField.js';
 export { Table, type Column, type TableProps } from './Table.js';
 export { Pill, type PillProps, type PillTone } from './Pill.js';
-export { Modal, type ModalProps } from './Modal.js';
+export { Modal, type ModalProps, type ModalWidth } from './Modal.js';
 export { ConfirmDialog, type ConfirmDialogProps } from './ConfirmDialog.js';
 export { SearchBar, type SearchBarProps } from './SearchBar.js';
 export { EmptyState, type EmptyStateProps } from './EmptyState.js';

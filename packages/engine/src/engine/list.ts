@@ -41,6 +41,7 @@ export interface ListColumnSpec {
   label: string;
   width: number;
   suffix: string;
+  thumbnail: boolean;
 }
 
 export type ObjectResolver = (name: string) => ObjectConfig | undefined;
@@ -70,6 +71,7 @@ export function listColumns(
         label: col.label ?? leaf?.title ?? leafName,
         width: col.width ?? DEFAULT_COLUMN_WIDTH,
         suffix: col.suffix ?? '',
+        thumbnail: false,
       };
     }
     const property: PropertyConfig = byName.get(col.property) ?? { name: col.property, type: 'text' };
@@ -79,8 +81,21 @@ export function listColumns(
       label: col.label ?? property.title ?? property.name,
       width: col.width ?? DEFAULT_COLUMN_WIDTH,
       suffix: col.suffix ?? '',
+      thumbnail: col.thumbnail === true,
     };
   });
+}
+
+// The blob to show for an image value in a list or picker: its thumbnail when it has one, else the image itself.
+export function thumbnailHash(value: unknown): string | null {
+  if (value === null || typeof value !== 'object') return null;
+  const { thumb, hash } = value as { thumb?: unknown; hash?: unknown };
+  if (typeof thumb === 'string') return thumb;
+  return typeof hash === 'string' ? hash : null;
+}
+
+export function imagePropertyOf(obj: ObjectConfig | undefined): string | null {
+  return obj?.properties.find((p) => p.type === 'image')?.name ?? null;
 }
 
 // A translated value matches in any of its locales.

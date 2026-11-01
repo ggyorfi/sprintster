@@ -111,6 +111,8 @@
 }
 
 .option {
+  display: flex;
+  align-items: center;
   padding: var(--row-y) 9px;
   border-radius: var(--radius);
   cursor: pointer;
@@ -125,4 +127,22 @@
   background: transparent;
   color: var(--highlight);
   font-weight: 600;
+}
+
+.thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 3px;
+  margin-right: 8px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.chipThumb {
+  width: 20px;
+  height: 20px;
+  object-fit: cover;
+  border-radius: 50%;
+  margin-right: 2px;
 }

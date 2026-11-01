@@ -30,6 +30,14 @@ describe('ImageField', () => {
     expect(onChange).toHaveBeenCalledWith(JSON.stringify(uploaded));
   });
 
+  it('keeps the thumbnail the upload made', async () => {
+    const onChange = vi.fn();
+    const upload = vi.fn(async (_file: File) => ({ ...uploaded, thumb: 't4' }));
+    const { container } = render(<ImageField label="Hero" value="" onChange={onChange} upload={upload} assetUrl={assetUrl} />);
+    await userEvent.upload(container.querySelector('input[type=file]')!, pngFile());
+    expect(JSON.parse(onChange.mock.calls[0]![0] as string)).toMatchObject({ hash: 'd4', thumb: 't4' });
+  });
+
   it('renders a preview and filename for an existing value', () => {
     render(
       <ImageField label="Hero" value={JSON.stringify({ ...uploaded, alt: 'Sun' })} onChange={() => {}} upload={makeUpload()} assetUrl={assetUrl} />,

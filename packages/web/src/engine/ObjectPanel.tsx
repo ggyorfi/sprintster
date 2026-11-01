@@ -105,7 +105,7 @@ export function ObjectPanel({ api, obj, resolveObject, initialMode, row, onClose
 
   return (
     <>
-      <Modal title={title} onClose={onClose} footer={footer}>
+      <Modal title={title} onClose={onClose} footer={footer} width={obj.views?.find((v) => v.name === viewName)?.width}>
         {error !== null && <div className={styles.error}>{error}</div>}
         <ObjectFields form={form} />
       </Modal>

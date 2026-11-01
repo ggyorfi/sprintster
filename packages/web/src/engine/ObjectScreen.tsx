@@ -45,7 +45,7 @@ function ListScreen({ api, obj, resolveObject }: ObjectScreenProps) {
     [rows, query, search],
   );
 
-  const tableColumns: Column[] = cols.map((c) => ({ key: c.key, label: c.label, width: c.width }));
+  const tableColumns: Column[] = cols.map((c) => ({ key: c.key, label: c.thumbnail ? '' : c.label, width: c.thumbnail ? 56 : c.width }));
   const tableRows = visible.map((r) => {
     const cells: Record<string, ReactNode> = {};
     for (const c of cols) cells[c.key] = renderCell(c, r, lifecycle);

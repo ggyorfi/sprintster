@@ -132,6 +132,8 @@ export const ColumnConfig = z
     label: z.string().optional(),
     width: z.number().int().positive().optional(),
     suffix: z.string().optional(),
+    // Shows the image of an image property, or of the first record a ref/refs property points at, as a small picture.
+    thumbnail: z.boolean().optional(),
   })
   .strict();
 
@@ -191,6 +193,8 @@ export const ViewConfig = z
   .object({
     name: z.string().min(1),
     title: z.string(),
+    // How wide the web GUI opens the form; medium when unset.
+    width: z.enum(['small', 'medium', 'large', 'full']).optional(),
     fieldWidth: z.number().int().positive().optional(),
     fields: z.array(ViewItemConfig).min(1),
   })

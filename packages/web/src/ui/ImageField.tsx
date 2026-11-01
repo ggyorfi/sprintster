@@ -11,6 +11,7 @@ export interface ImageValue {
   width?: number;
   height?: number;
   alt?: string;
+  thumb?: string;
 }
 
 export interface ImageFieldProps {
@@ -60,6 +61,7 @@ export function ImageField({ label, value, onChange, upload, assetUrl, readOnly 
       filename: asset.filename,
       contentType: asset.contentType,
       size: asset.size,
+      ...(asset.thumb !== undefined ? { thumb: asset.thumb } : {}),
       ...(dims !== null ? { width: dims.width, height: dims.height } : {}),
     };
     onChange(JSON.stringify(next));

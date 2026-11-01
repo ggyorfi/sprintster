@@ -173,7 +173,7 @@ Every property has these common fields:
 | `refs` | string[] | An ordered set of references. `"target": "tag"`. Honors `minItems`/`maxItems`. |
 | `boolean` | boolean | true/false. |
 | `sequence` | number | Server-allocated incrementing number (read-only). |
-| `image` | object | Uploaded image reference: `{ hash, filename, contentType, size, width?, height?, alt? }`. Bytes stored on the filesystem; see [blobs](./configuration.md#blobs). |
+| `image` | object | Uploaded image reference: `{ hash, filename, contentType, size, width?, height?, alt?, thumb? }`; `thumb` is the hash of a small preview the web GUI makes at upload. Bytes stored on the filesystem; see [blobs](./configuration.md#blobs). |
 | `object` | object | A nested group: `"properties": [ ... ]`. |
 | `array` | array | A repeating group of items: `"item": { "properties": [ ... ] }`. Honors `minItems`/`maxItems`. |
 

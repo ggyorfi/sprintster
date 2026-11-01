@@ -33,6 +33,11 @@ A list is a table over an object's records.
 - **`columns`**: each has a `property`, optional `label`, `width`, and `suffix`.
   A dotted property like `"author.name"` traverses a `ref` to show a field from
   the target object.
+- **`thumbnail: true`** on a column shows a small picture instead of text: the
+  image of an `image` property, or of the first record a `ref` or `refs`
+  property points at, which must have an image property. The web GUI shows the
+  thumbnail stored with the image (made at upload), or the image itself for one
+  uploaded without. The terminal list leaves thumbnail columns out.
 - **`search`**: `fields` are matched case-insensitively; `idPrefix: true` also
   matches on an id prefix.
 - **`filters`**: quick filters by a property (typically an `enum`).
@@ -73,6 +78,9 @@ A view is the form used to create, edit, or view a record.
 - A dotted property like `"author.name"` shows a read-only field pulled from a
   referenced object.
 - A **fieldset** (`"kind": "fieldset"`) groups fields under a titled section.
+- `width` sets how wide the web GUI opens the form: `small`, `medium` (the
+  default), `large`, or `full`. The terminal form sizes itself from
+  `fieldWidth`, a number of characters.
 - The widget for each field is chosen automatically from its property type: a
   select for enums, a searchable picker for refs, a Markdown editor for
   `markdown`, an upload widget for `image`, and so on.
