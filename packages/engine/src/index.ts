@@ -5,6 +5,7 @@ export * from './money/index.js';
 export * from './time/index.js';
 export * from './events/registry.js';
 export * from './events/store.js';
+export * from './events/log.js';
 export * from './blobs/store.js';
 export * from './blobs/api.js';
 export * from './blobs/limits.js';

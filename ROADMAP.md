@@ -142,7 +142,7 @@ never collected, so we tolerate them and never emit them.
 
 ---
 
-## Epic: run on Cloudflare (next)
+## Epic: run on Cloudflare
 
 **Goal.** One sprintster app deploys to a Cloudflare account, the free plan
 included, with the same config, the same HTTP API and the same web GUI it has
@@ -257,6 +257,35 @@ land here, the per-app config below being the likely one.
 - **Per-app config.** Replacing the `appConfig` global with config passed per
   app. Not needed for single tenant, and a prerequisite for any multi-app host.
   Whether it lands here depends on whether multi-app hosts share one config.
+
+---
+
+## Epic: plugin routes and GUI extensions
+
+**Goal.** A package adds routes, a button and a status badge to any app through
+its `plugins` config, and can ask what changed since a point it remembers. The
+first user is sprintster-cms publishing: the engine gains the extension points,
+not the feature. Design: [ADR 13](./docs/ADR/0013-plugin-routes-and-declarative-gui-extensions.md).
+
+### Steps
+
+- [x] **1. Load plugins in every host.** The daemon and CLI call
+      `loadPlugins` for the config's `plugins`; `createWorker` takes the modules
+      explicitly; the TUI and web GUI read what plugins add from `/config`.
+      *Done when:* a test plugin's object appears in each host, and a Worker
+      whose config names a plugin it was not given refuses to start.
+- [x] **2. Plugin routes.** `ctx.routes.register` mounts handlers at
+      `/plugins/<namespace>/`, behind the same auth; `plugins` is reserved.
+      *Done when:* a plugin route answers on Node and in the Worker, and an
+      object routed `plugins` is rejected by `loadConfig`.
+- [x] **3. The log position.** `EventStore.position()` in all four stores,
+      covered by the shared contract suite; `GET /log?since=`.
+      *Done when:* the position grows with every append in every store, and
+      `/log` lists exactly the changes after the given position.
+- [x] **4. Actions and badges.** `ctx.gui.action` and `ctx.gui.badge`, listed
+      in `/config` under `extensions`, rendered by the web GUI and the TUI.
+      *Done when:* pressing an action POSTs to its route and shows the reply,
+      and a badge refreshes on its interval and after any action.
 
 ---
 

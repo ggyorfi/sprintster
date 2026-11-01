@@ -50,10 +50,10 @@ export function parseProjectConfig(raw: unknown): ProjectConfig {
   };
 }
 
-export function projectConfigPath(): string {
+export function projectConfigPath(dir: string = process.cwd()): string {
   const override = process.env['SPRINTSTER_CONFIG'];
   if (override !== undefined && override !== '') return override;
-  return join(process.cwd(), 'sprintster.config.json');
+  return join(dir, 'sprintster.config.json');
 }
 
 export function loadProjectConfig(path: string): ProjectConfig {

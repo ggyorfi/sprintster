@@ -4,6 +4,8 @@ import { resolveApiBaseUrl } from '../api/config.js';
 import { createWebApiClient } from '../api/client.js';
 import { makeResolveObject, ObjectScreen } from '../engine/index.js';
 import { StatusBar } from './StatusBar.js';
+import { Extensions } from './Extensions.js';
+import { serverExtensions } from './bootstrap.js';
 import { Maintenance } from './Maintenance.js';
 import styles from './App.module.css';
 
@@ -67,6 +69,7 @@ export function App() {
             Maintenance
           </button>
         </nav>
+        <Extensions baseUrl={baseUrl} extensions={serverExtensions} />
       </aside>
       <div className={styles.main}>
         <div className={styles.content}>

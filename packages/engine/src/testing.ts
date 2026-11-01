@@ -35,6 +35,22 @@ export function describeEventStore(
       expect(row.recordedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     });
 
+    it('reports a position that grows with every append, and the events after a position', async () => {
+      const store = await freshStore();
+      expect(await store.position()).toBe(0);
+      const a = await store.append(input({ streamVersion: 1 }));
+      const after = await store.position();
+      expect(after).toBe(Number(a.id));
+      await store.append(input({ streamVersion: 2 }));
+      await store.append(input({ streamType: 'invoice', streamId: 'I', streamVersion: 1 }));
+      expect(await store.position()).toBeGreaterThan(after);
+      expect((await store.findSince(after)).map((r) => [r.streamType, r.streamVersion])).toEqual([
+        ['client', 2],
+        ['invoice', 1],
+      ]);
+      expect(await store.findSince(await store.position())).toEqual([]);
+    });
+
     it('assigns a distinct id to every event', async () => {
       const store = await freshStore();
       const a = await store.append(input({ streamVersion: 1 }));

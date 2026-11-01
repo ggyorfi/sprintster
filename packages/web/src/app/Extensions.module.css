@@ -1,0 +1,17 @@
+.extensions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.reply {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.failed {
+  color: var(--red);
+  font-size: 12px;
+}

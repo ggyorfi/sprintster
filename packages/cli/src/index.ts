@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { defineCommand, runMain } from 'citty';
 import { version } from '@sprintster/engine';
+import { pluginCommands } from './plugin-commands.js';
 import { devCommand } from './commands/dev.js';
 import { daemonCommand } from './commands/daemon.js';
 import { migrateAssetsCommand } from './commands/migrate-assets.js';
@@ -28,6 +29,7 @@ async function main(): Promise<void> {
       daemon: daemonCommand,
       'migrate-assets': migrateAssetsCommand,
       'rebuild-states': rebuildStatesCommand,
+      ...(await pluginCommands(process.cwd())),
     },
   });
   await runMain(root);

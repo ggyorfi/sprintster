@@ -27,6 +27,12 @@
   border-color: var(--green-bd);
 }
 
+.warning {
+  background: var(--amber-bg);
+  color: var(--amber);
+  border-color: var(--amber-bd);
+}
+
 .danger {
   background: var(--red-bg);
   color: var(--red);

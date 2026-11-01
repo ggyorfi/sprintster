@@ -49,8 +49,64 @@ export interface CliRunContext {
   config: unknown;
 }
 
+export type RouteMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
+// Mounted at /plugins/<namespace><path>; `path` starts with a slash and may hold `:param` segments.
+export interface PluginRoute {
+  method: RouteMethod;
+  path: string;
+  handler(request: Request, params: Record<string, string>): Promise<Response>;
+}
+
+// A button; pressing it POSTs to `route` and shows the reply's `message`. `hotkey` is for the TUI.
+export interface GuiAction {
+  id: string;
+  label: string;
+  route: string;
+  confirm?: string;
+  hotkey?: string;
+}
+
+export type BadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+
+// Short status text; the GUI GETs `route` for `{ text, tone }`, every `refresh` seconds and after any action.
+export interface GuiBadge {
+  id: string;
+  route: string;
+  refresh?: number;
+}
+
+// What /config lists: ids prefixed with the namespace, routes as full daemon paths.
+export interface GuiExtensions {
+  actions: GuiAction[];
+  badges: GuiBadge[];
+}
+
+export interface LogChange {
+  position: number;
+  object: string;
+  id: string;
+  event: string;
+  at: string;
+}
+
+export interface PluginData {
+  object(name: string): PluginObjectApi<{ id: string }>;
+  position(): Promise<number>;
+  changesSince(position: number): Promise<LogChange[]>;
+}
+
+// Pushes to every client connected at /plugins/<namespace>/channels/<name>. A message is sent as JSON; clients never send.
+export interface Channel {
+  send(message: unknown): void;
+}
+
 export interface DaemonRegistries {
   objects: { register(o: ObjectRegistration): void };
+  routes: { register(r: PluginRoute): void };
+  channels: { open(name: string): Channel };
+  gui: { action(a: GuiAction): void; badge(b: GuiBadge): void };
+  data: PluginData;
 }
 
 export interface CliRegistries {

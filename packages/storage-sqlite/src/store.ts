@@ -103,6 +103,8 @@ export function createSqliteEventStore(db: Database.Database): EventStore & { st
   const byStreamType = db.prepare(
     `SELECT * FROM events WHERE partition_id = ? AND stream_type = ? ORDER BY id ASC`,
   );
+  const positionStmt = db.prepare(`SELECT COALESCE(MAX(id), 0) AS position FROM events`);
+  const sinceStmt = db.prepare(`SELECT * FROM events WHERE id > ? ORDER BY id ASC`);
   const headStmt = db.prepare(
     `SELECT COALESCE(MAX(stream_version), 0) AS head FROM events WHERE partition_id = ? AND stream_type = ? AND stream_id = ?`,
   );
@@ -183,6 +185,14 @@ export function createSqliteEventStore(db: Database.Database): EventStore & { st
     async streamHead(partitionId, streamType, streamId) {
       const row = headStmt.get(partitionId, streamType, streamId) as { head: number };
       return row.head;
+    },
+
+    async position() {
+      return (positionStmt.get() as { position: number }).position;
+    },
+
+    async findSince(position) {
+      return (sinceStmt.all(position) as Row[]).map(toEventRow);
     },
 
     states: {

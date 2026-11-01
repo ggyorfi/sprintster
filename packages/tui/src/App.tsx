@@ -31,6 +31,7 @@ import { filterHelp, listActions, objectHelp } from './help.js';
 import { makeFilter } from './search.js';
 import { loadScrollOff } from './config.js';
 import { THEME } from './theme.js';
+import { useExtensions } from './extensions.js';
 
 const LIST_VERTICAL_RESERVE = 6;
 
@@ -143,6 +144,13 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
   const [panelInitial, setPanelInitial] = useState<PopupFormValues>({});
   const [contextIndex, setContextIndex] = useState(0);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const extensions = useExtensions(daemonUrl);
+  const [pendingAction, setPendingAction] = useState<(typeof extensions.actions)[number] | null>(null);
+
+  function runAction(action: (typeof extensions.actions)[number]): void {
+    setStatusMessage(`${action.label}...`);
+    void extensions.run(action).then(setStatusMessage);
+  }
   const [loading, setLoading] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
   const [refOptions, setRefOptions] = useState<RefOptionMap>({});
@@ -427,6 +435,20 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
   useInput((input, key) => {
     if (mode === 'panel') return;
 
+    if (pendingAction !== null) {
+      setPendingAction(null);
+      if (input === 'y' || input === 'Y') runAction(pendingAction);
+      else setStatusMessage(`${pendingAction.label} cancelled.`);
+      return;
+    }
+
+    const action = key.ctrl ? extensions.actions.find((a) => a.hotkey === input) : undefined;
+    if (action !== undefined) {
+      if (action.confirm !== undefined) setPendingAction(action);
+      else runAction(action);
+      return;
+    }
+
     if (pendingDelete !== null) {
       const row = pendingDelete.row;
       setPendingDelete(null);
@@ -562,11 +584,18 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
   }
 
   const filterActive = query.trim() !== '';
+  const actionHelp = extensions.actions
+    .filter((a) => a.hotkey !== undefined)
+    .map((a) => ` · ^${a.hotkey} ${a.label.toLowerCase()}`)
+    .join('');
   const activeTitleIndex = mode === 'panel' ? null : contextIndex;
   let helpText: string;
   let helpColor: string;
   if (pendingDelete !== null) {
     helpText = `${pendingDelete.message} (y/N)`;
+    helpColor = THEME.errorColor;
+  } else if (pendingAction !== null) {
+    helpText = `${pendingAction.confirm ?? pendingAction.label} (y/N)`;
     helpColor = THEME.errorColor;
   } else if (searching) {
     helpText = `Search: ${query}▌`;
@@ -578,10 +607,10 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
     helpText = filterHelp(activeObj);
     helpColor = THEME.mutedColor;
   } else if (activeObj !== null) {
-    helpText = objectHelp(activeObj) + (objectStatus !== null ? ' · s sync' : '');
+    helpText = objectHelp(activeObj) + (objectStatus !== null ? ' · s sync' : '') + actionHelp;
     helpColor = THEME.mutedColor;
   } else {
-    helpText = MAINTENANCE_HELP;
+    helpText = MAINTENANCE_HELP + actionHelp;
     helpColor = THEME.mutedColor;
   }
 
@@ -631,6 +660,11 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
             {' '}{helpText}{' '}
           </Text>
         </Box>
+        {extensions.badges !== '' ? (
+          <Box flexShrink={0}>
+            <Text color={THEME.highlightColor}>{' '}{extensions.badges}{' '}</Text>
+          </Box>
+        ) : null}
         {freshnessText !== '' ? (
           <Box flexShrink={0}>
             <Text color={THEME.mutedColor}>{' '}{freshnessText}{listCounter !== '' ? ' · ' : ' '}</Text>

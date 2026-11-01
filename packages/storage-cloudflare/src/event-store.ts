@@ -173,6 +173,14 @@ export function createDurableObjectEventStore(storage: DurableObjectSqlStorage):
         .one().head;
     },
 
+    async position() {
+      return sql.exec<{ position: number }>(`SELECT COALESCE(MAX(id), 0) AS position FROM events`).one().position;
+    },
+
+    async findSince(position) {
+      return sql.exec<Row>(`SELECT * FROM events WHERE id > ? ORDER BY id ASC`, position).toArray().map(toEventRow);
+    },
+
     states: {
       async appendWithState(input, project) {
         return mapUnique(() =>

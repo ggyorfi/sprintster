@@ -62,6 +62,10 @@ export interface EventStore {
     streamType: string,
     streamId: string,
   ): Promise<number>;
+  // The log's position: the id of its latest event, 0 when empty. It only grows.
+  position(): Promise<number>;
+  // Every event after a position, in log order.
+  findSince(position: number): Promise<EventRow[]>;
   states?: StateStore;
 }
 
@@ -170,5 +174,13 @@ export class InMemoryEventStore implements EventStore {
       )
       .map((r) => r.streamVersion);
     return versions.length === 0 ? 0 : Math.max(...versions);
+  }
+
+  async position(): Promise<number> {
+    return this.nextId - 1;
+  }
+
+  async findSince(position: number): Promise<EventRow[]> {
+    return this.rows.filter((r) => Number(r.id) > position).sort((a, b) => Number(a.id) - Number(b.id));
   }
 }

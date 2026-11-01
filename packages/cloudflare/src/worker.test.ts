@@ -83,3 +83,31 @@ describe('basic auth', () => {
     expect(await res.json()).toMatchObject({ code: 'auth_misconfigured' });
   });
 });
+
+describe('plugins', () => {
+  it('serves a plugin route and lists its badge in /config', async () => {
+    expect(await (await req('/plugins/ping/pong')).json()).toMatchObject({ position: expect.any(Number) });
+    const config = (await (await req('/config')).json()) as { extensions: { badges: Array<{ route: string }> } };
+    expect(config.extensions.badges).toEqual([{ id: 'ping.pong', route: '/plugins/ping/pong' }]);
+  });
+
+  it('pushes channel messages to a connected socket', async () => {
+    const res = await req('/plugins/ping/channels/news', { headers: { upgrade: 'websocket' } });
+    expect(res.status).toBe(101);
+    const ws = (res as unknown as { webSocket: WebSocket & { accept(): void } }).webSocket;
+    ws.accept();
+    const received = new Promise<string>((resolve) => ws.addEventListener('message', (e) => resolve(String(e.data))));
+    await req('/plugins/ping/say', { method: 'POST' });
+    expect(JSON.parse(await received)).toEqual({ type: 'hello' });
+    ws.close();
+  });
+
+  it('does not upgrade a path that is not a channel', async () => {
+    expect((await req('/plugins/ping/channels/other', { headers: { upgrade: 'websocket' } })).status).not.toBe(101);
+  });
+
+  it('refuses to start when the config names a plugin it was not given', async () => {
+    const { createWorker } = await import('./index.js');
+    expect(() => createWorker({ app: { version: '1', objects: [], plugins: [{ name: 'plugin-missing' }] } })).toThrow(/plugin-missing/);
+  });
+});

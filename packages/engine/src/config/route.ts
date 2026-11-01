@@ -1,7 +1,7 @@
 import type { ObjectConfig } from './schema.js';
 
 // Paths the daemon mounts for itself; an object slugging to one of these would shadow it.
-export const RESERVED_ROUTES: ReadonlySet<string> = new Set(['health', 'config', 'assets']);
+export const RESERVED_ROUTES: ReadonlySet<string> = new Set(['health', 'config', 'assets', 'log', 'plugins']);
 
 export function slugify(text: string): string {
   return text

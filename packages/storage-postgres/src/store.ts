@@ -128,5 +128,15 @@ export function createPgEventStore(db: Kysely<EventStoreDatabase>): EventStore {
         .executeTakeFirst();
       return row ? Number(row.head) : 0;
     },
+
+    async position() {
+      const row = await db.selectFrom('events').select(sql<string>`COALESCE(MAX(id), 0)`.as('position')).executeTakeFirst();
+      return row ? Number(row.position) : 0;
+    },
+
+    async findSince(position) {
+      const rows = await db.selectFrom('events').selectAll().where('id', '>', String(position) as never).orderBy('id', 'asc').execute();
+      return rows.map((r) => toEventRow(r as RawRow));
+    },
   };
 }

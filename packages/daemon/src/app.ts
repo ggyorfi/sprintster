@@ -1,5 +1,14 @@
 import { Hono, type MiddlewareHandler } from 'hono';
-import { appConfig, objectRoute, type BlobApi, type ObjectConfig, type PluginObjectApi } from '@sprintster/engine';
+import {
+  appConfig,
+  changesSince,
+  objectRoute,
+  type BlobApi,
+  type EventStore,
+  type ObjectConfig,
+  type PluginObjectApi,
+} from '@sprintster/engine';
+import type { LoadedDaemonPlugins } from './plugins.js';
 import { healthRoute } from './routes/health.js';
 import { createObjectRoute } from './routes/object.js';
 import { createAssetRoute, type AssetHashResolver } from './routes/asset.js';
@@ -16,6 +25,8 @@ export interface AppDeps {
   apis: ReadonlyArray<MountedObject>;
   blobApi?: BlobApi;
   web?: StaticFiles;
+  store?: EventStore;
+  plugins?: LoadedDaemonPlugins;
 }
 
 // A client-side route has no file extension on its last segment; a missing asset does.
@@ -53,6 +64,7 @@ function claimedByApi(path: string, apiRoots: ReadonlySet<string>): boolean {
 
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
+  const apis: MountedObject[] = [...deps.apis, ...(deps.plugins?.objects ?? []).map(({ config, api }) => ({ obj: config, api }))];
   app.route('/health', healthRoute);
   app.get('/config', (c) =>
     c.json({
@@ -60,16 +72,32 @@ export function createApp(deps: AppDeps): Hono {
       ...(appConfig.title === undefined ? {} : { title: appConfig.title }),
       ...(appConfig.locales === undefined ? {} : { locales: appConfig.locales }),
       theme: appConfig.theme,
-      objects: deps.apis.map((d) => d.obj),
+      objects: apis.map((d) => d.obj),
       ...(appConfig.assets === undefined ? {} : { assets: appConfig.assets }),
+      ...(deps.plugins === undefined ? {} : { extensions: deps.plugins.extensions }),
     }),
   );
-  for (const { api, obj } of deps.apis) {
+  for (const { api, obj } of apis) {
     app.route(`/${objectRoute(obj)}`, createObjectRoute(api, obj));
   }
-  const apiRoots = new Set(['health', 'config', ...deps.apis.map(({ obj }) => objectRoute(obj))]);
+  const apiRoots = new Set(['health', 'config', 'plugins', ...apis.map(({ obj }) => objectRoute(obj))]);
+  if (deps.store !== undefined) {
+    const store = deps.store;
+    app.get('/log', async (c) => {
+      const since = Number(c.req.query('since') ?? '0');
+      if (!Number.isInteger(since) || since < 0) {
+        return c.json({ code: 'bad_request', message: 'since must be a non-negative integer position' }, 400);
+      }
+      const [position, changes] = await Promise.all([store.position(), changesSince(store, since)]);
+      return c.json({ position, changes });
+    });
+    apiRoots.add('log');
+  }
+  for (const r of deps.plugins?.routes ?? []) {
+    app.on(r.method, `/plugins/${r.namespace}${r.path}`, (c) => r.handler(c.req.raw, c.req.param() as Record<string, string>));
+  }
   if (deps.blobApi !== undefined) {
-    app.route('/assets', createAssetRoute(deps.blobApi, assetHashResolver(deps)));
+    app.route('/assets', createAssetRoute(deps.blobApi, assetHashResolver({ ...deps, apis })));
     apiRoots.add('assets');
   }
   app.use('/*', async (c, next) => {

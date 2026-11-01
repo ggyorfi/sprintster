@@ -1,4 +1,7 @@
-import { loadConfig, setAppConfig } from '@sprintster/engine';
+import { loadConfig, setAppConfig, type GuiExtensions } from '@sprintster/engine';
+
+// Plugin actions and badges from the daemon; empty until the config loads or when no plugin declares any.
+export let serverExtensions: GuiExtensions = { actions: [], badges: [] };
 
 interface ServerConfig {
   version?: string;
@@ -7,6 +10,7 @@ interface ServerConfig {
   theme?: unknown;
   objects?: unknown;
   assets?: string;
+  extensions?: GuiExtensions;
 }
 
 /*
@@ -33,6 +37,7 @@ export async function loadServerConfig(baseUrl: string, fetchImpl: typeof fetch 
         ...(raw.assets === undefined ? {} : { assets: raw.assets }),
       }),
     );
+    serverExtensions = raw.extensions ?? { actions: [], badges: [] };
     return true;
   } catch {
     return false;

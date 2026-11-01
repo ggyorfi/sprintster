@@ -15,6 +15,8 @@ per-app CRUD code to write.
   every property type, validation, and editability.
 - [Views and lists](./views-and-lists.md): forms (views) and list screens.
 - [CLI (`s8r`)](./cli.md): the commands that run your app.
+- [Plugins](./plugins.md): routes, Publish-style buttons and status badges, and
+  the event log.
 - [Running on Cloudflare](./cloudflare.md): deploy an app as a Worker with a
   Durable Object and R2.
 

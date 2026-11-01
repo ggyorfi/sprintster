@@ -18,6 +18,8 @@ function fresh(): Store {
     findByStream: (...args) => inObject((s) => s.findByStream(...args)),
     findByStreamType: (...args) => inObject((s) => s.findByStreamType(...args)),
     streamHead: (...args) => inObject((s) => s.streamHead(...args)),
+    position: () => inObject((s) => s.position()),
+    findSince: (...args) => inObject((s) => s.findSince(...args)),
     states: {
       appendWithState: (input, project) => inObject((s) => s.states.appendWithState(input, project)),
       getState: (...args) => inObject((s) => s.states.getState(...args)),

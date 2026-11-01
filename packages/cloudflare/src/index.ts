@@ -1,6 +1,14 @@
 import { Hono } from 'hono';
 import { basicAuth } from 'hono/basic-auth';
-import { buildApis, createApp, type StaticFiles } from '@sprintster/daemon';
+import {
+  buildApis,
+  createApp,
+  loadDaemonPlugins,
+  withContributedObjects,
+  type PluginModule,
+  type SocketHost,
+  type StaticFiles,
+} from '@sprintster/daemon';
 import { createBlobApi, loadConfig, setAppConfig } from '@sprintster/engine';
 import {
   createDurableObjectEventStore,
@@ -33,32 +41,74 @@ function assetFiles(assets: Fetcher): StaticFiles {
   };
 }
 
+interface HibernatableSocket {
+  send(message: string): void;
+}
+
+// The slice of DurableObjectState used here; accepting sockets through it lets the object hibernate while they stay open.
+export interface AppState {
+  storage: DurableObjectSqlStorage;
+  acceptWebSocket(socket: unknown, tags?: string[]): void;
+  getWebSockets(tag?: string): HibernatableSocket[];
+}
+
+type SocketPair = new () => { 0: unknown; 1: unknown };
+
 export interface SprintsterWorker {
   // The Durable Object class; the project's Worker module exports it under the name its wrangler config binds as APP.
-  App: new (state: { storage: DurableObjectSqlStorage }, env: SprintsterEnv) => Fetcher;
+  App: new (state: AppState, env: SprintsterEnv) => Fetcher;
   worker: { fetch(request: Request, env: SprintsterEnv): Promise<Response> };
 }
 
+export interface WorkerOptions {
+  // A Worker cannot import a package by name at runtime, so each plugin the config lists is passed in under that name.
+  plugins?: Record<string, PluginModule>;
+}
+
 // One app per Worker: every request goes to the same Durable Object, whose SQLite storage holds the event log.
-export function createWorker(projectConfig: { app: unknown }): SprintsterWorker {
-  const config = loadConfig(projectConfig.app);
+export function createWorker(projectConfig: { app: unknown }, opts: WorkerOptions = {}): SprintsterWorker {
+  const base = loadConfig(projectConfig.app);
+  const modules = opts.plugins ?? {};
+  const missing = base.plugins.filter((p) => p.enabled !== false && modules[p.name] === undefined).map((p) => p.name);
+  if (missing.length > 0) {
+    throw new Error(`createWorker: the config lists plugins with no module passed in: ${missing.join(', ')}`);
+  }
+  const resolve = async (name: string) => modules[name] ?? null;
 
   class App {
     readonly #app;
+    readonly #state: AppState;
+    #channels: string[] = [];
 
-    constructor(state: { storage: DurableObjectSqlStorage }, env: SprintsterEnv) {
-      setAppConfig(config);
-      const store = createDurableObjectEventStore(state.storage);
-      this.#app = createApp({
-        apis: buildApis(config, store),
-        blobApi: createBlobApi(store, createR2BlobStore(env.BLOBS)),
-        web: assetFiles(env.ASSETS),
-      });
+    constructor(state: AppState, env: SprintsterEnv) {
+      this.#state = state;
+      const sockets: SocketHost = {
+        send: (path, message) => state.getWebSockets(path).forEach((ws) => ws.send(message)),
+      };
+      this.#app = (async () => {
+        const config = await withContributedObjects(base, resolve);
+        setAppConfig(config);
+        const store = createDurableObjectEventStore(state.storage);
+        const apis = buildApis(config, store);
+        const plugins = await loadDaemonPlugins({ config, store, apis, resolve, sockets });
+        this.#channels = plugins.channels;
+        return createApp({ apis, blobApi: createBlobApi(store, createR2BlobStore(env.BLOBS)), web: assetFiles(env.ASSETS), store, plugins });
+      })();
     }
 
-    fetch(request: Request): Promise<Response> {
-      return Promise.resolve(this.#app.fetch(request));
+    async fetch(request: Request): Promise<Response> {
+      const app = await this.#app;
+      const path = new URL(request.url).pathname;
+      if (request.headers.get('upgrade')?.toLowerCase() === 'websocket' && this.#channels.includes(path)) {
+        const pair = new (globalThis as unknown as { WebSocketPair: SocketPair }).WebSocketPair();
+        this.#state.acceptWebSocket(pair[1], [path]);
+        return new Response(null, { status: 101, webSocket: pair[0] } as ResponseInit);
+      }
+      return app.fetch(request);
     }
+
+    // Clients only listen, so anything they send is dropped without keeping the object awake.
+    webSocketMessage(): void {}
   }
 
   const toApp = (request: Request, env: SprintsterEnv) => env.APP.get(env.APP.idFromName('app')).fetch(request);
