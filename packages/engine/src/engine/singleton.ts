@@ -7,8 +7,9 @@ export function singletonId(obj: ObjectConfig): string {
 function zeroValue(prop: PropertyConfig): unknown {
   switch (prop.type) {
     case 'text':
-    case 'code':
     case 'markdown':
+      return prop.translated === true ? {} : '';
+    case 'code':
       return '';
     case 'money':
       return '0';

@@ -3,6 +3,9 @@ import {
   listColumns,
   toInput,
   arrayInitialValues,
+  displayText,
+  isTranslated,
+  translatedInputs,
   isNetworkError,
   isApiError,
   type ApiClient,
@@ -49,7 +52,7 @@ export function firstLabelField(obj: ObjectConfig): string {
 export function primaryLabel(obj: ObjectConfig, row: Row): string {
   const col = listColumns(obj, 'default').find((c) => c.property.type !== 'id');
   const key = col?.key ?? 'id';
-  return String(row[key] ?? row['id'] ?? '');
+  return displayText(row[key] ?? row['id']);
 }
 
 export function readPath(row: Row, path: string): unknown {
@@ -104,6 +107,8 @@ export function initInputs(
       Object.assign(inputs, arrayInitialValues(spec.property, spec.path, value));
     } else if (spec.derivedFromRef !== null) {
       inputs[spec.path] = '';
+    } else if (isTranslated(spec.property)) {
+      Object.assign(inputs, translatedInputs(spec.path, initial === null || mode === 'create' ? null : readPath(initial, spec.path)));
     } else if (mode === 'create' || initial === null) {
       inputs[spec.path] = spec.defaultInput;
     } else {

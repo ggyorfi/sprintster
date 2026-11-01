@@ -31,12 +31,13 @@ interface PropertyBase {
 
 export type PropertyConfig =
   | (PropertyBase & { type: 'id'; strategy: 'uuid' | 'sequence' })
-  | (PropertyBase & { type: 'text' })
+  | (PropertyBase & { type: 'text'; translated?: boolean | undefined })
   | (PropertyBase & { type: 'code'; language?: string | undefined })
   | (PropertyBase & {
       type: 'markdown';
       editor?: 'wysiwyg' | 'source' | 'combo' | undefined;
       images?: boolean | undefined;
+      translated?: boolean | undefined;
     })
   | (PropertyBase & { type: 'enum'; values: string[] })
   | (PropertyBase & { type: 'money'; currency: string })
@@ -62,7 +63,7 @@ const baseProperty = {
 };
 
 const IdProperty = z.object({ ...baseProperty, type: z.literal('id'), strategy: z.enum(['uuid', 'sequence']) }).strict();
-const TextProperty = z.object({ ...baseProperty, type: z.literal('text') }).strict();
+const TextProperty = z.object({ ...baseProperty, type: z.literal('text'), translated: z.boolean().optional() }).strict();
 const CodeProperty = z.object({ ...baseProperty, type: z.literal('code'), language: z.string().min(1).optional() }).strict();
 const MarkdownProperty = z
   .object({
@@ -70,6 +71,7 @@ const MarkdownProperty = z
     type: z.literal('markdown'),
     editor: z.enum(['wysiwyg', 'source', 'combo']).optional(),
     images: z.boolean().optional(),
+    translated: z.boolean().optional(),
   })
   .strict();
 const EnumProperty = z.object({ ...baseProperty, type: z.literal('enum'), values: z.array(z.string()).min(1) }).strict();
@@ -294,6 +296,8 @@ export const ConfigSchema = z
   .object({
     version: z.literal('1'),
     title: z.string().min(1).optional(),
+    // The first locale is the default: it is required where a translated field is, and every other locale falls back to it.
+    locales: z.array(z.string().min(1)).min(1).optional(),
     theme: ThemeConfig.default(() => ThemeConfig.parse({})),
     objects: z.array(ObjectConfig),
     assets: z.string().min(1).optional(),

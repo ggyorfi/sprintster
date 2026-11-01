@@ -5,7 +5,11 @@ import {
   appConfig,
   arrayInitialValues,
   assembleValues,
+  displayText,
+  isTranslated,
   listColumns,
+  localeInputKey,
+  translatedInputs,
   isApiError,
   isNetworkError,
   toInput,
@@ -15,6 +19,7 @@ import {
   type ObjectConfig,
   type ObjectResolver,
   type ObjectStatus,
+  type ViewFieldSpec,
   type ViewMode,
 } from '@sprintster/engine';
 import { MenuBar, type MenuTitle } from './components/MenuBar.js';
@@ -46,6 +51,15 @@ function valueAtPath(obj: unknown, path: string): unknown {
   return path
     .split('.')
     .reduce<unknown>((acc, key) => (acc == null ? undefined : (acc as Record<string, unknown>)[key]), obj);
+}
+
+// The terminal form shows every language of a translated field as its own row, under the per-locale input key.
+function panelFields(obj: ObjectConfig, viewName: string, mode: ViewMode): ViewFieldSpec[] {
+  return viewFields(obj, viewName, mode, resolveObject).flatMap((f) =>
+    f.derivedFromRef === null && isTranslated(f.property)
+      ? (appConfig.locales ?? []).map((l) => ({ ...f, path: localeInputKey(f.path, l), label: `${f.label} (${l})` }))
+      : [f],
+  );
 }
 
 function firstLabelField(obj: ObjectConfig | undefined): string {
@@ -284,7 +298,7 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
         if (f.property.type !== 'ref') continue;
         const labelFieldName = f.property.display ?? firstLabelField(resolveObject(f.property.target));
         const list = lists.get(f.property.target) ?? [];
-        next[f.path] = list.map((r) => ({ id: String(r['id']), label: String(r[labelFieldName] ?? r['id']), raw: r }));
+        next[f.path] = list.map((r) => ({ id: String(r['id']), label: displayText(r[labelFieldName]) || String(r['id']), raw: r }));
       }
       setRefOptions(next);
     },
@@ -301,6 +315,10 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
         if (panelMode !== 'create' && source !== null) {
           Object.assign(initial, arrayInitialValues(f.property, f.path, valueAtPath(source, f.path)));
         }
+        continue;
+      }
+      if (f.derivedFromRef === null && isTranslated(f.property)) {
+        Object.assign(initial, translatedInputs(f.path, panelMode === 'create' || source === null ? null : valueAtPath(source, f.path)));
         continue;
       }
       if (panelMode === 'create') {
@@ -350,7 +368,7 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
     if (activeObj === null) return;
     if (action.kind === 'delete') {
       if (row === null) return;
-      const label = String(row[labelField] ?? activeObj.title.toLowerCase());
+      const label = displayText(row[labelField]) || activeObj.title.toLowerCase();
       const message = action.confirm ?? `Delete "${label}"?`;
       setPendingDelete({ row, message });
       return;
@@ -376,7 +394,7 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
 
   async function handleDelete(row: Row | null): Promise<void> {
     if (activeObj === null || row === null) return;
-    const label = String(row[labelField] ?? activeObj.title.toLowerCase());
+    const label = displayText(row[labelField]) || activeObj.title.toLowerCase();
     setStatusMessage(`Deleting ${label}...`);
     try {
       await apiClient.object(activeObj.name).remove(rowId(row));
@@ -517,7 +535,7 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
     if (activeObj === null || panel === null) return;
     const { mode: panelMode, viewName, original } = panel;
     const assembled = assembleValues(activeObj, viewName, values, panelMode);
-    const label = String(values[labelField] ?? '') || activeObj.title.toLowerCase();
+    const label = displayText(assembled[labelField] ?? values[labelField]) || activeObj.title.toLowerCase();
     setFormError(null);
     try {
       if (panelMode === 'create') {
@@ -525,7 +543,7 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
         await apiClient.object(activeObj.name).add({ id: randomUUID(), ...assembled });
         setStatusMessage(`Added ${label}.`);
       } else if (panelMode === 'edit' && original !== null) {
-        const editLabel = String(original[labelField] ?? activeObj.title.toLowerCase());
+        const editLabel = displayText(original[labelField]) || activeObj.title.toLowerCase();
         setStatusMessage(`Updating ${editLabel}...`);
         await apiClient.object(activeObj.name).update(rowId(original), assembled);
         setStatusMessage(`Updated ${editLabel}.`);
@@ -624,7 +642,7 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
       {mode === 'panel' && panel !== null && activeObj !== null ? (
         <PopupForm
           title={panelTitle(activeObj, panel.viewName, panel.mode)}
-          fields={viewFields(activeObj, panel.viewName, panel.mode, resolveObject)}
+          fields={panelFields(activeObj, panel.viewName, panel.mode)}
           fieldWidth={activeObj.views?.find((v) => v.name === panel.viewName)?.fieldWidth}
           initial={panelInitial}
           refOptions={refOptions}

@@ -14,10 +14,11 @@ function validateSemantics(config: Config): void {
   assertUnique(objectNames, 'object name');
   checkRoutes(config);
   checkAssets(config);
+  if (config.locales !== undefined) assertUnique(config.locales, 'locale');
   const knownObjects = new Set(objectNames);
   const objectsByName = new Map(config.objects.map((o) => [o.name, o]));
   for (const obj of config.objects) {
-    checkProperties(obj.name, obj.properties, knownObjects);
+    checkProperties(obj.name, obj.properties, knownObjects, config.locales !== undefined);
     checkViews(obj, objectsByName);
     if (obj.singleton === true) {
       checkSingleton(obj);
@@ -195,7 +196,13 @@ function checkCommands(obj: ObjectConfig): void {
 // `unique` is enforced per-object over live records via a reserved stream, so it only applies to top-level scalar fields.
 const UNIQUE_INCAPABLE_TYPES = new Set(['id', 'sequence', 'object', 'array', 'refs', 'image']);
 
-function checkProperties(scope: string, properties: PropertyConfig[], knownObjects: Set<string>, nested = false): void {
+function checkProperties(
+  scope: string,
+  properties: PropertyConfig[],
+  knownObjects: Set<string>,
+  hasLocales: boolean,
+  nested = false,
+): void {
   assertUnique(
     properties.map((p) => p.name),
     `property name in '${scope}'`,
@@ -220,10 +227,22 @@ function checkProperties(scope: string, properties: PropertyConfig[], knownObjec
     if (prop.validation?.caseInsensitive === true && prop.validation?.unique !== true) {
       throw new Error(`property '${scope}.${prop.name}' sets caseInsensitive without unique; it only applies to unique fields`);
     }
+    if ((prop.type === 'text' || prop.type === 'markdown') && prop.translated === true) {
+      checkTranslated(`${scope}.${prop.name}`, prop, hasLocales, nested);
+    }
     if (prop.type === 'object') {
-      checkProperties(`${scope}.${prop.name}`, prop.properties, knownObjects, true);
+      checkProperties(`${scope}.${prop.name}`, prop.properties, knownObjects, hasLocales, true);
     }
   }
+}
+
+function checkTranslated(path: string, prop: PropertyConfig, hasLocales: boolean, nested: boolean): void {
+  if (!hasLocales) {
+    throw new Error(`translated property '${path}' needs a top-level 'locales' list, e.g. "locales": ["en", "hu"]`);
+  }
+  if (nested) throw new Error(`translated property '${path}' is nested; only top-level properties can be translated`);
+  if (prop.validation?.unique === true) throw new Error(`translated property '${path}' cannot be unique`);
+  if (prop.default !== undefined) throw new Error(`translated property '${path}' cannot declare a default`);
 }
 
 function checkLifecycle(obj: ObjectConfig): void {

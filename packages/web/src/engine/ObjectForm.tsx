@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import {
+  appConfig,
   viewFields,
   formatCell,
+  displayText,
+  isTranslated,
+  localeInputKey,
   type ApiClient,
   type ObjectConfig,
   type ObjectResolver,
   type ViewFieldSpec,
   type ViewMode,
 } from '@sprintster/engine';
-import { parseRefIds, type SelectOption } from '../ui/index.js';
+import { Button, parseRefIds, type SelectOption } from '../ui/index.js';
 import { Field } from './Field.js';
 import { RepeatingGroup } from './RepeatingGroup.js';
 import { initInputs, readPath, formatError, firstLabelField, type Row } from './resolve.js';
@@ -31,6 +35,8 @@ export interface ObjectFormState {
   setError: Dispatch<SetStateAction<string | null>>;
   busy: boolean;
   setBusy: Dispatch<SetStateAction<boolean>>;
+  locale: string | undefined;
+  setLocale: Dispatch<SetStateAction<string | undefined>>;
 }
 
 export function useObjectForm(
@@ -46,6 +52,7 @@ export function useObjectForm(
   const [refData, setRefData] = useState<Record<string, RefData>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [locale, setLocale] = useState<string | undefined>(appConfig.locales?.[0]);
 
   useEffect(() => {
     setInputs(initInputs(specs, mode, row));
@@ -62,7 +69,7 @@ export function useObjectForm(
         const target = resolveObject(s.property.target);
         const labelField = s.property.display ?? (target ? firstLabelField(target) : 'id');
         next[s.path] = {
-          options: list.map((r) => ({ value: String(r['id']), label: String(r[labelField] ?? r['id']) })),
+          options: list.map((r) => ({ value: String(r['id']), label: displayText(r[labelField]) || String(r['id']) })),
           rawById: new Map(list.map((r) => [String(r['id']), r])),
         };
       }
@@ -85,8 +92,7 @@ export function useObjectForm(
       const rd = refData[spec.derivedFromRef];
       const raw = rd?.rawById.get(inputs[spec.derivedFromRef] ?? '');
       const leaf = spec.path.slice(spec.path.lastIndexOf('.') + 1);
-      const v = raw ? raw[leaf] : undefined;
-      return v == null ? '' : String(v);
+      return displayText(raw ? raw[leaf] : undefined, locale);
     }
     if (spec.property.type === 'ref') {
       const rd = refData[spec.path];
@@ -111,10 +117,11 @@ export function useObjectForm(
         .join(', ');
     }
     const raw = row !== null ? readPath(row, spec.path) : undefined;
+    if (isTranslated(spec.property)) return displayText(raw, locale);
     return formatCell(spec.property, raw, '');
   }
 
-  return { viewName, specs, inputs, setInputs, setField, refData, displayFor, error, setError, busy, setBusy };
+  return { viewName, specs, inputs, setInputs, setField, refData, displayFor, error, setError, busy, setBusy, locale, setLocale };
 }
 
 function sections(specs: ViewFieldSpec[]): Array<{ title: string | null; specs: ViewFieldSpec[] }> {
@@ -127,10 +134,31 @@ function sections(specs: ViewFieldSpec[]): Array<{ title: string | null; specs: 
   return out;
 }
 
+// One language at a time: the switch flips every translated field, and an empty one shows the default locale's text as its placeholder.
+function LocaleSwitch({ locale, setLocale }: Pick<ObjectFormState, 'locale' | 'setLocale'>) {
+  return (
+    <div className={styles.locales} role="group" aria-label="Language">
+      {(appConfig.locales ?? []).map((l) => (
+        <Button key={l} variant={l === locale ? 'primary' : 'neutral'} aria-pressed={l === locale} onClick={() => setLocale(l)}>
+          {l}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+function translatedSpec(spec: ViewFieldSpec, inputs: Record<string, string>, locale: string): ViewFieldSpec {
+  const fallback = appConfig.locales?.[0];
+  if (locale === fallback || fallback === undefined) return spec;
+  return { ...spec, placeholder: inputs[localeInputKey(spec.path, fallback)] || spec.placeholder };
+}
+
 export function ObjectFields({ form }: { form: ObjectFormState }) {
-  const { specs, inputs, setInputs, setField, refData, displayFor } = form;
+  const { specs, inputs, setInputs, setField, refData, displayFor, locale, setLocale } = form;
+  const translated = locale !== undefined && specs.some((s) => s.derivedFromRef === null && isTranslated(s.property));
   return (
     <>
+      {translated && (appConfig.locales ?? []).length > 1 && <LocaleSwitch locale={locale} setLocale={setLocale} />}
       {sections(specs).map((section, i) => (
         <div key={section.title ?? `s${i}`} className={section.title !== null ? styles.fieldset : undefined}>
           {section.title !== null && <div className={styles.legend}>{section.title}</div>}
@@ -144,6 +172,14 @@ export function ObjectFields({ form }: { form: ObjectFormState }) {
                   itemProperties={spec.property.item.properties}
                   inputs={inputs}
                   setInputs={setInputs}
+                />
+              ) : translated && spec.derivedFromRef === null && isTranslated(spec.property) ? (
+                <Field
+                  key={localeInputKey(spec.path, locale)}
+                  spec={translatedSpec(spec, inputs, locale)}
+                  value={inputs[localeInputKey(spec.path, locale)] ?? ''}
+                  onChange={(v) => setField(localeInputKey(spec.path, locale), v)}
+                  display={displayFor(spec)}
                 />
               ) : (
                 <Field

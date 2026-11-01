@@ -86,6 +86,18 @@ describe('createApp', () => {
       setAppConfig(previous);
     }
   });
+
+  it('GET /config carries the locales only when configured', async () => {
+    const { app } = buildApp();
+    expect(await (await app.request('/config')).json()).not.toHaveProperty('locales');
+    const previous = appConfig;
+    setAppConfig(loadConfig({ ...fixtureAppRaw, locales: ['en', 'hu'] }));
+    try {
+      expect(((await (await app.request('/config')).json()) as { locales?: string[] }).locales).toEqual(['en', 'hu']);
+    } finally {
+      setAppConfig(previous);
+    }
+  });
 });
 
 describe('POST /clients', () => {

@@ -1,6 +1,7 @@
 import type { ObjectConfig, PropertyConfig, ViewFieldConfig, ViewFieldsetConfig, ViewItemConfig } from '../config/schema.js';
 import type { ObjectResolver } from './list.js';
 import { isoToLocalInput, localInputToIso } from '../time/index.js';
+import { assembleTranslated, displayText, isTranslated } from './locale.js';
 
 function isFieldset(item: ViewItemConfig): item is ViewFieldsetConfig {
   return 'kind' in item && item.kind === 'fieldset';
@@ -58,6 +59,7 @@ export function penceToPounds(pence: string): string {
 export function toInput(property: PropertyConfig, value: unknown): string {
   if (property.type === 'array') return '';
   if (value === null || value === undefined) return '';
+  if (isTranslated(property)) return displayText(value);
   switch (property.type) {
     case 'money':
       return penceToPounds(String(value));
@@ -356,6 +358,10 @@ export function assembleValues(
     const direct = info.items.find((i) => !i.property.includes('.'));
     if (direct === undefined) continue;
     if (!resolveEditable(root, mode, direct.readOnly)) continue;
+    if (isTranslated(root)) {
+      out[rootName] = assembleTranslated(rootName, inputs);
+      continue;
+    }
     const v = toStorage(root, inputs[rootName] ?? '');
     if (v !== undefined) out[rootName] = v;
   }

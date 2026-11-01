@@ -93,7 +93,7 @@ has none.
 
 | type | unset value |
 |---|---|
-| `text`, `code`, `markdown` | `""` |
+| `text`, `code`, `markdown` | `""` (`{}` when [translated](#translated-fields)) |
 | `integer`, `sequence` | `0` |
 | `money` | `"0"` |
 | `boolean` | `false` |
@@ -161,9 +161,9 @@ Every property has these common fields:
 | Type | Value | Notes |
 |---|---|---|
 | `id` | string | Primary key. `"strategy": "uuid"` (client-minted) or `"sequence"` (server-allocated number). Usually `system: true`. |
-| `text` | string | Single or multi-line (see `rows` in a view). |
+| `text` | string | Single or multi-line (see `rows` in a view). `"translated": true` makes it [translated](#translated-fields). |
 | `code` | string | Source code editor with highlighting. `"language"`: e.g. `markdown`, `html`, `css`, `json`, `plaintext`. |
-| `markdown` | string | Rich Markdown editor; stores raw CommonMark. `"editor"`: `wysiwyg`, `source`, or `combo` (default). `"images": true` allows [in-body images](#images-in-a-markdown-body) and requires an [assets](#assets) object. |
+| `markdown` | string | Rich Markdown editor; stores raw CommonMark. `"editor"`: `wysiwyg`, `source`, or `combo` (default). `"images": true` allows [in-body images](#images-in-a-markdown-body) and requires an [assets](#assets) object. `"translated": true` makes it [translated](#translated-fields). |
 | `enum` | string | One of `"values": ["a", "b"]`. Renders as a select. |
 | `money` | string | Integer minor units as a string (e.g. pence). `"currency": "GBP"`. |
 | `integer` | number | Whole number. |
@@ -286,6 +286,36 @@ It is required as soon as any `markdown` property asks for images:
 is named is a configuration error, not an editor that quietly lacks a button, so
 the mistake surfaces at load rather than when an author goes looking for the
 control.
+
+## Translated fields
+
+A `text` or `markdown` property with `"translated": true` holds one text per
+locale. The locales are listed once, at the top of the app config; the first is
+the default:
+
+```json
+{
+  "version": "1",
+  "locales": ["en", "hu"],
+  "objects": [
+    { "name": "work", "properties": [
+      { "name": "title", "type": "text", "translated": true, "validation": { "required": true } }
+    ] }
+  ]
+}
+```
+
+The stored value maps each locale to its text, `{ "en": "Mask", "hu": "Maszk" }`.
+A locale left empty is not stored, and readers fall back to the default locale.
+`required` applies to the default locale only. Lists, ref labels and delete
+prompts show the default locale; search matches any locale.
+
+The web form edits one language at a time: a switch at the top flips every
+translated field, and an empty field shows the default locale's text as its
+placeholder. The terminal form shows each locale as its own row.
+
+A translated property must be top level, and cannot be `unique` or declare a
+`default`.
 
 ## Validation
 

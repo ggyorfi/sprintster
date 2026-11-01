@@ -1,6 +1,7 @@
 import { formatGBP, fromPence } from '../money/index.js';
 import { formatIsoMinute } from '../time/index.js';
 import type { ObjectConfig, PropertyConfig } from '../config/schema.js';
+import { displayText } from './locale.js';
 
 export function formatCell(property: PropertyConfig, value: unknown, suffix = ''): string {
   if (value === null || value === undefined) return '';
@@ -28,7 +29,7 @@ export function formatCell(property: PropertyConfig, value: unknown, suffix = ''
       base = '';
       break;
     default:
-      base = String(value);
+      base = displayText(value);
   }
   return base === '' ? '' : base + suffix;
 }
@@ -82,6 +83,12 @@ export function listColumns(
   });
 }
 
+// A translated value matches in any of its locales.
+function searchText(value: unknown): string {
+  if (value !== null && typeof value === 'object' && !Array.isArray(value)) return Object.values(value).map(String).join(' ');
+  return String(value ?? '');
+}
+
 export interface SearchSpec {
   fields: readonly string[];
   idPrefix?: boolean;
@@ -98,7 +105,7 @@ export function filterByConfig<T extends object>(
   const idField = spec.idField ?? 'id';
   return rows.filter((row) => {
     const r = row as Record<string, unknown>;
-    const hay = spec.fields.map((f) => String(r[f] ?? '')).join(' ').toLowerCase();
+    const hay = spec.fields.map((f) => searchText(r[f])).join(' ').toLowerCase();
     const id = String(r[idField] ?? '').toLowerCase();
     return terms.every((t) => hay.includes(t) || (spec.idPrefix === true && id.startsWith(t)));
   });

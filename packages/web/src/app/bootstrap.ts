@@ -3,6 +3,7 @@ import { loadConfig, setAppConfig } from '@sprintster/engine';
 interface ServerConfig {
   version?: string;
   title?: string;
+  locales?: string[];
   theme?: unknown;
   objects?: unknown;
   assets?: string;
@@ -25,6 +26,7 @@ export async function loadServerConfig(baseUrl: string, fetchImpl: typeof fetch 
       loadConfig({
         version: raw.version ?? '1',
         ...(raw.title === undefined ? {} : { title: raw.title }),
+        ...(raw.locales === undefined ? {} : { locales: raw.locales }),
         theme: raw.theme ?? {},
         objects: raw.objects,
         plugins: [],

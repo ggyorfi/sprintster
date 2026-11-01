@@ -2,6 +2,16 @@ import { z } from 'zod';
 import { PenceString } from '../money/index.js';
 import { IsoInstant } from '../time/index.js';
 import type { ObjectConfig, PropertyConfig } from './schema.js';
+import { appConfig } from './app-config.js';
+
+// A translated value maps each locale to its text; only the default locale can be required.
+function translatedSchema(text: z.ZodString, required: boolean): z.ZodTypeAny {
+  const [first, ...rest] = appConfig.locales ?? [];
+  const shape: Record<string, z.ZodTypeAny> = {};
+  if (first !== undefined) shape[first] = required ? text.min(1) : text.optional();
+  for (const locale of rest) shape[locale] = text.optional();
+  return z.object(shape).strict();
+}
 
 function baseSchema(prop: PropertyConfig): z.ZodTypeAny {
   switch (prop.type) {
@@ -13,7 +23,7 @@ function baseSchema(prop: PropertyConfig): z.ZodTypeAny {
       if (v?.minLength !== undefined) s = s.min(v.minLength);
       if (v?.maxLength !== undefined) s = s.max(v.maxLength);
       if (v?.format === 'email') s = s.email();
-      return s;
+      return prop.translated === true ? translatedSchema(s, v?.required === true) : s;
     }
     case 'code':
     case 'markdown': {
@@ -21,7 +31,7 @@ function baseSchema(prop: PropertyConfig): z.ZodTypeAny {
       const v = prop.validation;
       if (v?.minLength !== undefined) s = s.min(v.minLength);
       if (v?.maxLength !== undefined) s = s.max(v.maxLength);
-      return s;
+      return prop.type === 'markdown' && prop.translated === true ? translatedSchema(s, v?.required === true) : s;
     }
     case 'enum':
       return z.enum(prop.values as [string, ...string[]]);
