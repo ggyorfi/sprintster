@@ -4,6 +4,7 @@ import {
   type EventInput,
   type EventRow,
   type EventStore,
+  type StateStore,
 } from '../events/store.js';
 
 export type Reducer<State> = (state: State | null, event: EventRow) => State | null;
@@ -28,6 +29,8 @@ export interface EntityApi<State> {
   findOneById(streamId: string): Promise<State | null>;
   findMany(): Promise<State[]>;
   createEvent(streamId: string, build: (state: State | null) => ApplyEventInput): Promise<State>;
+  // Refolds every stream from the log into the store's states; a no-op for a store without them.
+  rebuildStates(): Promise<void>;
 }
 
 export function createEntityApi<State>(
@@ -37,6 +40,9 @@ export function createEntityApi<State>(
   const { partitionId, streamType, reducer } = config;
   const maxRetries = config.maxRetries ?? 5;
 
+  const states = store.states;
+  let checked: Promise<void> | undefined;
+
   async function foldStream(streamId: string): Promise<{ state: State | null; version: number }> {
     const events = await store.findByStream(partitionId, streamType, streamId);
     let state: State | null = null;
@@ -44,11 +50,8 @@ export function createEntityApi<State>(
     return { state, version: events.length };
   }
 
-  async function findOneById(streamId: string): Promise<State | null> {
-    return (await foldStream(streamId)).state;
-  }
-
-  async function findMany(): Promise<State[]> {
+  // Every stream of the type, in order of its first event.
+  async function foldAll(): Promise<Map<string, { state: State | null; version: number }>> {
     const events = await store.findByStreamType(partitionId, streamType);
     const byStream = new Map<string, EventRow[]>();
     for (const e of events) {
@@ -56,14 +59,57 @@ export function createEntityApi<State>(
       if (arr === undefined) byStream.set(e.streamId, [e]);
       else arr.push(e);
     }
-    const out: State[] = [];
-    for (const list of byStream.values()) {
+    const out = new Map<string, { state: State | null; version: number }>();
+    for (const [streamId, list] of byStream) {
       list.sort((a, b) => a.streamVersion - b.streamVersion);
       let s: State | null = null;
       for (const e of list) s = reducer(s, e);
-      if (s !== null) out.push(s);
+      out.set(streamId, { state: s, version: list[list.length - 1]?.streamVersion ?? 0 });
     }
     return out;
+  }
+
+  async function rebuildStates(): Promise<void> {
+    if (states === undefined) return;
+    const all = await foldAll();
+    await states.replaceStates(
+      partitionId,
+      streamType,
+      [...all].map(([streamId, { state, version }]) => ({ streamId, version, state })),
+    );
+  }
+
+  // Once per api: states written before this version, or by a writer that bypassed them, are rebuilt before the first read.
+  function ensureStates(s: StateStore): Promise<void> {
+    checked ??= s
+      .statesStale(partitionId, streamType)
+      .then((stale) => (stale ? rebuildStates() : undefined))
+      .catch((err: unknown) => {
+        checked = undefined;
+        throw err;
+      });
+    return checked;
+  }
+
+  async function current(streamId: string): Promise<{ state: State | null; version: number }> {
+    if (states === undefined) return foldStream(streamId);
+    await ensureStates(states);
+    const stored = await states.getState(partitionId, streamType, streamId);
+    return stored === null ? { state: null, version: 0 } : { state: stored.state as State | null, version: stored.version };
+  }
+
+  async function findOneById(streamId: string): Promise<State | null> {
+    return (await current(streamId)).state;
+  }
+
+  async function findMany(): Promise<State[]> {
+    if (states === undefined) {
+      return [...(await foldAll()).values()].flatMap(({ state }) => (state === null ? [] : [state]));
+    }
+    await ensureStates(states);
+    return (await states.listStates(partitionId, streamType)).flatMap(({ state }) =>
+      state === null ? [] : [state as State],
+    );
   }
 
   async function createEvent(
@@ -72,7 +118,7 @@ export function createEntityApi<State>(
   ): Promise<State> {
     let lastErr: unknown = null;
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      const { state, version } = await foldStream(streamId);
+      const { state, version } = await current(streamId);
       const built = build(state);
       const input: EventInput = {
         partitionId,
@@ -86,8 +132,7 @@ export function createEntityApi<State>(
         actor: built.actor,
         correlationId: built.correlationId ?? null,
       };
-      try {
-        const row = await store.append(input);
+      const apply = (row: EventRow): State => {
         const next = reducer(state, row);
         if (next === null) {
           throw new Error(
@@ -95,6 +140,12 @@ export function createEntityApi<State>(
           );
         }
         return next;
+      };
+      try {
+        if (states === undefined) return apply(await store.append(input));
+        let next: State | undefined;
+        await states.appendWithState(input, (row) => (next = apply(row)));
+        return next as State;
       } catch (err) {
         if (err instanceof UniqueViolationError) {
           lastErr = err;
@@ -108,5 +159,5 @@ export function createEntityApi<State>(
     );
   }
 
-  return { findOneById, findMany, createEvent };
+  return { findOneById, findMany, createEvent, rebuildStates };
 }

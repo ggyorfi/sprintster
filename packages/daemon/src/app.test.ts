@@ -16,7 +16,8 @@ import {
   type ObjectConfig,
   type PluginObjectApi,
 } from '@sprintster/engine';
-import { createApp } from './app.js';
+import { serveStatic } from '@hono/node-server/serve-static';
+import { createApp, type StaticFiles } from './app.js';
 
 function buildApp() {
   const store = new InMemoryEventStore();
@@ -431,7 +432,7 @@ describe('externally-backed object: status / sync / refresh routes', () => {
   });
 });
 
-describe('static web hosting (webRoot)', () => {
+describe('static web hosting', () => {
   const dir = mkdtempSync(join(tmpdir(), 'sprintster-web-'));
   writeFileSync(join(dir, 'index.html'), '<!doctype html><title>App</title><div id="root"></div>');
   writeFileSync(join(dir, 'app.js'), 'console.log("bundle")');
@@ -439,7 +440,8 @@ describe('static web hosting (webRoot)', () => {
   function withWeb() {
     const store = new InMemoryEventStore();
     const clientApi = createObjectApi<{ id: string }>(store, fixtureClientConfig);
-    return createApp({ apis: [{ obj: fixtureClientConfig, api: clientApi }], webRoot: dir });
+    const web: StaticFiles = (path) => serveStatic(path === undefined ? { root: dir } : { path, root: dir });
+    return createApp({ apis: [{ obj: fixtureClientConfig, api: clientApi }], web });
   }
 
   it('serves index.html at /', async () => {

@@ -41,6 +41,11 @@ export interface CreateObjectApiOptions {
   resolveTarget?: RefResolver;
 }
 
+// Refolds every record of the object from the log into the store's current states, for a store that keeps them.
+export async function rebuildObjectStates(store: EventStore, obj: ObjectConfig, partitionId = 0): Promise<void> {
+  await createEntityApi(store, { partitionId, streamType: obj.name, reducer: makeReducer(obj) }).rebuildStates();
+}
+
 export function createObjectApi<State extends { id: string }>(
   store: EventStore,
   obj: ObjectConfig,

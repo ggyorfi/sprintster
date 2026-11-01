@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createObjectApi } from './object-api.js';
+import { createObjectApi, rebuildObjectStates } from './object-api.js';
 import {
   fixtureClientConfig,
   fixtureStatusObject,
@@ -609,5 +609,22 @@ describe('createObjectApi: case-insensitive unique', () => {
     await api.remove!(ID_A);
     await api.add({ id: ID_B, slug: 'FOO' });
     expect((await api.get(ID_B))?.['slug']).toBe('FOO');
+  });
+});
+
+describe('rebuildObjectStates', () => {
+  it('replaces stored states with a fresh fold of the log', async () => {
+    const { store, api } = buildApi();
+    await api.add(validInput());
+    await api.add(validInput({ id: ID_B, name: 'Second' }));
+    const before = await store.states.listStates(0, fixtureClientConfig.name);
+    await store.states.replaceStates(
+      0,
+      fixtureClientConfig.name,
+      before.map((s) => ({ ...s, state: { id: s.streamId, corrupted: true } })),
+    );
+    await rebuildObjectStates(store, fixtureClientConfig);
+    expect(await store.states.listStates(0, fixtureClientConfig.name)).toEqual(before);
+    expect(before).toHaveLength(2);
   });
 });

@@ -3,7 +3,12 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createBlobApi, InMemoryBlobStore, InMemoryEventStore, MAX_ASSET_BYTES } from '@sprintster/engine';
-import { createApp } from '../app.js';
+import { serveStatic } from '@hono/node-server/serve-static';
+import { createApp, type StaticFiles } from '../app.js';
+
+function nodeWeb(root: string): StaticFiles {
+  return (path) => serveStatic(path === undefined ? { root } : { path, root });
+}
 
 const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
 const ascii = (t: string): number[] => Array.from(t, (c) => c.charCodeAt(0));
@@ -145,7 +150,7 @@ describe('/assets does not swallow the web bundle', () => {
       writeFileSync(target, body);
     }
     const events = new InMemoryEventStore();
-    return createApp({ apis: [], blobApi: createBlobApi(events, new InMemoryBlobStore()), webRoot: dir });
+    return createApp({ apis: [], blobApi: createBlobApi(events, new InMemoryBlobStore()), web: nodeWeb(dir) });
   }
 
   it('serves a bundle file under the vite assetsDir', async () => {
@@ -195,7 +200,7 @@ describe('/assets is not mounted without a blob api, nor shadowed by the web cat
     const dir = mkdtempSync(join(tmpdir(), 'sprintster-assets-'));
     writeFileSync(join(dir, 'index.html'), '<!doctype html><div id="root"></div>');
     const events = new InMemoryEventStore();
-    const app = createApp({ apis: [], blobApi: createBlobApi(events, new InMemoryBlobStore()), webRoot: dir });
+    const app = createApp({ apis: [], blobApi: createBlobApi(events, new InMemoryBlobStore()), web: nodeWeb(dir) });
     expect((await app.request('/assets', upload(png, 'image/png'))).status).toBe(201);
   });
 });

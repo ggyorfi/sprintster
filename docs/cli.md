@@ -42,6 +42,22 @@ that no asset holds is left alone and reported, as is one held by more than one
 asset, since nothing can say which was meant. Each rewrite is an ordinary update
 event, so it appears in the record's history like any other edit.
 
+### `s8r rebuild-states`
+
+Refolds every record from the event log into the current-state table that
+lists and reads come from.
+
+```
+s8r rebuild-states [--env <name>]
+```
+
+The event log is the source of truth and the table is derived from it, so this
+is always safe. Stored states that are missing or behind the log are rebuilt
+automatically the first time each object is read, so this is only needed when
+the way events fold into records has changed, for example after an upgrade that
+fixes how an event is applied. Stop the daemon first, or restart it afterwards:
+a running daemon checks the table once, when it first reads each object.
+
 ### `s8r`
 
 With no arguments, opens just the terminal UI against a running daemon (as

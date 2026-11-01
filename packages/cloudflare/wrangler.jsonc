@@ -1,0 +1,10 @@
+// Test-only: a whole sprintster Worker, as a project would deploy it.
+{
+  "name": "sprintster-cloudflare-test",
+  "main": "test/worker.ts",
+  "compatibility_date": "2026-09-01",
+  "assets": { "directory": "test/web", "binding": "ASSETS", "html_handling": "none" },
+  "durable_objects": { "bindings": [{ "name": "APP", "class_name": "App" }] },
+  "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "sprintster-cloudflare-test" }],
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["App"] }]
+}

@@ -166,6 +166,14 @@ closely. The daemon is a Hono app, and Hono runs on Workers.
 - `appConfig` is a module-level global set once at boot
   (`engine/src/config/app-config.ts:7`). That is fine for one app per Worker.
   It rules out more than one app in one isolate.
+- Listing an object folds every event of its type on every request
+  (`engine/src/entity-api/factory.ts:51`), so the cost grows with total event
+  bytes, not with record count. Measured 2026-10-31 with 5 KB bodies: 500
+  records of 10 events each cost 62 ms of CPU in Node and 63 ms inside a
+  Durable Object on a free account, against a documented free-plan limit of
+  10 ms. The free account let it through, but nothing documents how far over
+  the limit it will go, so we do not build on it. One record read costs
+  0.06 ms.
 
 **Scope.** Single tenant only: one Worker and one Durable Object per app.
 Hosting many apps on one deployment is a separate, private product built on
@@ -174,43 +182,78 @@ land here, the per-app config below being the likely one.
 
 ### Steps
 
-- [ ] **1. Daemon free of Node at import.** The static handler for the web GUI
+- [x] **1. Daemon free of Node at import.** The static handler for the web GUI
       is passed in through `AppDeps` instead of imported, and the Node runtime in
       `cli/src/runtime.ts` supplies it.
       *Done when:* `@sprintster/daemon` bundles for the Workers runtime with no
       Node built-ins, and the Node daemon still serves the GUI.
 
-- [ ] **2. Shared store contract tests.** `storage-sqlite` and
-      `storage-postgres` each carry their own tests today. One suite, run
-      against every `EventStore`.
-      *Done when:* both existing stores pass the shared suite and their
-      duplicated cases are gone.
+- [x] **2. Shared store contract tests.** One suite,
+      `describeEventStore` in `@sprintster/engine/testing`, run against every
+      `EventStore`: in memory and sqlite today, the Durable Object store when it
+      exists. Postgres is left out until something deploys on it, since its
+      only test checks the shape of the store object and running it for real
+      needs a server (or PGlite, which cannot show concurrent connections).
+      *Done when:* the in memory and sqlite stores pass the shared suite and
+      their duplicated cases are gone.
 
-- [ ] **3. Durable Object event store.** After 2. A `storage-durable-object`
-      package implementing `EventStore` over the Durable Object SQL API, with
-      the same DDL as sqlite, unique constraint included.
+- [x] **3. Current-state table.** After 2. Each record's folded state is
+      stored in a table of its own, written in the same transaction as the event
+      that changed it, and every read (one record or a list) comes from that
+      table instead of folding the log. The log stays the source of truth: the
+      table is derived, and `s8r rebuild-states` rebuilds it from the log,
+      the same rule as the reference index below. The engine computes the
+      state, since only it holds the reducer, and the store writes both
+      atomically. A store opts in through `EventStore.states`; postgres does
+      not yet and keeps folding. States that are missing or behind the log are
+      rebuilt on the first read of each object, which is how existing data
+      upgrades.
+      *Done when:* listing 500 records of 10 events each costs about what 500
+      records of one event cost today (5 ms in Node rather than 62 ms); both
+      existing stores pass the shared suite with the table in place; and a
+      rebuild over a populated store yields the same states as the fold.
+      Measured 2026-11-01: 3.2 ms, and the reference site's data upgraded on
+      first read to states identical to the fold for all seven objects.
+
+- [x] **4. Durable Object event store.** After 3. `createDurableObjectEventStore`
+      in `@sprintster/storage-cloudflare`, implementing `EventStore` and its
+      states over the Durable Object SQL API, with the same DDL as sqlite.
       *Done when:* it passes the shared suite inside the Workers runtime.
 
-- [ ] **4. R2 blob store.** `BlobStore` over an R2 bucket, keyed by hash.
+- [x] **5. R2 blob store.** `createR2BlobStore` in the same package, keyed by
+      hash. `BlobStore` gained a shared suite of its own, `describeBlobStore`,
+      which the filesystem and in memory stores now run too.
       *Done when:* a second put of the same bytes stores nothing new, and the
       content type survives a round trip.
 
-- [ ] **5. Worker entry and deploy.** After 1, 3 and 4. A Worker that routes
-      every request to the app's Durable Object, the web GUI served as Workers
-      static assets, and a documented deploy path from a scaffolded project.
+- [x] **6. Worker entry and deploy.** After 1, 4 and 5. `createWorker` in
+      `@sprintster/cloudflare`, published as `sprintster/cloudflare`: a Durable
+      Object running the daemon's app over the two stores, and a Worker that
+      routes to it. The web GUI is served as Workers static assets, and
+      [docs/cloudflare.md](./docs/cloudflare.md) is the deploy path: two files
+      in the project, two wrangler commands.
       *Done when:* a fresh scaffold deploys to a free account, and the GUI and
-      API work at its `workers.dev` URL.
+      API work at its `workers.dev` URL. Deployed 2026-11-01 with the
+      reference site's config: API, writes, R2 upload and download, and the
+      GUI with its assets all answered, then the Worker and bucket were
+      deleted.
 
 ### Still open
 
 - **The CLI and TUI.** Whether they stay local and point at the deployed URL,
-  and how they authenticate there. The daemon has no auth today, which is
-  acceptable on `127.0.0.1` and not on a public URL. Auth may have to come
-  before step 5 ships.
+  and how they authenticate there. A deployed app now takes one user and
+  password from Worker secrets and checks them as Basic Auth in the Worker,
+  before the Durable Object; `/health` stays open. Per-user accounts are not decided.
+  The local daemon still has no auth, which is acceptable on `127.0.0.1`.
 - **Free plan limits.** 100,000 rows written per day, and a per-object storage
   cap that Cloudflare's own docs give as 1 GB in one place and 10 GB in another.
-  Each event is at least one row written. Check the current numbers before
-  promising anything about free use.
+  Each write becomes two rows once step 3 lands, the event and the state, so
+  the daily write allowance halves. Check the current numbers before promising
+  anything about free use.
+- **Lists that grow by record count.** Step 3 removes the cost of edits, not of
+  records: 500 records of one event each still cost about 5 ms, most of it
+  full bodies a list view does not show. Lists that return only the fields
+  they ask for would cut that, and are not planned until a project needs them.
 - **Per-app config.** Replacing the `appConfig` global with config passed per
   app. Not needed for single tenant, and a prerequisite for any multi-app host.
   Whether it lands here depends on whether multi-app hosts share one config.

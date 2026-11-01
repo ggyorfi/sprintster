@@ -173,6 +173,39 @@ describe('createEntityApi', () => {
       actor: 'tester',
       correlationId: null,
     });
+    // An append that bypasses the api leaves the stored states behind the log until they are rebuilt.
+    expect((await api.findMany()).length).toBe(1);
+    await api.rebuildStates();
     expect((await api.findMany()).length).toBe(0);
+  });
+
+  it('rebuilds stale states once, before the first read', async () => {
+    const store = new InMemoryEventStore();
+    const event = (version: number, eventType: string) => ({
+      partitionId: 0,
+      streamType: 'counter',
+      streamId: 'a',
+      streamVersion: version,
+      eventType,
+      eventVersion: 1,
+      payload: { id: 'a', by: 5 },
+      occurredAt: new Date().toISOString(),
+      actor: 'tester',
+      correlationId: null,
+    });
+    await store.append(event(1, 'Created'));
+    await store.append(event(2, 'Incremented'));
+    const api = createEntityApi(store, { partitionId: 0, streamType: 'counter', reducer: counterReducer });
+    expect(await api.findOneById('a')).toMatchObject({ value: 5 });
+    expect(await store.states.getState(0, 'counter', 'a')).toMatchObject({ version: 2 });
+  });
+
+  it('appends nothing when the reducer refuses the event', async () => {
+    const store = new InMemoryEventStore();
+    const api = createEntityApi(store, { partitionId: 0, streamType: 'counter', reducer: () => null });
+    await expect(
+      api.createEvent('a', () => ({ eventType: 'Created', eventVersion: 1, payload: { id: 'a' }, actor: 'tester' })),
+    ).rejects.toThrow(/reducer returned null/);
+    expect(await store.findByStream(0, 'counter', 'a')).toEqual([]);
   });
 });

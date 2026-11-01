@@ -1,5 +1,4 @@
-import { Hono } from 'hono';
-import { serveStatic } from '@hono/node-server/serve-static';
+import { Hono, type MiddlewareHandler } from 'hono';
 import { appConfig, objectRoute, type BlobApi, type ObjectConfig, type PluginObjectApi } from '@sprintster/engine';
 import { healthRoute } from './routes/health.js';
 import { createObjectRoute } from './routes/object.js';
@@ -10,10 +9,13 @@ export interface MountedObject {
   obj: ObjectConfig;
 }
 
+// Serves the requested static file, or the named one when given a path. Supplied by the runtime, so the app imports nothing platform specific.
+export type StaticFiles = (path?: string) => MiddlewareHandler;
+
 export interface AppDeps {
   apis: ReadonlyArray<MountedObject>;
   blobApi?: BlobApi;
-  webRoot?: string;
+  web?: StaticFiles;
 }
 
 // A client-side route has no file extension on its last segment; a missing asset does.
@@ -73,12 +75,12 @@ export function createApp(deps: AppDeps): Hono {
     if (!claimedByApi(c.req.path, apiRoots)) return next();
     return c.json({ code: 'not_found', message: `no route for ${c.req.method} ${c.req.path}` }, 404);
   });
-  if (deps.webRoot !== undefined) {
-    const root = deps.webRoot;
-    app.use('/*', serveStatic({ root }));
+  if (deps.web !== undefined) {
+    const web = deps.web;
+    app.use('/*', web());
     app.get('*', async (c, next) => {
       if (looksLikeFile(c.req.path)) return next();
-      return serveStatic({ path: 'index.html', root })(c, next);
+      return web('index.html')(c, next);
     });
   }
   return app;

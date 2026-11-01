@@ -12,13 +12,17 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./cloudflare": {
+      "types": "./dist/cloudflare.d.ts",
+      "default": "./dist/cloudflare.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsup && tsc -p tsconfig.build.json && api-extractor run --local && node scripts/vendor-web.mjs",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsup && tsc -p tsconfig.build.json && api-extractor run --local && api-extractor run --local -c api-extractor.cloudflare.json && node scripts/vendor-web.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -38,6 +42,7 @@
   "devDependencies": {
     "@microsoft/api-extractor": "^7.58.11",
     "@sprintster/cli": "workspace:*",
+    "@sprintster/cloudflare": "workspace:*",
     "@sprintster/engine": "workspace:*",
     "@sprintster/storage-postgres": "workspace:*",
     "@sprintster/storage-sqlite": "workspace:*",

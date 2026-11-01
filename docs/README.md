@@ -15,6 +15,8 @@ per-app CRUD code to write.
   every property type, validation, and editability.
 - [Views and lists](./views-and-lists.md): forms (views) and list screens.
 - [CLI (`s8r`)](./cli.md): the commands that run your app.
+- [Running on Cloudflare](./cloudflare.md): deploy an app as a Worker with a
+  Durable Object and R2.
 
 ## How it fits together
 
@@ -22,7 +24,8 @@ per-app CRUD code to write.
 - Each object gets **list** screens (a table with search and row actions) and
   **views** (the create/edit/view form).
 - Every write becomes an **event** in an append-only log; the current state of
-  any record is folded from its events. Binary uploads (images) are stored on
+  any record is folded from its events, and kept in a table that reads come
+  from (`s8r rebuild-states` refolds it). Binary uploads (images) are stored on
   the filesystem, content-addressed, and referenced from events.
 - The `s8r` CLI runs a daemon (HTTP API plus the web GUI) and a TUI over the
   same config and data.

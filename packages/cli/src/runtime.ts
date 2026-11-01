@@ -1,24 +1,11 @@
 import { serve } from '@hono/node-server';
-import {
-  createObjectApi,
-  createBlobApi,
-  setAppConfig,
-  type BlobStore,
-  type Config,
-  type EventStore,
-  type PluginObjectApi,
-} from '@sprintster/engine';
-import { createApp } from '@sprintster/daemon';
+import { serveStatic } from '@hono/node-server/serve-static';
+import { createBlobApi, setAppConfig, type BlobStore, type Config, type EventStore } from '@sprintster/engine';
+import { buildApis, createApp, type StaticFiles } from '@sprintster/daemon';
 import { runTui } from '@sprintster/tui';
 
-export function buildApis(config: Config, store: EventStore) {
-  const apiByName: Record<string, PluginObjectApi<{ id: string }>> = {};
-  const resolveTarget = (name: string): PluginObjectApi<{ id: string }> | undefined => apiByName[name];
-  return config.objects.map((obj) => {
-    const api = createObjectApi<{ id: string }>(store, obj, { resolveTarget });
-    apiByName[obj.name] = api;
-    return { obj, api };
-  });
+export function nodeStaticFiles(root: string): StaticFiles {
+  return (path) => serveStatic(path === undefined ? { root } : { path, root });
 }
 
 export interface DaemonHandle {
@@ -37,7 +24,7 @@ export async function startDaemon(opts: {
   const apis = buildApis(opts.config, opts.store);
   const blobApi = createBlobApi(opts.store, opts.blobStore);
   const app = createApp(
-    opts.webRoot !== undefined ? { apis, blobApi, webRoot: opts.webRoot } : { apis, blobApi },
+    opts.webRoot !== undefined ? { apis, blobApi, web: nodeStaticFiles(opts.webRoot) } : { apis, blobApi },
   );
   const server = await new Promise<ReturnType<typeof serve>>((resolve, reject) => {
     const s = serve({ fetch: app.fetch, hostname: opts.host, port: opts.port }, () => resolve(s));

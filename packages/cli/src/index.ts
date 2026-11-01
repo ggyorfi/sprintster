@@ -4,6 +4,7 @@ import { version } from '@sprintster/engine';
 import { devCommand } from './commands/dev.js';
 import { daemonCommand } from './commands/daemon.js';
 import { migrateAssetsCommand } from './commands/migrate-assets.js';
+import { rebuildStatesCommand } from './commands/rebuild-states.js';
 import { loadProjectConfig, projectConfigPath, selectEnvironment } from './project-config.js';
 import { startTui } from './runtime.js';
 
@@ -26,6 +27,7 @@ async function main(): Promise<void> {
       dev: devCommand,
       daemon: daemonCommand,
       'migrate-assets': migrateAssetsCommand,
+      'rebuild-states': rebuildStatesCommand,
     },
   });
   await runMain(root);

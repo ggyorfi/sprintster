@@ -11,7 +11,8 @@ import {
   setAppConfig,
   type ObjectConfig,
 } from '@sprintster/engine';
-import { createApp } from '../app.js';
+import { serveStatic } from '@hono/node-server/serve-static';
+import { createApp, type StaticFiles } from '../app.js';
 
 const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
 const gif = new Uint8Array([71, 73, 70, 56, 57, 97, 1, 2, 3, 4]);
@@ -40,6 +41,10 @@ function assetConfig() {
   });
 }
 
+function nodeWeb(root: string): StaticFiles {
+  return (path) => serveStatic(path === undefined ? { root } : { path, root });
+}
+
 function build(opts: { assets?: boolean; webRoot?: string } = {}) {
   const config = assetConfig();
   setAppConfig(opts.assets === false ? loadConfig({ version: '1', objects: [] }) : config);
@@ -50,7 +55,7 @@ function build(opts: { assets?: boolean; webRoot?: string } = {}) {
   const app = createApp({
     apis: [{ obj, api }],
     blobApi,
-    ...(opts.webRoot !== undefined ? { webRoot: opts.webRoot } : {}),
+    ...(opts.webRoot !== undefined ? { web: nodeWeb(opts.webRoot) } : {}),
   });
   return { app, api, blobApi };
 }

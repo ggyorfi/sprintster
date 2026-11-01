@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { InMemoryEventStore, fixtureConfig, fixtureRefConfig, loadConfig } from '@sprintster/engine';
-import { buildApis, startDaemon } from './runtime.js';
+import { buildApis } from '@sprintster/daemon';
+import { startDaemon } from './runtime.js';
 
 const CLIENT = '11111111-1111-4111-8111-111111111111';
 const MEMO = '22222222-2222-4222-8222-222222222222';
