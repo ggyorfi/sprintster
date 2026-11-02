@@ -98,9 +98,21 @@ export function Field({ spec, value, onChange, refOptions, display }: FieldProps
         </Suspense>
       );
     }
+    case 'boolean':
+      return (
+        <Select
+          label={label}
+          value={value === 'true' ? 'true' : value === '' && property.nullable === true ? '' : 'false'}
+          onChange={onChange}
+          options={[
+            { value: 'true', label: 'Yes' },
+            { value: 'false', label: 'No' },
+          ]}
+          placeholder={property.nullable === true ? 'none' : undefined}
+        />
+      );
     case 'id':
     case 'text':
-    case 'boolean':
     case 'sequence':
     case 'object':
     case 'array':

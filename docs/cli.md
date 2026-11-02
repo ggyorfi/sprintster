@@ -58,6 +58,22 @@ the way events fold into records has changed, for example after an upgrade that
 fixes how an event is applied. Stop the daemon first, or restart it afterwards:
 a running daemon checks the table once, when it first reads each object.
 
+### `s8r export` and `s8r import`
+
+Move an app to another store, for example from a local SQLite file to a
+Cloudflare deployment.
+
+```
+s8r export <dir> [--env <name>]
+SPRINTSTER_PASSWORD=... s8r import <dir> <url> [--user <name>]
+```
+
+`export` writes the whole event log to `<dir>/events.ndjson` and every blob an
+event references to `<dir>/blobs/`. `import` uploads the blobs, then appends
+the events through `POST /log`, which only accepts a batch that continues the
+log exactly where it is. It refuses an app that already holds records, and the
+history comes across intact.
+
 ### `s8r`
 
 With no arguments, opens just the terminal UI against a running daemon (as

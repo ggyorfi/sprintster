@@ -6,6 +6,7 @@ import { devCommand } from './commands/dev.js';
 import { daemonCommand } from './commands/daemon.js';
 import { migrateAssetsCommand } from './commands/migrate-assets.js';
 import { rebuildStatesCommand } from './commands/rebuild-states.js';
+import { exportCommand, importCommand } from './commands/transfer.js';
 import { loadProjectConfig, projectConfigPath, selectEnvironment } from './project-config.js';
 import { startTui } from './runtime.js';
 
@@ -29,6 +30,8 @@ async function main(): Promise<void> {
       daemon: daemonCommand,
       'migrate-assets': migrateAssetsCommand,
       'rebuild-states': rebuildStatesCommand,
+      export: exportCommand,
+      import: importCommand,
       ...(await pluginCommands(process.cwd())),
     },
   });

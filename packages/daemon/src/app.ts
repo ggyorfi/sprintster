@@ -3,6 +3,8 @@ import {
   appConfig,
   changesSince,
   objectRoute,
+  rebuildObjectStates,
+  type EventInput,
   type BlobApi,
   type EventStore,
   type ObjectConfig,
@@ -90,6 +92,23 @@ export function createApp(deps: AppDeps): Hono {
       }
       const [position, changes] = await Promise.all([store.position(), changesSince(store, since)]);
       return c.json({ position, changes });
+    });
+    // Appends exported events as they are, for moving an app to another store. `after` must be the log's position,
+    // so two imports cannot interleave and a retried batch is refused rather than doubled.
+    app.post('/log', async (c) => {
+      const body = (await c.req.json().catch(() => null)) as { after?: unknown; events?: unknown } | null;
+      if (body === null || typeof body.after !== 'number' || !Array.isArray(body.events)) {
+        return c.json({ code: 'bad_request', message: 'expected { after: number, events: EventInput[] }' }, 400);
+      }
+      const position = await store.position();
+      if (position !== body.after) {
+        return c.json({ code: 'conflict', message: `the log is at ${position}, not ${body.after}`, position }, 409);
+      }
+      const events = body.events as EventInput[];
+      for (const event of events) await store.append(event);
+      const touched = new Set(events.map((e) => e.streamType));
+      for (const { obj } of deps.apis) if (touched.has(obj.name)) await rebuildObjectStates(store, obj);
+      return c.json({ position: await store.position() });
     });
     apiRoots.add('log');
   }

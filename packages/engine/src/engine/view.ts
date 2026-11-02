@@ -173,13 +173,19 @@ export function toStorage(property: PropertyConfig, input: string): unknown {
       if (s === '') return property.nullable ? null : '';
       return localInputToIso(s);
     }
+    case 'boolean': {
+      if (s === '') return property.nullable ? null : false;
+      const v = s.toLowerCase();
+      if (v === 'true' || v === 'yes') return true;
+      if (v === 'false' || v === 'no') return false;
+      return s;
+    }
     case 'id':
     case 'text':
     case 'code':
     case 'markdown':
     case 'enum':
     case 'date':
-    case 'boolean':
     case 'ref':
     case 'sequence':
     case 'object':

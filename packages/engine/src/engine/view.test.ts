@@ -438,3 +438,16 @@ describe('ConfigSchema accepts an optional views array', () => {
     expect(c.objects[0]?.views).toBeUndefined();
   });
 });
+
+describe('boolean form values', () => {
+  const flag = { name: 'flag', type: 'boolean' } satisfies PropertyConfig;
+  it('turns the form text into a boolean', () => {
+    expect(toStorage(flag, 'true')).toBe(true);
+    expect(toStorage(flag, 'false')).toBe(false);
+    expect(toStorage(flag, 'Yes')).toBe(true);
+    expect(toStorage(flag, '')).toBe(false);
+    expect(toStorage({ ...flag, nullable: true }, '')).toBeNull();
+    expect(toStorage(flag, 'maybe')).toBe('maybe');
+    expect(toInput(flag, false)).toBe('false');
+  });
+});

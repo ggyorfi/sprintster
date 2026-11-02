@@ -123,3 +123,33 @@ describe('GET /log', () => {
     }
   });
 });
+
+describe('POST /log', () => {
+  const event = (streamId: string, title: string) => ({
+    partitionId: 0,
+    streamType: 'note',
+    streamId,
+    streamVersion: 1,
+    eventType: 'NoteAdded',
+    eventVersion: 1,
+    payload: { id: streamId, title, removed: false },
+    occurredAt: '2026-01-01T00:00:00Z',
+    actor: 'system',
+    correlationId: null,
+  });
+
+  it('appends exported events at the given position and serves the records', async () => {
+    const { app } = await setup([]);
+    const res = await app.request('/log', post({ after: 0, events: [event('11111111-1111-4111-8111-111111111111', 'moved')] }));
+    expect(await res.json()).toEqual({ position: 1 });
+    expect(await (await app.request('/notes')).json()).toEqual([expect.objectContaining({ title: 'moved' })]);
+  });
+
+  it('refuses a batch that does not continue the log', async () => {
+    const { app } = await setup([]);
+    await app.request('/log', post({ after: 0, events: [event('11111111-1111-4111-8111-111111111111', 'a')] }));
+    const res = await app.request('/log', post({ after: 0, events: [event('22222222-2222-4222-8222-222222222222', 'b')] }));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ position: 1 });
+  });
+});

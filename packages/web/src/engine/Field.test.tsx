@@ -32,3 +32,13 @@ describe('Field: datetime', () => {
     expect(new Date(input.value).getTime()).toBe(new Date('2026-07-25T14:30:45').getTime());
   });
 });
+
+describe('Field: boolean', () => {
+  it('renders a yes/no select whose values the form converts back to booleans', () => {
+    render(<Field spec={specFor({ name: 'flag', type: 'boolean' } as PropertyConfig)} value="false" onChange={() => {}} />);
+    const select = screen.getByLabelText('Published at');
+    expect(select.tagName).toBe('SELECT');
+    expect(select).toHaveValue('false');
+    expect([...(select as HTMLSelectElement).options].map((o) => o.value)).toEqual(['true', 'false']);
+  });
+});
