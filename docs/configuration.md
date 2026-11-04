@@ -29,6 +29,32 @@ Everything lives in one file: `sprintster.config.json` in your project root
   [Objects and properties](./objects-and-properties.md) and
   [Views and lists](./views-and-lists.md).
 
+## Sharing a config
+
+Projects that run the same app with small differences can keep the common part
+in one file and extend it ([ADR 15](./ADR/0015-config-extends.md)):
+
+```jsonc
+{
+  "extends": "../shared/portfolio/sprintster.config.json",
+  "environments": { "dev": { "backend": { "kind": "sqlite", "path": ".sprintster/dev.db" } } },
+  "app": { "title": "Katalin Haász", "locales": ["hu", "en"] }
+}
+```
+
+The path is relative to the file that declares it, and the shared file may
+extend another. Objects merge key by key; anything else, arrays included, is
+replaced. Keep `environments` in each project's own file.
+
+A Worker imports its config, so it merges the two itself with `extendConfig`
+from `sprintster/cloudflare`:
+
+```ts
+import shared from '../shared/portfolio/sprintster.config.json';
+import site from './sprintster.config.json';
+const { App, worker } = createWorker(extendConfig(shared, site) as { app: unknown });
+```
+
 ## Environments
 
 Each environment names a backend and (optionally) a server and blob directory.

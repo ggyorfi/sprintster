@@ -1,7 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { loadConfig, type Config } from '@sprintster/engine';
+import { readConfigFile } from './config-file.js';
 
 const BackendConfig = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('sqlite'), path: z.string() }).strict(),
@@ -57,7 +57,7 @@ export function projectConfigPath(dir: string = process.cwd()): string {
 }
 
 export function loadProjectConfig(path: string): ProjectConfig {
-  return parseProjectConfig(JSON.parse(readFileSync(path, 'utf8')));
+  return parseProjectConfig(readConfigFile(path));
 }
 
 export function selectEnvironment(cfg: ProjectConfig, env: string): EnvironmentConfig {

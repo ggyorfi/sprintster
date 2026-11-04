@@ -3,3 +3,4 @@ export * from '@sprintster/engine';
 export * from '@sprintster/storage-sqlite';
 export * from '@sprintster/storage-postgres';
 export { createFsBlobStore } from '@sprintster/cli/dist/fs-blob-store.js';
+export { readConfigFile } from '@sprintster/cli/dist/config-file.js';
