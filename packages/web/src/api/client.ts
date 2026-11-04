@@ -1,5 +1,6 @@
 import { createApiClient, type ApiClient } from '@sprintster/engine';
 import { resolveApiBaseUrl } from './config.js';
+import { authFetch } from './auth.js';
 
 export interface WebApiOptions {
   baseUrl?: string;
@@ -8,5 +9,5 @@ export interface WebApiOptions {
 
 export function createWebApiClient(options: WebApiOptions = {}): ApiClient {
   const baseUrl = options.baseUrl ?? resolveApiBaseUrl();
-  return createApiClient(baseUrl, options.fetch ? { fetch: options.fetch } : {});
+  return createApiClient(baseUrl, { fetch: options.fetch ?? authFetch });
 }

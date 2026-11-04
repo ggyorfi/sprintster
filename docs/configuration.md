@@ -22,7 +22,10 @@ Everything lives in one file: `sprintster.config.json` in your project root
 - `configVersion`: always `"1"`.
 - `environments`: named runtime environments (backend + server + blobs).
 - `app`: your application (objects, an optional `title` shown by the web GUI
-  and defaulting to `sprintster`, and an optional `theme`). Covered in
+  and defaulting to `sprintster`, an optional `theme`, and an optional `auth`
+  with the `login`, `logout` and `refresh` paths of a host that checks
+  passwords in front of the daemon, see
+  [ADR 14](./ADR/0014-login-screen-for-a-host-provided-auth.md)). Covered in
   [Objects and properties](./objects-and-properties.md) and
   [Views and lists](./views-and-lists.md).
 

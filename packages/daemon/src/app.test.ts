@@ -60,6 +60,18 @@ describe('createApp', () => {
     expect((await app.request('/health')).status).toBe(200);
   });
 
+  it('GET /health reports auth only when the config sets it', async () => {
+    const before = appConfig;
+    const auth = { login: '/_auth/login', logout: '/_auth/logout', refresh: '/_auth/refresh' };
+    try {
+      expect(await (await buildApp().app.request('/health')).json()).not.toHaveProperty('auth');
+      setAppConfig(loadConfig({ ...(fixtureAppRaw as object), auth }));
+      expect(await (await buildApp().app.request('/health')).json()).toMatchObject({ auth });
+    } finally {
+      setAppConfig(before);
+    }
+  });
+
   it('unknown route returns 404', async () => {
     const { app } = buildApp();
     expect((await app.request('/no-such-route')).status).toBe(404);

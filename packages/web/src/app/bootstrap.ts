@@ -1,4 +1,5 @@
 import { loadConfig, setAppConfig, type GuiExtensions } from '@sprintster/engine';
+import { authFetch } from '../api/auth.js';
 
 // Plugin actions and badges from the daemon; empty until the config loads or when no plugin declares any.
 export let serverExtensions: GuiExtensions = { actions: [], badges: [] };
@@ -20,7 +21,7 @@ interface ServerConfig {
  * the daemon is unreachable so the app still loads. Plugins (which hold secrets)
  * are never sent by the daemon; we inject an empty list.
  */
-export async function loadServerConfig(baseUrl: string, fetchImpl: typeof fetch = fetch): Promise<boolean> {
+export async function loadServerConfig(baseUrl: string, fetchImpl: typeof fetch = authFetch): Promise<boolean> {
   try {
     const res = await fetchImpl(`${baseUrl}/config`);
     if (!res.ok) return false;

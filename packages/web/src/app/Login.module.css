@@ -1,0 +1,28 @@
+.screen {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 16px;
+  background: var(--bg);
+}
+
+.card {
+  display: grid;
+  gap: 14px;
+  width: 100%;
+  max-width: 340px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+}
+
+.error {
+  margin: 0;
+  color: var(--red);
+}

@@ -35,6 +35,10 @@
   font-size: 12px;
 }
 
+.signOut {
+  margin-top: auto;
+}
+
 .nav {
   display: flex;
   flex-direction: column;

@@ -13,6 +13,7 @@ function validateSemantics(config: Config): void {
   const objectNames = config.objects.map((o) => o.name);
   assertUnique(objectNames, 'object name');
   checkRoutes(config);
+  checkAuth(config);
   checkAssets(config);
   if (config.locales !== undefined) assertUnique(config.locales, 'locale');
   const knownObjects = new Set(objectNames);
@@ -51,6 +52,18 @@ function checkRoutes(config: Config): void {
       throw new Error(`duplicate object route '${route}': '${owner}' and '${obj.name}'`);
     }
     ownerByRoute.set(route, obj.name);
+  }
+}
+
+// The daemon would answer an auth path that starts with one of its own routes, so the host never could.
+function checkAuth(config: Config): void {
+  if (config.auth === undefined) return;
+  const daemonRoutes = new Set([...RESERVED_ROUTES, ...config.objects.map(objectRoute)]);
+  for (const [name, path] of Object.entries(config.auth)) {
+    const first = path.split('/')[1] ?? '';
+    if (first === '' || daemonRoutes.has(first)) {
+      throw new Error(`auth ${name} path '${path}' must start with a segment the daemon does not serve`);
+    }
   }
 }
 

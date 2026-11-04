@@ -527,3 +527,25 @@ describe('loadConfig: assets', () => {
     expect(loadConfig(raw).assets).toBe('asset');
   });
 });
+
+describe('loadConfig: auth', () => {
+  const auth = { login: '/_auth/login', logout: '/_auth/logout', refresh: '/_auth/refresh' };
+
+  it('accepts paths the daemon does not serve', () => {
+    expect(loadConfig({ ...clone(), auth }).auth).toEqual(auth);
+  });
+
+  it.each(['/config/login', '/log', '/'])('rejects a path the daemon would answer: %s', (login) => {
+    expect(() => loadConfig({ ...clone(), auth: { ...auth, login } })).toThrow(/auth login path/);
+  });
+
+  it('rejects a path under an object route', () => {
+    const raw = clone();
+    const route = raw.objects[0].route;
+    expect(() => loadConfig({ ...raw, auth: { ...auth, refresh: `/${route}/refresh` } })).toThrow(/auth refresh path/);
+  });
+
+  it('rejects a relative path', () => {
+    expect(() => loadConfig({ ...clone(), auth: { ...auth, logout: '_auth/logout' } })).toThrow();
+  });
+});

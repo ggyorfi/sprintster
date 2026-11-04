@@ -16,6 +16,7 @@ export interface TextFieldProps {
   readOnly?: boolean;
   disabled?: boolean;
   name?: string;
+  autoComplete?: string;
 }
 
 export function TextField({
@@ -33,6 +34,7 @@ export function TextField({
   readOnly,
   disabled,
   name,
+  autoComplete,
 }: TextFieldProps) {
   const id = useId();
   const errorId = `${id}-error`;
@@ -44,6 +46,7 @@ export function TextField({
   const shared = {
     id,
     name,
+    autoComplete,
     className: controlClasses,
     value,
     placeholder,

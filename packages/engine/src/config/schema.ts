@@ -296,6 +296,16 @@ export const PluginEntry = z
   .strict();
 export type PluginEntry = z.infer<typeof PluginEntry>;
 
+// Paths the host serves in front of the daemon (ADR 14); the engine only draws the screen that calls them.
+export const AuthConfig = z
+  .object({
+    login: z.string().startsWith('/'),
+    logout: z.string().startsWith('/'),
+    refresh: z.string().startsWith('/'),
+  })
+  .strict();
+export type AuthConfig = z.infer<typeof AuthConfig>;
+
 export const ConfigSchema = z
   .object({
     version: z.literal('1'),
@@ -306,6 +316,7 @@ export const ConfigSchema = z
     objects: z.array(ObjectConfig),
     assets: z.string().min(1).optional(),
     plugins: z.array(PluginEntry).default([]),
+    auth: AuthConfig.optional(),
   })
   .strict();
 export type Config = z.infer<typeof ConfigSchema>;

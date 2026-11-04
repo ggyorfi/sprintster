@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { BadgeTone, GuiAction, GuiBadge, GuiExtensions } from '@sprintster/engine';
 import { Button, Pill, type PillTone } from '../ui/index.js';
+import { authFetch } from '../api/auth.js';
 import styles from './Extensions.module.css';
 
 const TONES: Record<BadgeTone, PillTone> = { neutral: 'neutral', info: 'info', success: 'success', warning: 'warning', danger: 'danger' };
@@ -10,7 +11,7 @@ function Badge({ baseUrl, badge, tick }: { baseUrl: string; badge: GuiBadge; tic
   useEffect(() => {
     let alive = true;
     const load = () =>
-      fetch(`${baseUrl}${badge.route}`)
+      authFetch(`${baseUrl}${badge.route}`)
         .then((r) => (r.ok ? (r.json() as Promise<{ text: string; tone?: BadgeTone }>) : null))
         .then((body) => alive && setState(body === null ? null : { text: body.text, tone: body.tone ?? 'neutral' }))
         .catch(() => alive && setState(null));
@@ -36,7 +37,7 @@ export function Extensions({ baseUrl, extensions }: { baseUrl: string; extension
       setBusy(action.id);
       setReply(null);
       try {
-        const res = await fetch(`${baseUrl}${action.route}`, { method: 'POST' });
+        const res = await authFetch(`${baseUrl}${action.route}`, { method: 'POST' });
         const body = (await res.json().catch(() => ({}))) as { message?: string };
         setReply({ text: body.message ?? (res.ok ? 'Done.' : `Failed (${res.status}).`), failed: !res.ok });
       } catch {

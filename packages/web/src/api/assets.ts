@@ -1,5 +1,6 @@
 import { appConfig, objectRoute } from '@sprintster/engine';
 import { resolveApiBaseUrl, type ApiEnv } from './config.js';
+import { authFetch } from './auth.js';
 
 export interface UploadedAsset {
   hash: string;
@@ -31,7 +32,7 @@ async function makeThumbnail(file: File): Promise<Blob | null> {
 async function postBlob(blob: Blob, filename: string): Promise<UploadedAsset> {
   const form = new FormData();
   form.append('file', blob, filename);
-  const res = await fetch(`${resolveApiBaseUrl()}/assets`, { method: 'POST', body: form });
+  const res = await authFetch(`${resolveApiBaseUrl()}/assets`, { method: 'POST', body: form });
   if (!res.ok) throw new Error(`upload failed (${res.status})`);
   return (await res.json()) as UploadedAsset;
 }
@@ -69,7 +70,7 @@ export async function attachAsset(file: File): Promise<{ id: string }> {
   }
   const asset = await uploadAsset(file);
   const id = globalThis.crypto.randomUUID();
-  const res = await fetch(`${resolveApiBaseUrl()}/${objectRoute(obj)}`, {
+  const res = await authFetch(`${resolveApiBaseUrl()}/${objectRoute(obj)}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ id, [fileProperty.name]: asset }),

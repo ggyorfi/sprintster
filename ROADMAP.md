@@ -483,3 +483,21 @@ capability pointed somewhere else.
   cannot say what a record is used for: sharing a blob is invisible and
   harmless, sharing a record is invisible and not. Revisit after the reference
   index.
+
+## Epic: login screen
+
+**Goal.** An app whose host provides auth gets a login screen, a logout button
+and silent session renewal in the web GUI, while the engine never checks a
+password. Design: [ADR 14](./docs/ADR/0014-login-screen-for-a-host-provided-auth.md).
+
+### Steps
+
+- [x] **1. Config.** Optional `auth: { login, logout, refresh }`, each a path
+      whose first segment is not a daemon route, checked in `loadConfig`;
+      `/health` reports it.
+      *Done when:* a path shadowed by an object route is rejected, and `/health`
+      returns `auth` only when it is set.
+- [x] **2. The web GUI.** A login screen on 401, one shared refresh and retry
+      before it, a logout button, state reloaded after login.
+      *Done when:* two concurrent 401s cause one refresh call, and a failed
+      refresh shows the login screen.

@@ -74,6 +74,10 @@ The browser shows its own login prompt and remembers the credentials until it
 is closed; there is no logout. The GUI's script and style files are public,
 since Cloudflare serves them without running the Worker; they hold no data.
 
+For a login screen with a logout button instead, leave both secrets unset,
+wrap the Worker in your own gate and declare its paths as the app's `auth`
+([ADR 14](./ADR/0014-login-screen-for-a-host-provided-auth.md)).
+
 For `wrangler dev`, put both values in a `.dev.vars` file next to
 `wrangler.jsonc` and add `.dev.vars` to `.gitignore`.
 

@@ -7,6 +7,8 @@ import { StatusBar } from './StatusBar.js';
 import { Extensions } from './Extensions.js';
 import { serverExtensions } from './bootstrap.js';
 import { Maintenance } from './Maintenance.js';
+import { authEnabled, logOut } from '../api/auth.js';
+import { Button } from '../ui/index.js';
 import styles from './App.module.css';
 
 const MAINTENANCE = '__maintenance__';
@@ -70,6 +72,11 @@ export function App() {
           </button>
         </nav>
         <Extensions baseUrl={baseUrl} extensions={serverExtensions} />
+        {authEnabled() && (
+          <Button variant="neutral" className={styles.signOut} onClick={() => void logOut(baseUrl)}>
+            Sign out
+          </Button>
+        )}
       </aside>
       <div className={styles.main}>
         <div className={styles.content}>

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { version } from '@sprintster/engine';
+import { appConfig, version } from '@sprintster/engine';
 
 export const healthRoute = new Hono();
 
@@ -8,5 +8,7 @@ healthRoute.get('/', (c) =>
     status: 'ok',
     version,
     time: new Date().toISOString(),
+    // Public, so the web GUI learns where to log in before it can read /config (ADR 14).
+    ...(appConfig.auth === undefined ? {} : { auth: appConfig.auth }),
   }),
 );
