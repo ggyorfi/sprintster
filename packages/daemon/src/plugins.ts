@@ -1,8 +1,10 @@
 import {
   changesSince,
   collectPluginObjects,
+  deriveNamespace,
   loadConfig,
   loadPlugins,
+  readPluginSecrets,
   type Config,
   type DaemonPlugin,
   type DaemonPluginContext,
@@ -10,8 +12,10 @@ import {
   type GuiExtensions,
   type Logger,
   type ObjectRegistration,
+  type PluginEntry,
   type PluginRoute,
   type PluginSharedExports,
+  type PublicRoute,
 } from '@sprintster/engine';
 import type { MountedObject } from './app.js';
 
@@ -59,11 +63,13 @@ export async function loadDaemonPlugins(opts: {
   resolve: PluginResolver;
   logger?: Logger;
   sockets?: SocketHost;
+  // Where declared secrets come from: the environment on Node, the Worker's env on Cloudflare.
+  secret?: (name: string) => string | undefined;
 }): Promise<LoadedDaemonPlugins> {
   const out: LoadedDaemonPlugins = { objects: [], routes: [], extensions: { actions: [], badges: [] }, channels: [] };
   const logger = opts.logger ?? consoleLogger;
   const base = (namespace: string) => `/plugins/${namespace}`;
-  await loadPlugins<DaemonPluginContext>({
+  const loaded = await loadPlugins<DaemonPluginContext>({
     entries: opts.config.plugins,
     logger,
     resolve: async (name) => {
@@ -71,9 +77,10 @@ export async function loadDaemonPlugins(opts: {
       if (mod === null) throw new Error(`no module for plugin '${name}'`);
       return mod.plugin === undefined ? null : { plugin: mod.plugin };
     },
-    buildContext: (_entry, namespace, config) => ({
+    buildContext: (entry, namespace, config, manifest) => ({
       config,
       logger,
+      secrets: readPluginSecrets(entry.name, manifest.secrets ?? [], opts.secret ?? (() => undefined)),
       objects: { register: (o) => out.objects.push(o) },
       routes: { register: (r) => out.routes.push({ ...r, namespace }) },
       channels: {
@@ -98,5 +105,37 @@ export async function loadDaemonPlugins(opts: {
       },
     }),
   });
+  for (const { manifest, namespace } of loaded) {
+    for (const p of manifest.publicRoutes ?? []) {
+      if (!out.routes.some((r) => r.namespace === namespace && r.method === p.method && r.path === p.path)) {
+        throw new Error(`plugin '${manifest.name}' declares public route ${p.method} ${p.path} but registers no such route`);
+      }
+    }
+  }
   return out;
+}
+
+function matches(pattern: string, path: string): boolean {
+  const want = pattern.split('/');
+  const got = path.split('/');
+  return want.length === got.length && want.every((segment, i) => segment.startsWith(':') ? got[i] !== '' : segment === got[i]);
+}
+
+// Built from the manifests alone, so a gate in front of the daemon can apply it without loading the plugins (ADR 16).
+export function publicRouteMatcher(
+  entries: ReadonlyArray<PluginEntry>,
+  modules: Readonly<Record<string, PluginModule>>,
+): (request: Request) => boolean {
+  const routes: PublicRoute[] = [];
+  for (const entry of entries) {
+    const plugin = entry.enabled === false ? undefined : modules[entry.name]?.plugin;
+    if (plugin === undefined) continue;
+    const base = `/plugins/${deriveNamespace(plugin.name, plugin.namespace)}`;
+    for (const r of plugin.publicRoutes ?? []) routes.push({ method: r.method, path: `${base}${r.path}` });
+  }
+  return (request) => {
+    if (routes.length === 0) return false;
+    const path = new URL(request.url).pathname;
+    return routes.some((r) => r.method === request.method && matches(r.path, path));
+  };
 }

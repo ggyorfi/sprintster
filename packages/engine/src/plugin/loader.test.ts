@@ -140,7 +140,7 @@ describe('loadPlugins', () => {
       buildContext: builder,
       logger: silent,
     });
-    expect(builder).toHaveBeenCalledWith(expect.anything(), 'a', { greeting: 'hello' });
+    expect(builder).toHaveBeenCalledWith(expect.anything(), 'a', { greeting: 'hello' }, a);
   });
 
   it('fills config defaults when the entry omits the slice', async () => {

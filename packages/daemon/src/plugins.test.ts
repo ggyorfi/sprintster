@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { InMemoryEventStore, loadConfig, setAppConfig, type DaemonPlugin, type ObjectConfig } from '@sprintster/engine';
 import { buildApis } from './apis.js';
 import { createApp } from './app.js';
-import { loadDaemonPlugins, withContributedObjects, type PluginModule } from './plugins.js';
+import { loadDaemonPlugins, publicRouteMatcher, withContributedObjects, type PluginModule } from './plugins.js';
 
 const note: ObjectConfig = loadConfig({
   version: '1',
@@ -95,6 +95,88 @@ describe('daemon plugins', () => {
   it('loads nothing when the config names no plugins', async () => {
     const { app } = await setup([]);
     expect(await (await app.request('/config')).json()).toMatchObject({ extensions: { actions: [], badges: [] } });
+  });
+});
+
+describe('plugin secrets', () => {
+  const vault: Record<string, string> = { SHOP_KEY: 'sk_test', OTHER_KEY: 'other', EMPTY_KEY: '' };
+  const keyed = (secrets: string[], seen: Array<Readonly<Record<string, string>>>): PluginModule => ({
+    plugin: { ...counter, name: 'plugin-keyed', namespace: 'keyed', secrets, init: (ctx) => void seen.push(ctx.secrets) },
+  });
+  const load = (mod: PluginModule) => {
+    const config = loadConfig({ version: '1', objects: [note], plugins: [{ name: 'plugin-keyed' }] });
+    const store = new InMemoryEventStore();
+    return loadDaemonPlugins({
+      config,
+      store,
+      apis: buildApis(config, store),
+      resolve: async () => mod,
+      logger: { info() {}, warn() {}, error() {} },
+      secret: (name) => vault[name],
+    });
+  };
+
+  it('hands a plugin exactly the secrets it declares', async () => {
+    const seen: Array<Readonly<Record<string, string>>> = [];
+    await load(keyed(['SHOP_KEY'], seen));
+    expect(seen).toEqual([{ SHOP_KEY: 'sk_test' }]);
+    expect(Object.isFrozen(seen[0])).toBe(true);
+  });
+
+  it('refuses to load when a declared secret is missing or empty, naming it', async () => {
+    await expect(load(keyed(['NOT_SET'], []))).rejects.toThrow(/plugin-keyed.*NOT_SET/);
+    await expect(load(keyed(['EMPTY_KEY'], []))).rejects.toThrow(/EMPTY_KEY/);
+  });
+
+  it('refuses names the engine reserves', async () => {
+    await expect(load(keyed(['SPRINTSTER_PASSWORD'], []))).rejects.toThrow(/reserved/);
+  });
+
+  it('never puts a value in the error', async () => {
+    const err = await load(keyed(['SHOP_KEY', 'NOT_SET'], [])).catch((e: Error) => e.message);
+    expect(err).not.toContain('sk_test');
+  });
+});
+
+describe('public plugin routes', () => {
+  const shop = (publicRoutes: Array<{ method: 'GET' | 'POST'; path: string }>): PluginModule => ({
+    plugin: {
+      ...counter,
+      name: 'plugin-shop',
+      namespace: 'shop',
+      publicRoutes,
+      init(ctx) {
+        ctx.routes.register({ method: 'POST', path: '/checkout', handler: async () => Response.json({}) });
+        ctx.routes.register({ method: 'GET', path: '/stock/:id', handler: async () => Response.json({}) });
+        ctx.routes.register({ method: 'GET', path: '/orders', handler: async () => Response.json({}) });
+      },
+    },
+  });
+  const entries = [{ name: 'plugin-shop' }];
+  const at = (method: string, path: string) => new Request(`https://app.test${path}`, { method });
+
+  it('matches only declared method and path, params included', () => {
+    const isPublic = publicRouteMatcher(entries, { 'plugin-shop': shop([{ method: 'POST', path: '/checkout' }, { method: 'GET', path: '/stock/:id' }]) });
+    expect(isPublic(at('POST', '/plugins/shop/checkout'))).toBe(true);
+    expect(isPublic(at('GET', '/plugins/shop/stock/42'))).toBe(true);
+    expect(isPublic(at('GET', '/plugins/shop/checkout'))).toBe(false);
+    expect(isPublic(at('GET', '/plugins/shop/stock/'))).toBe(false);
+    expect(isPublic(at('GET', '/plugins/shop/stock/42/x'))).toBe(false);
+    expect(isPublic(at('GET', '/plugins/shop/orders'))).toBe(false);
+    expect(isPublic(at('POST', '/notes'))).toBe(false);
+  });
+
+  it('ignores a disabled plugin', () => {
+    const isPublic = publicRouteMatcher([{ name: 'plugin-shop', enabled: false }], { 'plugin-shop': shop([{ method: 'POST', path: '/checkout' }]) });
+    expect(isPublic(at('POST', '/plugins/shop/checkout'))).toBe(false);
+  });
+
+  it('refuses to load a plugin declaring a public route it never registers', async () => {
+    const mod = shop([{ method: 'POST', path: '/chekout' }]);
+    const config = loadConfig({ version: '1', objects: [note], plugins: entries });
+    const store = new InMemoryEventStore();
+    const loading = loadDaemonPlugins({ config, store, apis: buildApis(config, store), resolve: async () => mod, logger: { info() {}, warn() {}, error() {} } });
+    await expect(loading).rejects.toThrow(/POST \/chekout/);
   });
 });
 

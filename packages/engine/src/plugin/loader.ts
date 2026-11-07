@@ -50,7 +50,7 @@ export function deriveNamespace(packageName: string, override?: string): string 
 export interface PluginLoaderOptions<Ctx extends PluginContext> {
   entries: ReadonlyArray<PluginEntry>;
   resolve(packageName: string): Promise<{ plugin: PluginManifest<Ctx> } | null>;
-  buildContext(entry: PluginEntry, namespace: string, validatedConfig: unknown): Ctx;
+  buildContext(entry: PluginEntry, namespace: string, validatedConfig: unknown, manifest: PluginManifest<Ctx>): Ctx;
   logger: Logger;
 }
 
@@ -87,9 +87,29 @@ export async function loadPlugins<Ctx extends PluginContext>(
     } catch (err) {
       throw new Error(`plugin '${entry.name}' config is invalid: ${String(err)}`);
     }
-    const ctx = options.buildContext(entry, namespace, validatedConfig);
+    const ctx = options.buildContext(entry, namespace, validatedConfig, manifest);
     await manifest.init(ctx);
     loaded.push({ manifest, namespace, ctx });
   }
   return loaded;
+}
+
+const RESERVED_SECRET_PREFIX = 'SPRINTSTER_';
+
+// Throws naming the plugin and the secret, never the value.
+export function readPluginSecrets(
+  pluginName: string,
+  names: ReadonlyArray<string>,
+  read: (name: string) => string | undefined,
+): Readonly<Record<string, string>> {
+  const out: Record<string, string> = {};
+  for (const name of names) {
+    if (name.startsWith(RESERVED_SECRET_PREFIX)) {
+      throw new Error(`plugin '${pluginName}' declares secret '${name}': names starting with ${RESERVED_SECRET_PREFIX} are reserved`);
+    }
+    const value = read(name);
+    if (value === undefined || value === '') throw new Error(`plugin '${pluginName}' needs secret '${name}', which is not set`);
+    out[name] = value;
+  }
+  return Object.freeze(out);
 }

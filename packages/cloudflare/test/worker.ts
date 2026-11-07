@@ -8,7 +8,10 @@ export const ping: PluginModule = {
     version: '1',
     capabilities: [],
     config: { parse: () => ({}) } as never,
+    publicRoutes: [{ method: 'GET', path: '/open' }],
+    secrets: ['PING_SECRET'],
     init(ctx) {
+      ctx.routes.register({ method: 'GET', path: '/open', handler: async () => Response.json({ secretLength: ctx.secrets['PING_SECRET']?.length }) });
       ctx.routes.register({ method: 'GET', path: '/pong', handler: async () => Response.json({ position: await ctx.data.position() }) });
       ctx.gui.badge({ id: 'pong', route: '/pong' });
       const channel = ctx.channels.open('news');
@@ -24,7 +27,7 @@ export const ping: PluginModule = {
   },
 };
 
-const { App, worker } = createWorker({
+const { App, worker, isPublic } = createWorker({
   app: {
     version: '1',
     objects: [
@@ -45,5 +48,5 @@ const { App, worker } = createWorker({
   },
 }, { plugins: { 'plugin-ping': ping } });
 
-export { App };
+export { App, isPublic };
 export default worker;

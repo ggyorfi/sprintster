@@ -49,7 +49,7 @@ export async function startDaemon(opts: {
   const sockets: SocketHost = {
     send: (path, message) => clients.get(path)?.forEach((ws) => ws.send(message)),
   };
-  const plugins = await loadDaemonPlugins({ config, store: opts.store, apis, resolve, sockets });
+  const plugins = await loadDaemonPlugins({ config, store: opts.store, apis, resolve, sockets, secret: (name) => process.env[name] });
   const wss = new WebSocketServer({ noServer: true });
   const base = { apis, blobApi, store: opts.store, plugins };
   const app = createApp(opts.webRoot !== undefined ? { ...base, web: nodeStaticFiles(opts.webRoot) } : base);

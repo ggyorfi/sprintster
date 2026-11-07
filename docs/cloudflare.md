@@ -68,7 +68,13 @@ npx wrangler secret put SPRINTSTER_PASSWORD
 
 Each command prompts for the value. Secrets belong to the Worker and survive
 redeploys. With neither set the app is open; with only one set every request
-fails, so a half-done setup never ends up open. `/health` always answers.
+fails, so a half-done setup never ends up open. `/health` always answers, and
+so do the routes plugins declare public
+([ADR 16](./ADR/0016-public-plugin-routes-and-plugin-secrets.md)).
+
+Plugin secrets are Worker secrets too, set the same way under the names the
+plugin declares; plugins load on the first request, so a missing one fails
+that request with an error naming it.
 
 The browser shows its own login prompt and remembers the credentials until it
 is closed; there is no logout. The GUI's script and style files are public,
@@ -76,7 +82,9 @@ since Cloudflare serves them without running the Worker; they hold no data.
 
 For a login screen with a logout button instead, leave both secrets unset,
 wrap the Worker in your own gate and declare its paths as the app's `auth`
-([ADR 14](./ADR/0014-login-screen-for-a-host-provided-auth.md)).
+([ADR 14](./ADR/0014-login-screen-for-a-host-provided-auth.md)). The gate
+should also let through requests for which `createWorker`'s `isPublic` returns
+true.
 
 For `wrangler dev`, put both values in a `.dev.vars` file next to
 `wrangler.jsonc` and add `.dev.vars` to `.gitignore`.

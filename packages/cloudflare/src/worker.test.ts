@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SELF, env } from 'cloudflare:test';
-import worker from '../test/worker.js';
+import worker, { isPublic } from '../test/worker.js';
 import type { SprintsterEnv } from './index.js';
 
 const ID = '11111111-1111-4111-8111-111111111111';
@@ -77,6 +77,12 @@ describe('basic auth', () => {
     expect((await call('/health', secrets)).status).toBe(200);
   });
 
+  it('lets a declared public plugin route through and keeps the plugin\'s other routes gated', async () => {
+    expect((await call('/plugins/ping/open', secrets)).status).toBe(200);
+    expect((await call('/plugins/ping/pong', secrets)).status).toBe(401);
+    expect((await worker.fetch(new Request('https://app.test/plugins/ping/open', { method: 'POST' }), { ...(env as unknown as SprintsterEnv), ...secrets })).status).toBe(401);
+  });
+
   it('refuses every request when only one secret is set', async () => {
     const res = await call('/notes', { SPRINTSTER_USER: 'gabor' }, auth('gabor', ''));
     expect(res.status).toBe(500);
@@ -100,6 +106,15 @@ describe('plugins', () => {
     await req('/plugins/ping/say', { method: 'POST' });
     expect(JSON.parse(await received)).toEqual({ type: 'hello' });
     ws.close();
+  });
+
+  it('hands a plugin the secret it declares from the Worker env', async () => {
+    expect(await (await req('/plugins/ping/open')).json()).toEqual({ secretLength: 'pong-secret'.length });
+  });
+
+  it('returns isPublic for a gate wrapping the worker', () => {
+    expect(isPublic(new Request('https://app.test/plugins/ping/open'))).toBe(true);
+    expect(isPublic(new Request('https://app.test/plugins/ping/pong'))).toBe(false);
   });
 
   it('does not upgrade a path that is not a channel', async () => {

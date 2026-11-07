@@ -58,6 +58,12 @@ export interface PluginRoute {
   handler(request: Request, params: Record<string, string>): Promise<Response>;
 }
 
+// A route callers reach without the API's auth; the plugin checks each request itself (ADR 16).
+export interface PublicRoute {
+  method: RouteMethod;
+  path: string;
+}
+
 // A button; pressing it POSTs to `route` and shows the reply's `message`. `hotkey` is for the TUI.
 export interface GuiAction {
   id: string;
@@ -107,6 +113,8 @@ export interface DaemonRegistries {
   channels: { open(name: string): Channel };
   gui: { action(a: GuiAction): void; badge(b: GuiBadge): void };
   data: PluginData;
+  // Exactly the secrets the manifest declares, each one present and non-empty.
+  secrets: Readonly<Record<string, string>>;
 }
 
 export interface CliRegistries {
@@ -134,6 +142,9 @@ export interface PluginManifest<Ctx extends PluginContext = PluginContext> {
   config: z.ZodTypeAny;
   setup?: string;
   isSetUp?(config: unknown): boolean | Promise<boolean>;
+  // Static, so a host can read them without running init: routes left open by its gate, and the secret names to hand over.
+  publicRoutes?: ReadonlyArray<PublicRoute>;
+  secrets?: ReadonlyArray<string>;
   init(ctx: Ctx): void | Promise<void>;
 }
 

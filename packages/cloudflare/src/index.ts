@@ -4,6 +4,7 @@ import {
   buildApis,
   createApp,
   loadDaemonPlugins,
+  publicRouteMatcher,
   withContributedObjects,
   type PluginModule,
   type SocketHost,
@@ -58,6 +59,8 @@ export interface SprintsterWorker {
   // The Durable Object class; the project's Worker module exports it under the name its wrangler config binds as APP.
   App: new (state: AppState, env: SprintsterEnv) => Fetcher;
   worker: { fetch(request: Request, env: SprintsterEnv): Promise<Response> };
+  // True for a request to a route a plugin declares public; a gate wrapping `worker` lets those through too.
+  isPublic(request: Request): boolean;
 }
 
 export interface WorkerOptions {
@@ -74,6 +77,7 @@ export function createWorker(projectConfig: { app: unknown }, opts: WorkerOption
     throw new Error(`createWorker: the config lists plugins with no module passed in: ${missing.join(', ')}`);
   }
   const resolve = async (name: string) => modules[name] ?? null;
+  const isPublic = publicRouteMatcher(base.plugins, modules);
 
   class App {
     readonly #app;
@@ -90,7 +94,9 @@ export function createWorker(projectConfig: { app: unknown }, opts: WorkerOption
         setAppConfig(config);
         const store = createDurableObjectEventStore(state.storage);
         const apis = buildApis(config, store);
-        const plugins = await loadDaemonPlugins({ config, store, apis, resolve, sockets });
+        const vars = env as unknown as Record<string, unknown>;
+        const secret = (name: string) => (typeof vars[name] === 'string' ? vars[name] : undefined);
+        const plugins = await loadDaemonPlugins({ config, store, apis, resolve, sockets, secret });
         this.#channels = plugins.channels;
         return createApp({ apis, blobApi: createBlobApi(store, createR2BlobStore(env.BLOBS)), web: assetFiles(env.ASSETS), store, plugins });
       })();
@@ -116,7 +122,7 @@ export function createWorker(projectConfig: { app: unknown }, opts: WorkerOption
   // Checked here rather than in the Durable Object, so a refused request costs no Durable Object request.
   const gate = new Hono<{ Bindings: SprintsterEnv }>()
     .use('*', async (c, next) => {
-      if (c.req.path === '/health') return next();
+      if (c.req.path === '/health' || isPublic(c.req.raw)) return next();
       const { SPRINTSTER_USER: username, SPRINTSTER_PASSWORD: password } = c.env;
       if (username === undefined && password === undefined) return next();
       if (!username || !password) {
@@ -132,5 +138,5 @@ export function createWorker(projectConfig: { app: unknown }, opts: WorkerOption
     },
   };
 
-  return { App, worker };
+  return { App, worker, isPublic };
 }

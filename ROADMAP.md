@@ -501,3 +501,43 @@ password. Design: [ADR 14](./docs/ADR/0014-login-screen-for-a-host-provided-auth
       before it, a logout button, state reloaded after login.
       *Done when:* two concurrent 401s cause one refresh call, and a failed
       refresh shows the login screen.
+
+---
+
+## Epic: public plugin routes and plugin secrets
+
+**Goal.** A plugin can take requests from outside the admin, such as a payment
+provider's webhook or a public form, and read the keys it needs, without the
+engine knowing what the plugin is for. The first user is a shop's payment
+plugin (Stripe checkout and webhook), but nothing here is about payments.
+Design: [ADR 16](./docs/ADR/0016-public-plugin-routes-and-plugin-secrets.md).
+
+
+Today every plugin route sits behind the API's auth (`docs/plugins.md`, "A
+daemon plugin") and the plugin context carries no secrets
+(`engine/src/plugin/types.ts`).
+
+### Steps
+
+- [x] **1. ADR 16.** How a route declares itself public, how hosts that wrap
+      the daemon learn which paths are public, and how a plugin names and
+      receives its secrets.
+      *Done when:* the ADR is accepted and the open questions below are
+      answered in it.
+- [x] **2. Public routes.** A manifest's `publicRoutes`; `createWorker`
+      returns `isPublic`, which its Basic Auth applies and a wrapping gate
+      takes. The Node daemon has no auth, so nothing changes there; the plugin
+      checks the request itself.
+      *Done when:* a public route answers without credentials in the Worker,
+      and a non-public route of the same plugin still returns 401.
+- [x] **3. Secrets.** A plugin declares the secret names it needs and reads
+      them from `ctx.secrets`: Worker secrets on Cloudflare, environment
+      variables on Node.
+      *Done when:* a plugin reads a declared secret on both hosts, an
+      undeclared name is not readable, and a missing declared secret stops the
+      host from starting with an error naming it.
+
+### Still open
+
+- **Rate limiting** of public routes: the plugin's job, the host's, or
+  Cloudflare's rules in front of both.

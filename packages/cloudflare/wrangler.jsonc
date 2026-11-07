@@ -6,5 +6,6 @@
   "assets": { "directory": "test/web", "binding": "ASSETS", "html_handling": "none" },
   "durable_objects": { "bindings": [{ "name": "APP", "class_name": "App" }] },
   "r2_buckets": [{ "binding": "BLOBS", "bucket_name": "sprintster-cloudflare-test" }],
+  "vars": { "PING_SECRET": "pong-secret" },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["App"] }]
 }

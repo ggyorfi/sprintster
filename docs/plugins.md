@@ -61,6 +61,25 @@ export const plugin = {
 The web GUI and the TUI show badges and actions from the daemon's `/config`;
 no plugin code runs in either.
 
+## Public routes and secrets
+
+A manifest can declare both statically, so hosts read them without running
+`init` ([ADR 16](./ADR/0016-public-plugin-routes-and-plugin-secrets.md)):
+
+```js
+publicRoutes: [{ method: 'POST', path: '/webhook' }],
+secrets: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'],
+```
+
+- **Public routes** are reached without the API's auth. The handler checks
+  each request itself (a signature, a rate limit); writes it makes carry no
+  user, so it passes an actor such as `plugin:<namespace>`. Every declared
+  route must also be registered in `init`, or loading fails.
+- **Secrets** arrive in `ctx.secrets`, exactly the declared names: Worker
+  secrets on Cloudflare, environment variables on Node. A missing or empty one
+  fails loading with an error naming it; names starting with `SPRINTSTER_` are
+  reserved.
+
 ## The event log
 
 `GET /log?since=<position>` returns `{ position, changes }`, each change being
@@ -79,3 +98,8 @@ const { App, worker } = createWorker(config, { plugins: { 'my-plugin': myPlugin 
 
 A plugin the config names but `createWorker` was not given stops the Worker
 from starting.
+
+`createWorker` also returns `isPublic(request)`, true for a declared public
+plugin route. Its own Basic Auth lets those through; a gate wrapping `worker`
+takes the same function. A gate that ignores it keeps every plugin route
+private.
