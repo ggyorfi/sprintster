@@ -51,7 +51,15 @@ describe('makeReducer over the client config (softDelete)', () => {
       address: null,
       notes: null,
       removed: false,
+      createdAt: '2026-05-22T10:00:00.000Z',
+      updatedAt: '2026-05-22T10:00:00.000Z',
     });
+  });
+
+  it('stamps updatedAt from each later event and keeps createdAt (ADR 17)', () => {
+    const later = { ...eventRow('client', 'ClientFieldChanged', { client_id: ID_A, field: 'name', value: 'B' }, 2, ID_A), occurredAt: '2026-06-01T08:00:00.000Z' };
+    const state = fold(fold(null, added({ client_id: ID_A, name: 'A' })), later);
+    expect(state).toMatchObject({ name: 'B', createdAt: '2026-05-22T10:00:00.000Z', updatedAt: '2026-06-01T08:00:00.000Z' });
   });
 
   it('takes id from the envelope, not the payload', () => {
@@ -80,7 +88,7 @@ describe('makeReducer over a statusField object', () => {
 
   it('initialises the status enum to its config default on Added', () => {
     const state = fold(null, eventRow('widget', 'WidgetAdded', { widget_id: ID_A, label: 'A' }));
-    expect(state).toEqual({ id: ID_A, label: 'A', status: 'live' });
+    expect(state).toEqual({ id: ID_A, label: 'A', status: 'live', createdAt: '2026-05-22T10:00:00.000Z', updatedAt: '2026-05-22T10:00:00.000Z' });
   });
 
   it('transitions status via WidgetFieldChanged', () => {

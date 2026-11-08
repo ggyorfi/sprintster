@@ -1,5 +1,6 @@
-import { ConfigSchema, type Config, type ObjectConfig, type PropertyConfig } from './schema.js';
+import { ConfigSchema, type Config, type ObjectConfig, type PropertyConfig, type ViewFieldConfig, type ViewFieldsetConfig, type VisibleWhen } from './schema.js';
 import { objectRoute, slugify, RESERVED_ROUTES } from './route.js';
+import { TIMESTAMP_FIELDS } from '../engine/reducer.js';
 
 export function loadConfig(raw: unknown): Config {
   const config = ConfigSchema.parse(raw);
@@ -89,24 +90,59 @@ function checkViews(obj: ObjectConfig, objectsByName: Map<string, ObjectConfig>)
   for (const view of obj.views) {
     for (const item of view.fields) {
       if ('kind' in item && (item as { kind?: string }).kind === 'fieldset') {
-        const fs = item as { title: string; fields: Array<{ property: string; readOnly?: boolean | undefined }> };
+        const fs = item as ViewFieldsetConfig;
+        checkVisibleWhen(`fieldset '${obj.name}.${view.name}.${fs.title}'`, fs.visibleWhen, propByName);
         for (const field of fs.fields) {
           checkViewField(obj, view.name, field, propByName, objectsByName);
         }
       } else {
-        checkViewField(obj, view.name, item as { property: string; readOnly?: boolean | undefined }, propByName, objectsByName);
+        checkViewField(obj, view.name, item as ViewFieldConfig, propByName, objectsByName);
       }
     }
   }
 }
 
+const CONDITION_TYPES = new Set<PropertyConfig['type']>(['enum', 'boolean', 'text', 'integer', 'ref']);
+
+function checkVisibleWhen(where: string, cond: VisibleWhen | undefined, propByName: Map<string, PropertyConfig>): void {
+  if (cond === undefined) return;
+  const prop = propByName.get(cond.property);
+  if (prop === undefined) throw new Error(`${where} visibleWhen names unknown property '${cond.property}'`);
+  if (!CONDITION_TYPES.has(prop.type)) throw new Error(`${where} visibleWhen cannot test a ${prop.type} property`);
+  if (prop.type === 'enum' && !prop.values.includes(String(cond.equals))) {
+    throw new Error(`${where} visibleWhen: '${String(cond.equals)}' is not a value of '${cond.property}' (${prop.values.join(', ')})`);
+  }
+  if (prop.type === 'boolean' && typeof cond.equals !== 'boolean') throw new Error(`${where} visibleWhen: '${cond.property}' is boolean, so equals must be true or false`);
+}
+
+const PLACEHOLDER_SOURCES = new Set<PropertyConfig['type']>(['text', 'markdown', 'code', 'integer', 'money', 'date', 'datetime', 'enum']);
+
+function checkPlaceholderFrom(obj: ObjectConfig, viewName: string, field: ViewFieldConfig, objectsByName: Map<string, ObjectConfig>): void {
+  if (field.placeholderFrom === undefined) return;
+  const where = `view field '${obj.name}.${viewName}.${field.property}' placeholderFrom '${field.placeholderFrom}'`;
+  const [objectName, propertyName, ...rest] = field.placeholderFrom.split('.');
+  const source = objectName === undefined ? undefined : objectsByName.get(objectName);
+  if (source === undefined || propertyName === undefined || rest.length > 0) {
+    throw new Error(`${where} must name '<object>.<property>' of an existing object`);
+  }
+  if (source.singleton !== true) throw new Error(`${where}: '${objectName}' is not a singleton, so it has no one value to show`);
+  const prop = source.properties.find((p) => p.name === propertyName);
+  if (prop === undefined) throw new Error(`${where}: '${objectName}' has no property '${propertyName}'`);
+  if (!PLACEHOLDER_SOURCES.has(prop.type)) throw new Error(`${where}: a ${prop.type} property cannot be shown as a placeholder`);
+}
+
 function checkViewField(
   obj: ObjectConfig,
   viewName: string,
-  field: { property: string; readOnly?: boolean | undefined },
+  field: ViewFieldConfig,
   propByName: Map<string, PropertyConfig>,
   objectsByName: Map<string, ObjectConfig>,
 ): void {
+  checkPlaceholderFrom(obj, viewName, field, objectsByName);
+  checkVisibleWhen(`view field '${obj.name}.${viewName}.${field.property}'`, field.visibleWhen, propByName);
+  if (field.layout === 'table' && propByName.get(field.property)?.type !== 'array') {
+    throw new Error(`view field '${obj.name}.${viewName}.${field.property}' uses layout 'table', which only an array property has`);
+  }
   const segments = field.property.split('.');
   const first = segments[0];
   if (first === undefined) return;
@@ -240,6 +276,9 @@ function checkProperties(
     `property name in '${scope}'`,
   );
   for (const prop of properties) {
+    if (!nested && (TIMESTAMP_FIELDS as readonly string[]).includes(prop.name)) {
+      throw new Error(`property '${scope}.${prop.name}' is reserved: every record carries ${TIMESTAMP_FIELDS.join(' and ')} from the log (ADR 17)`);
+    }
     if (prop.type === 'enum' && prop.default !== undefined && !prop.values.includes(prop.default as string)) {
       throw new Error(
         `enum property '${scope}.${prop.name}' has default '${String(prop.default)}', not one of its values`,
@@ -264,6 +303,9 @@ function checkProperties(
     }
     if (prop.type === 'object') {
       checkProperties(`${scope}.${prop.name}`, prop.properties, knownObjects, hasLocales, true);
+    }
+    if (prop.type === 'array' && prop.uniqueBy !== undefined && !prop.item.properties.some((p) => p.name === prop.uniqueBy)) {
+      throw new Error(`array property '${scope}.${prop.name}' has uniqueBy '${prop.uniqueBy}', not one of its item properties`);
     }
   }
 }

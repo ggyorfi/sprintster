@@ -628,3 +628,27 @@ describe('rebuildObjectStates', () => {
     expect(before).toHaveLength(2);
   });
 });
+
+describe('record timestamps (ADR 17)', () => {
+  it('serves createdAt and updatedAt, moving only updatedAt on a change', async () => {
+    const { api } = buildApi();
+    const created = await api.add(validInput());
+    expect(created.createdAt).toEqual(expect.any(String));
+    expect(created.updatedAt).toBe(created.createdAt);
+    await new Promise((r) => setTimeout(r, 1100));
+    const changed = await api.update(created.id, { name: 'Changed Name' });
+    expect(changed.createdAt).toBe(created.createdAt);
+    expect(String(changed.updatedAt) > String(created.updatedAt)).toBe(true);
+  });
+
+  it('refolds stored states written before timestamps existed, on first read', async () => {
+    const { store, api } = buildApi();
+    const created = await api.add(validInput());
+    const { createdAt: _c, updatedAt: _u, ...old } = created;
+    void _c;
+    void _u;
+    await store.states.replaceStates(0, 'client', [{ streamId: created.id, version: 1, state: old }]);
+    const fresh = createObjectApi<Record<string, unknown> & { id: string }>(store, fixtureClientConfig);
+    expect(await fresh.get(created.id)).toMatchObject({ createdAt: created.createdAt, updatedAt: created.updatedAt });
+  });
+});

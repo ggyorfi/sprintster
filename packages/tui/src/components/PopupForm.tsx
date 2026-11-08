@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import TextInput from 'ink-text-input';
-import { arrayItemCount, penceToPounds, toInput, type PropertyConfig, type ViewFieldSpec, type ViewMode } from '@sprintster/engine';
+import { arrayItemCount, isVisible, penceToPounds, toInput, type PropertyConfig, type ViewFieldSpec, type ViewMode } from '@sprintster/engine';
 import { THEME } from '../theme.js';
 import { wrapLines } from '../editor.js';
 import { fuzzyFilter } from '@sprintster/engine';
@@ -188,7 +188,7 @@ const HELP_EDIT = 'Alt+S save · Alt+C cancel · Tab next · Esc back';
 
 export function PopupForm({
   title,
-  fields,
+  fields: allFields,
   fieldWidth: fieldWidthProp = DEFAULT_FIELD_WIDTH,
   initial = {},
   refOptions = {},
@@ -200,16 +200,18 @@ export function PopupForm({
   const { stdout } = useStdout();
   const cols = stdout?.columns ?? 80;
   const rows = stdout?.rows ?? 26;
-  const sizing = useMemo(() => computeSizing(fields, fieldWidthProp), [fields, fieldWidthProp]);
+  const sizing = useMemo(() => computeSizing(allFields, fieldWidthProp), [allFields, fieldWidthProp]);
   const fill = useMemo(() => makeFill(sizing.innerWidth), [sizing.innerWidth]);
 
   const [values, setValues] = useState<PopupFormValues>(() => {
     const initialValues: PopupFormValues = { ...initial };
-    for (const field of fields) {
+    for (const field of allFields) {
       if (field.property.type !== 'array' && initialValues[field.path] === undefined) initialValues[field.path] = '';
     }
     return initialValues;
   });
+  // Fields whose visibleWhen does not hold are left out of the layout and the tab order, keeping their values.
+  const fields = useMemo(() => allFields.filter((f) => isVisible(f, values)), [allFields, values]);
 
   const order = useMemo(() => (mode === 'view' ? [] : buildFormOrder(fields, values)), [fields, values, mode]);
   const [active, setActive] = useState<string>(order[0] ?? 'cancel');
@@ -759,6 +761,9 @@ function ArrayField({ field, values, active, setField, groupFrameWidth }: ArrayF
         property: sub,
         label: sub.title ?? sub.name,
         placeholder: '',
+        placeholderFrom: null,
+        visibleWhen: null,
+        layout: 'stack',
         rows: 1,
         group: field.path,
         editable: true,

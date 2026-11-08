@@ -1,4 +1,4 @@
-import type { ObjectConfig, PropertyConfig, ViewFieldConfig, ViewFieldsetConfig, ViewItemConfig } from '../config/schema.js';
+import type { ObjectConfig, PropertyConfig, ViewFieldConfig, ViewFieldsetConfig, ViewItemConfig, VisibleWhen } from '../config/schema.js';
 import type { ObjectResolver } from './list.js';
 import { isoToLocalInput, localInputToIso } from '../time/index.js';
 import { assembleTranslated, displayText, isTranslated } from './locale.js';
@@ -14,6 +14,11 @@ export interface ViewFieldSpec {
   property: PropertyConfig;
   label: string;
   placeholder: string;
+  // Read live by a frontend: the singleton record and property whose value stands in as the placeholder.
+  placeholderFrom: { object: string; property: string } | null;
+  // From the field or its fieldset; the frontends hide the field while the condition does not hold.
+  visibleWhen: VisibleWhen | null;
+  layout: 'stack' | 'table';
   rows: number;
   group: string | null;
   editable: boolean;
@@ -194,6 +199,11 @@ export function toStorage(property: PropertyConfig, input: string): unknown {
   }
 }
 
+function placeholderSource(field: ViewFieldConfig): ViewFieldSpec['placeholderFrom'] {
+  const [object, property] = field.placeholderFrom?.split('.') ?? [];
+  return object !== undefined && property !== undefined ? { object, property } : null;
+}
+
 function processField(
   field: ViewFieldConfig,
   propByName: Map<string, PropertyConfig>,
@@ -214,6 +224,9 @@ function processField(
       property: root,
       label: field.label ?? root.title ?? root.name,
       placeholder: field.placeholder ?? '',
+      placeholderFrom: placeholderSource(field),
+      visibleWhen: field.visibleWhen ?? null,
+      layout: field.layout ?? 'stack',
       rows: field.rows ?? 1,
       group,
       editable: resolveEditable(root, mode, field.readOnly),
@@ -231,6 +244,9 @@ function processField(
       property: leaf,
       label: field.label ?? leaf.title ?? leaf.name,
       placeholder: field.placeholder ?? '',
+      placeholderFrom: placeholderSource(field),
+      visibleWhen: field.visibleWhen ?? null,
+      layout: field.layout ?? 'stack',
       rows: field.rows ?? 1,
       group,
       editable: resolveEditable(leaf, mode, field.readOnly),
@@ -251,6 +267,9 @@ function processField(
       property: leaf,
       label: field.label ?? leaf.title ?? leaf.name,
       placeholder: '',
+      placeholderFrom: null,
+      visibleWhen: field.visibleWhen ?? null,
+      layout: 'stack',
       rows: 1,
       group,
       editable: false,
@@ -260,6 +279,12 @@ function processField(
   }
 
   return null;
+}
+
+// Compares against the form's current input for the property, the same string toInput produces from a stored value.
+export function isVisible(spec: ViewFieldSpec, inputs: Record<string, string>): boolean {
+  if (spec.visibleWhen === null || spec.visibleWhen === undefined) return true;
+  return (inputs[spec.visibleWhen.property] ?? '') === String(spec.visibleWhen.equals);
 }
 
 export function viewFields(
@@ -276,7 +301,7 @@ export function viewFields(
     if (isFieldset(item)) {
       for (const field of item.fields) {
         const spec = processField(field, propByName, mode, resolveTarget, item.title);
-        if (spec !== null) specs.push(spec);
+        if (spec !== null) specs.push({ ...spec, visibleWhen: spec.visibleWhen ?? item.visibleWhen ?? null });
       }
     } else {
       const spec = processField(item, propByName, mode, resolveTarget, null);

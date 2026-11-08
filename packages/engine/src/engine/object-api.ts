@@ -9,7 +9,7 @@ import type { PropertyConfig } from '../config/schema.js';
 import { eventTypeNames, objectIdKey } from '../events/names.js';
 import { commandEventInfos, lifecycleInfo } from './lifecycle.js';
 import { singletonId, synthesizeSingleton } from './singleton.js';
-import { makeReducer } from './reducer.js';
+import { hasTimestamps, makeReducer } from './reducer.js';
 import { nowAsIso } from '../time/index.js';
 
 // Internal stream type backing daemon-allocated `sequence` fields; one stream per object.field (+ scope later).
@@ -74,6 +74,7 @@ export function createObjectApi<State extends { id: string }>(
     partitionId,
     streamType: obj.name,
     reducer: makeReducer<State>(obj),
+    isCurrent: hasTimestamps,
   });
 
   // Allocate the next number via the event store's OCC: read the counter stream head, append at head+1, retry on a lost race.

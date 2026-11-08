@@ -445,7 +445,10 @@ capability pointed somewhere else.
       search and sort still work, and an object with no image property cannot
       declare it (rejected in `loadConfig`, not at render).
 
-- [ ] **2. Visual ref picker.** After 1. When a `ref` or `refs` target carries
+- [x] **2. Visual ref picker.** Shipped before 1, from the existing
+      thumbnail rule (an image property, or the first image behind the list's
+      thumbnail ref column): cards with drag and arrow reordering, a dialog
+      grid with search (`web/src/ui/RefCards.tsx`). When a `ref` or `refs` target carries
       an image, the picker shows thumbnails with search rather than a typeahead.
       *Done when:* picking works from the grid for both `ref` and `refs`,
       `refs` ordering is preserved, and a target with no image falls back to

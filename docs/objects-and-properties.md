@@ -118,6 +118,15 @@ The first `PATCH` writes the record; later ones update it. Fields added to the c
 after that keep projecting their default or zero value until they are saved. Both the
 web GUI and the TUI open a singleton's form directly instead of listing it.
 
+## Record timestamps
+
+Every record carries `createdAt` and `updatedAt`, ISO 8601 instants taken from
+its events: the first, and the latest that applied to it
+([ADR 17](./ADR/0017-record-timestamps-from-the-log.md)). They are not
+properties, so nothing declares them and no write can set them; a property
+with either name is rejected. Events moved with `s8r import` keep their times.
+The web GUI shows both in a record's form header.
+
 ## Lifecycle
 
 Every object except a singleton declares how a record is retired, one of:
@@ -175,7 +184,7 @@ Every property has these common fields:
 | `sequence` | number | Server-allocated incrementing number (read-only). |
 | `image` | object | Uploaded image reference: `{ hash, filename, contentType, size, width?, height?, alt?, thumb? }`; `thumb` is the hash of a small preview the web GUI makes at upload. Bytes stored on the filesystem; see [blobs](./configuration.md#blobs). |
 | `object` | object | A nested group: `"properties": [ ... ]`. |
-| `array` | array | A repeating group of items: `"item": { "properties": [ ... ] }`. Honors `minItems`/`maxItems`. |
+| `array` | array | A repeating group of items: `"item": { "properties": [ ... ] }`. Honors `minItems`/`maxItems`; `"uniqueBy": "<sub-property>"` refuses two items with the same value there. |
 
 ### Images in a markdown body
 

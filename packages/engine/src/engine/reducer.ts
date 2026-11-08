@@ -3,6 +3,14 @@ import type { ObjectConfig } from '../config/schema.js';
 import { eventTypeNames, objectIdKey } from '../events/names.js';
 import { commandEventInfos, lifecycleInfo } from './lifecycle.js';
 
+// Folded into every record from its events' times (ADR 17); never properties, never written by a client.
+export const TIMESTAMP_FIELDS = ['createdAt', 'updatedAt'] as const;
+
+// A stored state from before ADR 17 lacks the timestamps and must be refolded.
+export function hasTimestamps(state: unknown): boolean {
+  return state === null || typeof state !== 'object' || 'updatedAt' in state;
+}
+
 export function makeReducer<State extends { id: string }>(obj: ObjectConfig): Reducer<State> {
   const names = eventTypeNames(obj.name);
   const idKey = objectIdKey(obj.name);
@@ -18,20 +26,20 @@ export function makeReducer<State extends { id: string }>(obj: ObjectConfig): Re
       if (state !== null) return state;
       const { [idKey]: _idKey, ...data } = p;
       void _idKey;
-      const added: Record<string, unknown> = { ...data, id: event.streamId };
+      const added: Record<string, unknown> = { ...data, id: event.streamId, createdAt: event.occurredAt, updatedAt: event.occurredAt };
       if (lifecycleField !== null) added[lifecycleField] = lifecycleInitial;
       return added as unknown as State;
     }
     if (event.eventType === names.fieldChanged) {
-      return state === null ? null : ({ ...state, [p['field'] as string]: p['value'] } as State);
+      return state === null ? null : ({ ...state, [p['field'] as string]: p['value'], updatedAt: event.occurredAt } as State);
     }
     if (lifecycleField === null) return state;
     if (event.eventType === names.removed) {
-      return state === null ? null : ({ ...state, [lifecycleField]: true } as State);
+      return state === null ? null : ({ ...state, [lifecycleField]: true, updatedAt: event.occurredAt } as State);
     }
     const toState = transitionByEvent.get(event.eventType);
     if (toState !== undefined) {
-      return state === null ? null : ({ ...state, [lifecycleField]: toState } as State);
+      return state === null ? null : ({ ...state, [lifecycleField]: toState, updatedAt: event.occurredAt } as State);
     }
     return state;
   };

@@ -84,7 +84,17 @@ function baseSchema(prop: PropertyConfig): z.ZodTypeAny {
       const v = prop.validation;
       if (v?.minItems !== undefined) s = s.min(v.minItems);
       if (v?.maxItems !== undefined) s = s.max(v.maxItems);
-      return s;
+      const key = prop.uniqueBy;
+      if (key === undefined) return s;
+      return s.superRefine((items, ctx) => {
+        const seen = new Set<unknown>();
+        items.forEach((item, i) => {
+          const value = (item as Record<string, unknown>)[key];
+          if (value === null || value === undefined || value === '') return;
+          if (seen.has(value)) ctx.addIssue({ code: 'custom', path: [i, key], message: `${String(value)} is already in the list` });
+          seen.add(value);
+        });
+      });
     }
   }
 }

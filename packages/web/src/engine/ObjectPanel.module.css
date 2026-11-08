@@ -31,10 +31,21 @@
 }
 
 .spacer {
+  display: flex;
   flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
 }
 
 .locales {
   display: flex;
   gap: 6px;
+}
+
+.times {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
 }

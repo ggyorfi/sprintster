@@ -74,6 +74,19 @@ A view is the form used to create, edit, or view a record.
 
 - Each field references a `property`, with an optional `label`, `placeholder`,
   and `rows` (multi-line height for text/code/markdown).
+- `placeholderFrom: "<singleton>.<property>"` shows that singleton's current
+  value as the placeholder, in the language being edited: a field left empty
+  to fall back on a shop-wide default can show the default. `loadConfig`
+  rejects a source that is not a singleton or has no text form. The web GUI
+  reads it; the terminal form shows only a plain `placeholder`.
+- `visibleWhen: { "property": "stockBy", "equals": "Per size" }` on a field
+  or a fieldset shows it only while that property of the same record holds
+  the value, live as the form changes; both frontends follow it. A hidden
+  field keeps its value and is saved unchanged. `loadConfig` checks the
+  property exists, and that the value is one of an enum's values or a boolean
+  for a boolean.
+- `layout: "table"` on an array field edits it as a table: one row per item,
+  its sub-properties as columns (enums as selects), a remove button per row.
 - `readOnly: true` shows a field but does not let it be edited.
 - A dotted property like `"author.name"` shows a read-only field pulled from a
   referenced object.
@@ -84,6 +97,12 @@ A view is the form used to create, edit, or view a record.
 - The widget for each field is chosen automatically from its property type: a
   select for enums, a searchable picker for refs, a Markdown editor for
   `markdown`, an upload widget for `image`, and so on.
+- A `ref` or `refs` whose target carries a picture (its own `image`
+  property, or the first image behind its list's thumbnail column) is picked
+  visually in the web GUI: the chosen records show as cards with thumbnails,
+  reordered by drag or arrow buttons, and more are chosen from a searchable
+  grid in a dialog. Other refs keep the typeahead, whose list opens above the
+  field when there is no room below.
 
 ## Commands (status transitions)
 

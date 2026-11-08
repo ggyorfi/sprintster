@@ -8,6 +8,9 @@ import {
   isTranslated,
   thumbnailHash,
   localeInputKey,
+  singletonId,
+  isoToLocalInput,
+  isVisible,
   type ApiClient,
   type ObjectConfig,
   type ObjectResolver,
@@ -24,6 +27,28 @@ import styles from './ObjectPanel.module.css';
 export interface RefData {
   options: SelectOption[];
   rawById: Map<string, Row>;
+  // The target carries a picture (its own image, or its list's thumbnail through a ref), so the field picks visually.
+  visual: boolean;
+}
+
+// How a target record shows as a picture: its own image property, else the first image behind its list's thumbnail ref column.
+async function thumbnailSource(api: ApiClient, target: ObjectConfig | undefined, resolveObject: ObjectResolver): Promise<((r: Row) => string | undefined) | null> {
+  const own = imagePropertyOf(target);
+  const url = (value: unknown) => {
+    const hash = thumbnailHash(value);
+    return hash === null ? undefined : assetUrl(hash);
+  };
+  if (own !== null) return (r) => url(r[own]);
+  const column = target?.lists[0]?.columns.find((c) => c.thumbnail === true);
+  const prop = column === undefined ? undefined : target?.properties.find((p) => p.name === column.property);
+  if (prop?.type !== 'ref' && prop?.type !== 'refs') return null;
+  const image = imagePropertyOf(resolveObject(prop.target));
+  if (image === null) return null;
+  const pictures = new Map((await api.object<Row>(prop.target).list()).map((r) => [String(r['id']), r[image]]));
+  return (r) => {
+    const value = r[prop.name];
+    return url(pictures.get(String(Array.isArray(value) ? value[0] : value)));
+  };
 }
 
 export interface ObjectFormState {
@@ -33,6 +58,8 @@ export interface ObjectFormState {
   setInputs: Dispatch<SetStateAction<Record<string, string>>>;
   setField: (path: string, value: string) => void;
   refData: Record<string, RefData>;
+  // Raw values of each field's placeholderFrom source, by field path.
+  placeholderValues: Record<string, unknown>;
   displayFor: (spec: ViewFieldSpec) => string;
   error: string | null;
   setError: Dispatch<SetStateAction<string | null>>;
@@ -53,6 +80,7 @@ export function useObjectForm(
   const specs = useMemo(() => viewFields(obj, viewName, mode, resolveObject), [obj, viewName, mode, resolveObject]);
   const [inputs, setInputs] = useState<Record<string, string>>(() => initInputs(specs, mode, row));
   const [refData, setRefData] = useState<Record<string, RefData>>({});
+  const [placeholderValues, setPlaceholderValues] = useState<Record<string, unknown>>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [locale, setLocale] = useState<string | undefined>(appConfig.locales?.[0]);
@@ -71,14 +99,11 @@ export function useObjectForm(
         const list = await api.object<Row>(s.property.target).list();
         const target = resolveObject(s.property.target);
         const labelField = s.property.display ?? (target ? firstLabelField(target) : 'id');
-        const image = imagePropertyOf(target);
-        const thumbOf = (r: Row) => {
-          const hash = image === null ? null : thumbnailHash(r[image]);
-          return hash === null ? undefined : assetUrl(hash);
-        };
+        const thumbOf = await thumbnailSource(api, target, resolveObject);
         next[s.path] = {
-          options: list.map((r) => ({ value: String(r['id']), label: displayText(r[labelField]) || String(r['id']), thumb: thumbOf(r) })),
+          options: list.map((r) => ({ value: String(r['id']), label: displayText(r[labelField]) || String(r['id']), thumb: thumbOf?.(r) })),
           rawById: new Map(list.map((r) => [String(r['id']), r])),
+          visual: thumbOf !== null,
         };
       }
       if (alive) setRefData(next);
@@ -86,6 +111,27 @@ export function useObjectForm(
     load().catch((e) => {
       if (alive) setError(formatError(e));
     });
+    return () => {
+      alive = false;
+    };
+  }, [api, specs, resolveObject]);
+
+  useEffect(() => {
+    let alive = true;
+    const sourced = specs.filter((s) => s.placeholderFrom !== null);
+    if (sourced.length === 0) return;
+    Promise.all(
+      [...new Set(sourced.map((s) => s.placeholderFrom!.object))].map(async (name) => {
+        const target = resolveObject(name);
+        return [name, target === undefined ? null : await api.object<Row>(name).get(singletonId(target))] as const;
+      }),
+    )
+      .then((records) => {
+        if (!alive) return;
+        const byObject = new Map(records);
+        setPlaceholderValues(Object.fromEntries(sourced.map((s) => [s.path, byObject.get(s.placeholderFrom!.object)?.[s.placeholderFrom!.property]])));
+      })
+      .catch(() => {});
     return () => {
       alive = false;
     };
@@ -129,7 +175,7 @@ export function useObjectForm(
     return formatCell(spec.property, raw, '');
   }
 
-  return { viewName, specs, inputs, setInputs, setField, refData, displayFor, error, setError, busy, setBusy, locale, setLocale };
+  return { viewName, specs, inputs, setInputs, setField, refData, placeholderValues, displayFor, error, setError, busy, setBusy, locale, setLocale };
 }
 
 function sections(specs: ViewFieldSpec[]): Array<{ title: string | null; specs: ViewFieldSpec[] }> {
@@ -155,19 +201,48 @@ function LocaleSwitch({ locale, setLocale }: Pick<ObjectFormState, 'locale' | 's
   );
 }
 
+function sourcedSpec(spec: ViewFieldSpec, values: Record<string, unknown>, locale: string | undefined): ViewFieldSpec {
+  const text = displayText(values[spec.path], locale);
+  return text === '' ? spec : { ...spec, placeholder: text };
+}
+
 function translatedSpec(spec: ViewFieldSpec, inputs: Record<string, string>, locale: string): ViewFieldSpec {
   const fallback = appConfig.locales?.[0];
   if (locale === fallback || fallback === undefined) return spec;
   return { ...spec, placeholder: inputs[localeInputKey(spec.path, fallback)] || spec.placeholder };
 }
 
-export function ObjectFields({ form }: { form: ObjectFormState }) {
-  const { specs, inputs, setInputs, setField, refData, displayFor, locale, setLocale } = form;
-  const translated = locale !== undefined && specs.some((s) => s.derivedFromRef === null && isTranslated(s.property));
+const when = (iso: unknown) => (typeof iso === 'string' && iso !== '' ? isoToLocalInput(iso).slice(0, 16).replace('T', ' ') : null);
+
+// The times every record carries from its events (ADR 17); nothing before its first save.
+export function RecordTimes({ row }: { row: Row | null }) {
+  const created = when(row?.['createdAt']);
+  const updated = when(row?.['updatedAt']);
+  if (created === null && updated === null) return null;
+  return (
+    <p className={styles.times}>
+      {[created !== null ? `Created ${created}` : null, updated !== null ? `Updated ${updated}` : null].filter(Boolean).join(' – ')}
+    </p>
+  );
+}
+
+function hasTranslated(form: ObjectFormState): boolean {
+  return form.locale !== undefined && form.specs.some((s) => s.derivedFromRef === null && isTranslated(s.property));
+}
+
+// The language switch on its own, for a host that places it outside the fields (a dialog header).
+export function FormLocales({ form }: { form: ObjectFormState }) {
+  if (!hasTranslated(form) || (appConfig.locales ?? []).length < 2) return null;
+  return <LocaleSwitch locale={form.locale} setLocale={form.setLocale} />;
+}
+
+export function ObjectFields({ form, locales = true }: { form: ObjectFormState; locales?: boolean }) {
+  const { specs, inputs, setInputs, setField, refData, placeholderValues, displayFor, locale, setLocale } = form;
+  const translated = locale !== undefined && hasTranslated(form);
   return (
     <>
-      {translated && (appConfig.locales ?? []).length > 1 && <LocaleSwitch locale={locale} setLocale={setLocale} />}
-      {sections(specs).map((section, i) => (
+      {locales && translated && (appConfig.locales ?? []).length > 1 && <LocaleSwitch locale={locale} setLocale={setLocale} />}
+      {sections(specs.filter((s) => isVisible(s, inputs))).map((section, i) => (
         <div key={section.title ?? `s${i}`} className={section.title !== null ? styles.fieldset : undefined}>
           {section.title !== null && <div className={styles.legend}>{section.title}</div>}
           <div className={styles.fields}>
@@ -180,11 +255,12 @@ export function ObjectFields({ form }: { form: ObjectFormState }) {
                   itemProperties={spec.property.item.properties}
                   inputs={inputs}
                   setInputs={setInputs}
+                  layout={spec.layout}
                 />
               ) : translated && spec.derivedFromRef === null && isTranslated(spec.property) ? (
                 <Field
                   key={localeInputKey(spec.path, locale)}
-                  spec={translatedSpec(spec, inputs, locale)}
+                  spec={translatedSpec(sourcedSpec(spec, placeholderValues, locale), inputs, locale)}
                   value={inputs[localeInputKey(spec.path, locale)] ?? ''}
                   onChange={(v) => setField(localeInputKey(spec.path, locale), v)}
                   display={displayFor(spec)}
@@ -192,10 +268,11 @@ export function ObjectFields({ form }: { form: ObjectFormState }) {
               ) : (
                 <Field
                   key={spec.path}
-                  spec={spec}
+                  spec={sourcedSpec(spec, placeholderValues, locale)}
                   value={inputs[spec.path] ?? ''}
                   onChange={(v) => setField(spec.path, v)}
                   refOptions={refData[spec.path]?.options}
+                  refVisual={refData[spec.path]?.visual === true}
                   display={displayFor(spec)}
                 />
               ),

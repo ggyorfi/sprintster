@@ -7,7 +7,7 @@ import {
   type ObjectResolver,
 } from '@sprintster/engine';
 import { Button } from '../ui/index.js';
-import { ObjectFields, useObjectForm } from './ObjectForm.js';
+import { ObjectFields, RecordTimes, useObjectForm } from './ObjectForm.js';
 import { formatError, type Row } from './resolve.js';
 import styles from './ObjectScreen.module.css';
 
@@ -75,6 +75,7 @@ export function SingletonScreen({ api, obj, resolveObject }: SingletonScreenProp
       {error !== null && <div className={styles.error}>{error}</div>}
       {saved && error === null && <div className={styles.muted}>Saved.</div>}
 
+      {!loading && <RecordTimes row={row} />}
       {loading ? <div className={styles.muted}>Loading {obj.title.toLowerCase()}...</div> : <ObjectFields form={form} />}
     </div>
   );

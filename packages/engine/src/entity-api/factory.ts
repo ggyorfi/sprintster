@@ -14,6 +14,8 @@ export interface EntityApiConfig<State> {
   streamType: string;
   reducer: Reducer<State>;
   maxRetries?: number;
+  // False for a stored state the current reducer would not produce, so the states are refolded before the first read.
+  isCurrent?: (state: unknown) => boolean;
 }
 
 export interface ApplyEventInput {
@@ -81,9 +83,11 @@ export function createEntityApi<State>(
 
   // Once per api: states written before this version, or by a writer that bypassed them, are rebuilt before the first read.
   function ensureStates(s: StateStore): Promise<void> {
+    const outdated = async () =>
+      config.isCurrent !== undefined && (await s.listStates(partitionId, streamType)).some(({ state }) => !config.isCurrent!(state));
     checked ??= s
       .statesStale(partitionId, streamType)
-      .then((stale) => (stale ? rebuildStates() : undefined))
+      .then(async (stale) => (stale || (await outdated()) ? rebuildStates() : undefined))
       .catch((err: unknown) => {
         checked = undefined;
         throw err;

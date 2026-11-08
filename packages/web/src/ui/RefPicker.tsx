@@ -1,6 +1,7 @@
-import { useState, type KeyboardEvent } from 'react';
+import { useRef, useState, type KeyboardEvent } from 'react';
 import { fuzzyFilter } from '@sprintster/engine';
 import type { SelectOption } from './Select.js';
+import { useDropdownPlacement } from './placement.js';
 import styles from './RefPicker.module.css';
 
 export interface RefPickerProps {
@@ -41,11 +42,13 @@ export function RefPicker({ label, value, onChange, options, multiple = false, p
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
+  const control = useRef<HTMLDivElement>(null);
 
   const selectedIds = parseRefIds(value, multiple);
   const byId = new Map(options.map((o) => [o.value, o]));
   const available = options.filter((o) => !selectedIds.includes(o.value));
   const hits = fuzzyFilter(available, query);
+  const placement = useDropdownPlacement(control, open && hits.length > 0, 220);
 
   function commit(ids: string[]) {
     onChange(serialize(ids, multiple));
@@ -93,7 +96,7 @@ export function RefPicker({ label, value, onChange, options, multiple = false, p
   return (
     <div className={styles.field}>
       {label !== undefined && <span className={styles.label}>{label}</span>}
-      <div className={styles.control}>
+      <div className={styles.control} ref={control}>
         <div className={styles.chips}>
           {selectedIds.map((id, i) => {
             const text = byId.get(id)?.label ?? id;
@@ -135,7 +138,11 @@ export function RefPicker({ label, value, onChange, options, multiple = false, p
           />
         </div>
         {open && hits.length > 0 && (
-          <ul className={styles.list} role="listbox">
+          <ul
+            className={[styles.list, placement.above ? styles.above : ''].filter(Boolean).join(' ')}
+            style={{ maxHeight: placement.maxHeight }}
+            role="listbox"
+          >
             {hits.map((hit, i) => (
               <li
                 key={hit.option.value}

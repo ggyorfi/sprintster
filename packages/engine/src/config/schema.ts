@@ -50,7 +50,7 @@ export type PropertyConfig =
   | (PropertyBase & { type: 'sequence' })
   | (PropertyBase & { type: 'image' })
   | (PropertyBase & { type: 'object'; properties: PropertyConfig[] })
-  | (PropertyBase & { type: 'array'; item: { properties: PropertyConfig[] } });
+  | (PropertyBase & { type: 'array'; item: { properties: PropertyConfig[] }; uniqueBy?: string | undefined });
 
 const baseProperty = {
   name: z.string().min(1),
@@ -96,6 +96,8 @@ const ArrayProperty = z
     ...baseProperty,
     type: z.literal('array'),
     item: z.object({ properties: z.array(z.lazy(() => PropertyConfigSchema)).min(1) }).strict(),
+    // No two items may share this sub-property's value.
+    uniqueBy: z.string().min(1).optional(),
   })
   .strict();
 
@@ -166,11 +168,22 @@ export const ListConfig = z
   .strict();
 export type ListConfig = z.infer<typeof ListConfig>;
 
+// Shows a field or fieldset only while another property of the same record holds this value.
+export const VisibleWhen = z
+  .object({ property: z.string().min(1), equals: z.union([z.string(), z.number(), z.boolean()]) })
+  .strict();
+export type VisibleWhen = z.infer<typeof VisibleWhen>;
+
 export const ViewFieldConfig = z
   .object({
     property: z.string().min(1),
     label: z.string().optional(),
     placeholder: z.string().optional(),
+    // `<singleton>.<property>`: the field shows that record's current value as its placeholder.
+    placeholderFrom: z.string().optional(),
+    visibleWhen: VisibleWhen.optional(),
+    // For an array: one row per item with its sub-fields as columns.
+    layout: z.enum(['stack', 'table']).optional(),
     rows: z.number().int().positive().optional(),
     readOnly: z.boolean().optional(),
   })
@@ -181,6 +194,7 @@ export const ViewFieldsetConfig = z
   .object({
     kind: z.literal('fieldset'),
     title: z.string().min(1),
+    visibleWhen: VisibleWhen.optional(),
     fields: z.array(ViewFieldConfig).min(1),
   })
   .strict();

@@ -549,3 +549,66 @@ describe('loadConfig: auth', () => {
     expect(() => loadConfig({ ...clone(), auth: { ...auth, logout: '_auth/logout' } })).toThrow();
   });
 });
+
+describe('loadConfig: placeholderFrom', () => {
+  function raw(placeholderFrom: string, settings: Record<string, unknown> = { singleton: true }, sourceType = 'text'): unknown {
+    return {
+      version: '1',
+      objects: [
+        {
+          name: 'settings',
+          title: 'Settings',
+          titlePlural: 'Settings',
+          route: 'settings',
+          ...settings,
+          properties: [
+            { name: 'id', type: 'id', strategy: 'uuid', system: true },
+            { name: 'leadTime', type: sourceType, ...(sourceType === 'refs' ? { target: 'settings' } : {}) },
+          ],
+          ...(settings['singleton'] === true ? { views: [{ name: 'default', title: 'Settings', fields: [{ property: 'leadTime' }] }] } : {}),
+        },
+        {
+          name: 'product',
+          title: 'Product',
+          titlePlural: 'Products',
+          route: 'products',
+          lifecycle: { softDelete: 'removed' },
+          properties: [
+            { name: 'id', type: 'id', strategy: 'uuid', system: true },
+            { name: 'leadTime', type: 'text' },
+            { name: 'removed', type: 'boolean', system: true },
+          ],
+          views: [{ name: 'default', title: 'Product', fields: [{ property: 'leadTime', placeholderFrom }] }],
+        },
+      ],
+    };
+  }
+
+  it('accepts a property of a singleton', () => {
+    expect(() => loadConfig(raw('settings.leadTime'))).not.toThrow();
+  });
+
+  it('rejects an unknown object or property, or a malformed path', () => {
+    expect(() => loadConfig(raw('nope.leadTime'))).toThrow(/existing object/);
+    expect(() => loadConfig(raw('settings.missing'))).toThrow(/no property 'missing'/);
+    expect(() => loadConfig(raw('settings'))).toThrow(/<object>.<property>/);
+  });
+
+  it('rejects an object that is not a singleton', () => {
+    expect(() => loadConfig(raw('settings.leadTime', { lifecycle: { statusField: 'leadTime' } }))).toThrow(/not a singleton/);
+  });
+
+  it('rejects a property with no text form', () => {
+    expect(() => loadConfig(raw('settings.leadTime', { singleton: true }, 'refs'))).toThrow(/refs property cannot/);
+  });
+});
+
+describe('loadConfig: reserved timestamp names (ADR 17)', () => {
+  it('rejects a property named createdAt or updatedAt', () => {
+    for (const name of ['createdAt', 'updatedAt']) {
+      const raw = clone();
+      raw.objects[0].properties.push({ name, type: 'datetime' });
+      expect(() => loadConfig(raw)).toThrow(/reserved/);
+    }
+  });
+});

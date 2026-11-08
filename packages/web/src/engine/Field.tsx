@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
 import type { PropertyConfig, ViewFieldSpec } from '@sprintster/engine';
-import { TextField, Select, RefPicker, ImageField, type SelectOption } from '../ui/index.js';
+import { TextField, Select, RefPicker, RefCards, ImageField, type SelectOption } from '../ui/index.js';
 import { uploadAsset, assetUrl, attachAsset } from '../api/assets.js';
 import styles from './Field.module.css';
 
@@ -16,6 +16,8 @@ export interface FieldProps {
   value: string;
   onChange: (value: string) => void;
   refOptions?: SelectOption[] | undefined;
+  // The ref's targets carry pictures: pick from cards rather than a typeahead.
+  refVisual?: boolean | undefined;
   display?: string | undefined;
 }
 
@@ -32,7 +34,7 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function Field({ spec, value, onChange, refOptions, display }: FieldProps) {
+export function Field({ spec, value, onChange, refOptions, refVisual, display }: FieldProps) {
   const { property, label, placeholder } = spec;
 
   if (!spec.editable) {
@@ -63,8 +65,10 @@ export function Field({ spec, value, onChange, refOptions, display }: FieldProps
     case 'image':
       return <ImageField label={label} value={value} onChange={onChange} upload={uploadAsset} assetUrl={assetUrl} />;
     case 'ref':
+      if (refVisual === true) return <RefCards label={label} value={value} onChange={onChange} options={refOptions ?? []} />;
       return <RefPicker label={label} value={value} onChange={onChange} options={refOptions ?? []} placeholder="Search..." />;
     case 'refs':
+      if (refVisual === true) return <RefCards label={label} value={value} onChange={onChange} options={refOptions ?? []} multiple />;
       return <RefPicker label={label} value={value} onChange={onChange} options={refOptions ?? []} multiple placeholder="Search..." />;
     case 'money':
       return (

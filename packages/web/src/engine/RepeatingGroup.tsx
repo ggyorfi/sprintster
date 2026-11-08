@@ -1,5 +1,5 @@
-import { arrayItemCount, type PropertyConfig } from '@sprintster/engine';
-import { Button, TextField } from '../ui/index.js';
+import { arrayItemCount, toInput, type PropertyConfig } from '@sprintster/engine';
+import { Button, Select, TextField } from '../ui/index.js';
 import styles from './RepeatingGroup.module.css';
 
 export interface RepeatingGroupProps {
@@ -8,6 +8,7 @@ export interface RepeatingGroupProps {
   itemProperties: PropertyConfig[];
   inputs: Record<string, string>;
   setInputs: (updater: (prev: Record<string, string>) => Record<string, string>) => void;
+  layout?: 'stack' | 'table';
 }
 
 type Item = Record<string, string>;
@@ -23,7 +24,15 @@ function itemsFromInputs(path: string, subs: PropertyConfig[], inputs: Record<st
   return items;
 }
 
-export function RepeatingGroup({ label, path, itemProperties, inputs, setInputs }: RepeatingGroupProps) {
+function SubField({ sub, label, value, onChange }: { sub: PropertyConfig; label: string; value: string; onChange: (v: string) => void }) {
+  if (sub.type === 'enum') {
+    return <Select label={label} value={value} onChange={onChange} options={sub.values.map((v) => ({ value: v, label: v }))} placeholder="" />;
+  }
+  if (sub.type === 'integer') return <TextField label={label} value={value} onChange={onChange} inputMode="numeric" />;
+  return <TextField label={label} value={value} onChange={onChange} />;
+}
+
+export function RepeatingGroup({ label, path, itemProperties, inputs, setInputs, layout = 'stack' }: RepeatingGroupProps) {
   const items = itemsFromInputs(path, itemProperties, inputs);
 
   function commit(next: Item[]) {
@@ -37,7 +46,50 @@ export function RepeatingGroup({ label, path, itemProperties, inputs, setInputs 
     });
   }
 
-  const blank = (): Item => Object.fromEntries(itemProperties.map((s) => [s.name, '']));
+  const blank = (): Item => Object.fromEntries(itemProperties.map((s) => [s.name, s.default !== undefined ? toInput(s, s.default) : '']));
+  const change = (i: number, name: string, v: string) => commit(items.map((it, idx) => (idx === i ? { ...it, [name]: v } : it)));
+  const remove = (i: number) => commit(items.filter((_, idx) => idx !== i));
+
+  if (layout === 'table') {
+    return (
+      <div className={styles.group}>
+        <div className={styles.legend}>{label}</div>
+        {items.length > 0 && (
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                {itemProperties.map((s) => (
+                  <th key={s.name}>{s.title ?? s.name}</th>
+                ))}
+                <th aria-label="Remove" />
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, i) => (
+                <tr key={i}>
+                  {itemProperties.map((s) => (
+                    <td key={s.name}>
+                      <SubField sub={s} label={`${s.title ?? s.name} ${i + 1}`} value={item[s.name] ?? ''} onChange={(v) => change(i, s.name, v)} />
+                    </td>
+                  ))}
+                  <td className={styles.removeCell}>
+                    <button type="button" className={styles.removeRow} aria-label={`Remove row ${i + 1}`} onClick={() => remove(i)}>
+                      {'×'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div>
+          <Button variant="additive" onClick={() => commit([...items, blank()])}>
+            Add row
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.group}>
@@ -46,15 +98,10 @@ export function RepeatingGroup({ label, path, itemProperties, inputs, setInputs 
         <div key={i} className={styles.item}>
           <div className={styles.itemFields}>
             {itemProperties.map((s) => (
-              <TextField
-                key={s.name}
-                label={s.title ?? s.name}
-                value={item[s.name] ?? ''}
-                onChange={(v) => commit(items.map((it, idx) => (idx === i ? { ...it, [s.name]: v } : it)))}
-              />
+              <SubField key={s.name} sub={s} label={s.title ?? s.name} value={item[s.name] ?? ''} onChange={(v) => change(i, s.name, v)} />
             ))}
           </div>
-          <Button variant="destructive" onClick={() => commit(items.filter((_, idx) => idx !== i))}>
+          <Button variant="destructive" onClick={() => remove(i)}>
             Remove
           </Button>
         </div>

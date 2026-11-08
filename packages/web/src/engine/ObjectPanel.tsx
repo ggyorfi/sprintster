@@ -8,7 +8,7 @@ import {
   type ViewMode,
 } from '@sprintster/engine';
 import { Modal, Button, ConfirmDialog, type ButtonVariant } from '../ui/index.js';
-import { ObjectFields, useObjectForm } from './ObjectForm.js';
+import { FormLocales, ObjectFields, RecordTimes, useObjectForm } from './ObjectForm.js';
 import { formatError, primaryLabel, type Row } from './resolve.js';
 import styles from './ObjectPanel.module.css';
 
@@ -93,7 +93,7 @@ export function ObjectPanel({ api, obj, resolveObject, initialMode, row, onClose
             {c.name}
           </Button>
         ))}
-      <div className={styles.spacer} />
+      <div className={styles.spacer}>{mode !== 'create' && <RecordTimes row={row} />}</div>
       <Button variant="neutral" onClick={onClose}>
         Close
       </Button>
@@ -105,9 +105,15 @@ export function ObjectPanel({ api, obj, resolveObject, initialMode, row, onClose
 
   return (
     <>
-      <Modal title={title} onClose={onClose} footer={footer} width={obj.views?.find((v) => v.name === viewName)?.width}>
+      <Modal
+        title={title}
+        onClose={onClose}
+        footer={footer}
+        headerCenter={<FormLocales form={form} />}
+        width={obj.views?.find((v) => v.name === viewName)?.width}
+      >
         {error !== null && <div className={styles.error}>{error}</div>}
-        <ObjectFields form={form} />
+        <ObjectFields form={form} locales={false} />
       </Modal>
 
       {confirm !== null && row !== null && (

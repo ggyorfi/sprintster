@@ -36,3 +36,50 @@
   flex: 1;
   min-width: 0;
 }
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  padding: 0 8px 6px 0;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.table td {
+  padding: 0 8px 6px 0;
+  vertical-align: top;
+}
+
+.table td label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.removeCell {
+  width: 1%;
+}
+
+.removeRow {
+  height: 30px;
+  min-width: 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.removeRow:hover {
+  border-color: var(--red-bd);
+  color: var(--red);
+}

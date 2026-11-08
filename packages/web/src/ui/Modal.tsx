@@ -6,12 +6,14 @@ export interface ModalProps {
   onClose: () => void;
   children: ReactNode;
   footer?: ReactNode;
+  // Centred in the header, between the title and the close button.
+  headerCenter?: ReactNode;
   width?: ModalWidth | undefined;
 }
 
 export type ModalWidth = 'small' | 'medium' | 'large' | 'full';
 
-export function Modal({ title, onClose, children, footer, width = 'medium' }: ModalProps) {
+export function Modal({ title, onClose, children, footer, headerCenter, width = 'medium' }: ModalProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -31,6 +33,7 @@ export function Modal({ title, onClose, children, footer, width = 'medium' }: Mo
       >
         <div className={styles.header}>
           <h2 className={styles.title}>{title}</h2>
+          {headerCenter !== undefined && <div className={styles.headerCenter}>{headerCenter}</div>}
           <button type="button" className={styles.close} aria-label="Close" onClick={onClose}>
             ✕
           </button>

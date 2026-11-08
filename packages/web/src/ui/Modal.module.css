@@ -47,8 +47,20 @@
 }
 
 .title {
+  flex: 1 1 0;
   margin: 0;
   font-size: 15px;
+}
+
+.headerCenter {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: center;
+}
+
+.headerCenter + .close {
+  flex: 1 1 0;
+  text-align: right;
 }
 
 .close {

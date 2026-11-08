@@ -41,3 +41,31 @@ describe('RepeatingGroup', () => {
     expect(dump['emails.1.value']).toBeUndefined();
   });
 });
+
+describe('RepeatingGroup as a table', () => {
+  const sizeProps = [
+    { name: 'size', title: 'Size', type: 'enum', values: ['L', 'M', 'N'] },
+    { name: 'stock', title: 'Stock', type: 'integer', default: 0 },
+  ] as unknown as PropertyConfig[];
+
+  function TableHarness({ initial }: { initial: Record<string, string> }) {
+    const [inputs, setInputs] = useState(initial);
+    return (
+      <>
+        <RepeatingGroup label="Stock by size" path="rows" itemProperties={sizeProps} inputs={inputs} setInputs={setInputs} layout="table" />
+        <pre data-testid="dump">{JSON.stringify(inputs)}</pre>
+      </>
+    );
+  }
+
+  it('shows one row per item, an enum as a select, and adds rows with defaults', async () => {
+    render(<TableHarness initial={{ 'rows.0.size': 'M', 'rows.0.stock': '2' }} />);
+    expect(screen.getByRole('columnheader', { name: 'Size' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Size 1' })).toHaveValue('M');
+    await userEvent.click(screen.getByRole('button', { name: 'Add row' }));
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Size 2' }), 'N');
+    expect(JSON.parse(screen.getByTestId('dump').textContent!)).toMatchObject({ 'rows.1.size': 'N', 'rows.1.stock': '0' });
+    await userEvent.click(screen.getByRole('button', { name: 'Remove row 1' }));
+    expect(JSON.parse(screen.getByTestId('dump').textContent!)).toEqual({ 'rows.0.size': 'N', 'rows.0.stock': '0' });
+  });
+});
