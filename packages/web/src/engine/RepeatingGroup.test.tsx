@@ -69,3 +69,61 @@ describe('RepeatingGroup as a table', () => {
     expect(JSON.parse(screen.getByTestId('dump').textContent!)).toEqual({ 'rows.0.size': 'N', 'rows.0.stock': '0' });
   });
 });
+
+describe('RepeatingGroup with column choices', () => {
+  const props = [{ name: 'size', title: 'Size', type: 'text' }] as unknown as PropertyConfig[];
+  function ChoicesHarness({ initial }: { initial: Record<string, string> }) {
+    const [inputs, setInputs] = useState(initial);
+    return <RepeatingGroup label="Stock" path="rows" itemProperties={props} inputs={inputs} setInputs={setInputs} layout="table" columnChoices={{ size: ['S', 'M'] }} />;
+  }
+
+  it('offers the choices as a select and keeps a saved value that left the list', () => {
+    render(<ChoicesHarness initial={{ 'rows.0.size': 'XL' }} />);
+    const select = screen.getByRole('combobox', { name: 'Size 1' });
+    expect(select).toHaveValue('XL');
+    expect([...select.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['', 'XL', 'S', 'M']);
+  });
+});
+
+describe('RepeatingGroup column labels and visibility', () => {
+  const props = [
+    { name: 'a', title: 'A', type: 'text' },
+    { name: 'b', title: 'B', type: 'text' },
+    { name: 'c', title: 'C', type: 'text' },
+    { name: 'stock', title: 'Stock', type: 'integer' },
+  ] as unknown as PropertyConfig[];
+
+  it('titles columns from labels, hides empty ones and unmet conditions, keeps their values', () => {
+    const inputs = { mode: 'off', 'rows.0.a': 'M', 'rows.0.b': 'x', 'rows.0.c': 'y', 'rows.0.stock': '1' };
+    render(
+      <RepeatingGroup
+        label="Stock"
+        path="rows"
+        itemProperties={props}
+        inputs={inputs}
+        setInputs={() => {}}
+        layout="table"
+        columnLabels={{ a: 'Size', b: '', c: 'Stone' }}
+        columnVisibleWhen={{ c: { property: 'mode', notEquals: 'off' } }}
+      />,
+    );
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Size', 'Stock', '']);
+    expect(screen.getByLabelText('Size 1')).toHaveValue('M');
+  });
+});
+
+describe('RepeatingGroup read only', () => {
+  const props = [
+    { name: 'product', title: 'Product', type: 'ref', target: 'p' },
+    { name: 'title', title: 'Title', type: 'text' },
+    { name: 'qty', title: 'Qty', type: 'integer' },
+  ] as unknown as PropertyConfig[];
+
+  it('shows values in a table without controls or raw references', () => {
+    render(<RepeatingGroup label="Items" path="rows" itemProperties={props} inputs={{ 'rows.0.product': 'uuid-1', 'rows.0.title': 'Ring', 'rows.0.qty': '2' }} setInputs={() => {}} readOnly />);
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(['Title', 'Qty']);
+    expect(screen.getByText('Ring')).toBeInTheDocument();
+    expect(screen.queryByText('uuid-1')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+});

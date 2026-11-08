@@ -50,7 +50,7 @@ export type PropertyConfig =
   | (PropertyBase & { type: 'sequence' })
   | (PropertyBase & { type: 'image' })
   | (PropertyBase & { type: 'object'; properties: PropertyConfig[] })
-  | (PropertyBase & { type: 'array'; item: { properties: PropertyConfig[] }; uniqueBy?: string | undefined });
+  | (PropertyBase & { type: 'array'; item: { properties: PropertyConfig[] }; uniqueBy?: string | string[] | undefined });
 
 const baseProperty = {
   name: z.string().min(1),
@@ -96,8 +96,8 @@ const ArrayProperty = z
     ...baseProperty,
     type: z.literal('array'),
     item: z.object({ properties: z.array(z.lazy(() => PropertyConfigSchema)).min(1) }).strict(),
-    // No two items may share this sub-property's value.
-    uniqueBy: z.string().min(1).optional(),
+    // No two items may share this sub-property's value, or this combination of them.
+    uniqueBy: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]).optional(),
   })
   .strict();
 
@@ -169,9 +169,11 @@ export const ListConfig = z
 export type ListConfig = z.infer<typeof ListConfig>;
 
 // Shows a field or fieldset only while another property of the same record holds this value.
-export const VisibleWhen = z
-  .object({ property: z.string().min(1), equals: z.union([z.string(), z.number(), z.boolean()]) })
-  .strict();
+const ConditionValue = z.union([z.string(), z.number(), z.boolean()]);
+export const VisibleWhen = z.union([
+  z.object({ property: z.string().min(1), equals: ConditionValue }).strict(),
+  z.object({ property: z.string().min(1), notEquals: ConditionValue }).strict(),
+]);
 export type VisibleWhen = z.infer<typeof VisibleWhen>;
 
 export const ViewFieldConfig = z
@@ -184,6 +186,13 @@ export const ViewFieldConfig = z
     visibleWhen: VisibleWhen.optional(),
     // For an array: one row per item with its sub-fields as columns.
     layout: z.enum(['stack', 'table']).optional(),
+    // For an array: a column's choices, by item property, from `<singleton>.<array>.<column>`.
+    columnOptions: z.record(z.string(), z.string()).optional(),
+    // `<singleton>.<property>`: the field's label is that value, and the field is hidden while it is empty.
+    labelFrom: z.string().optional(),
+    // The same for an array's columns, by item property.
+    columnLabelsFrom: z.record(z.string(), z.string()).optional(),
+    columnVisibleWhen: z.record(z.string(), VisibleWhen).optional(),
     rows: z.number().int().positive().optional(),
     readOnly: z.boolean().optional(),
   })

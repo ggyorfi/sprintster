@@ -15,6 +15,7 @@ export interface TableProps {
   selectedId?: string;
   onSelect?: (id: string) => void;
   onEdit?: ((id: string) => void) | undefined;
+  onView?: ((id: string) => void) | undefined;
   emptyLabel?: string;
 }
 
@@ -28,6 +29,15 @@ function EditIcon() {
   );
 }
 
+function ViewIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+      <path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" />
+      <circle cx="8" cy="8" r="2" />
+    </svg>
+  );
+}
+
 export function Table({
   columns,
   rows,
@@ -35,9 +45,10 @@ export function Table({
   selectedId,
   onSelect,
   onEdit,
+  onView,
   emptyLabel = 'No rows',
 }: TableProps) {
-  const colCount = columns.length + (onEdit !== undefined ? 1 : 0);
+  const colCount = columns.length + (onEdit !== undefined || onView !== undefined ? 1 : 0);
   return (
     <table className={styles.table}>
       <thead>
@@ -47,7 +58,7 @@ export function Table({
               {col.label}
             </th>
           ))}
-          {onEdit !== undefined && <th className={styles.th} aria-hidden="true" />}
+          {(onEdit !== undefined || onView !== undefined) && <th className={styles.th} aria-hidden="true" />}
         </tr>
       </thead>
       <tbody>
@@ -78,19 +89,34 @@ export function Table({
                     )}
                   </td>
                 ))}
-                {onEdit !== undefined && (
+                {(onEdit !== undefined || onView !== undefined) && (
                   <td className={[styles.td, styles.actionCell].join(' ')}>
-                    <button
-                      type="button"
-                      className={styles.actionBtn}
-                      aria-label="Edit"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEdit(id);
-                      }}
-                    >
-                      <EditIcon />
-                    </button>
+                    {onView !== undefined && (
+                      <button
+                        type="button"
+                        className={styles.actionBtn}
+                        aria-label="View"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onView(id);
+                        }}
+                      >
+                        <ViewIcon />
+                      </button>
+                    )}
+                    {onEdit !== undefined && (
+                      <button
+                        type="button"
+                        className={styles.actionBtn}
+                        aria-label="Edit"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit(id);
+                        }}
+                      >
+                        <EditIcon />
+                      </button>
+                    )}
                   </td>
                 )}
               </tr>

@@ -102,6 +102,26 @@ function checkViews(obj: ObjectConfig, objectsByName: Map<string, ObjectConfig>)
   }
 }
 
+function checkColumnOptions(obj: ObjectConfig, viewName: string, field: ViewFieldConfig, propByName: Map<string, PropertyConfig>, objectsByName: Map<string, ObjectConfig>): void {
+  if (field.columnOptions === undefined) return;
+  const where = `view field '${obj.name}.${viewName}.${field.property}' columnOptions`;
+  const own = propByName.get(field.property);
+  if (own?.type !== 'array') throw new Error(`${where}: only an array property has columns`);
+  for (const [column, path] of Object.entries(field.columnOptions)) {
+    if (!own.item.properties.some((p) => p.name === column)) throw new Error(`${where}: '${column}' is not one of its item properties`);
+    const [objectName, arrayName, sourceColumn, ...rest] = path.split('.');
+    const source = objectName === undefined ? undefined : objectsByName.get(objectName);
+    if (source === undefined || arrayName === undefined || sourceColumn === undefined || rest.length > 0) {
+      throw new Error(`${where}: '${path}' must name '<object>.<array>.<column>' of an existing object`);
+    }
+    if (source.singleton !== true) throw new Error(`${where}: '${objectName}' is not a singleton, so it has no one list to offer`);
+    const list = source.properties.find((p) => p.name === arrayName);
+    if (list?.type !== 'array' || !list.item.properties.some((p) => p.name === sourceColumn)) {
+      throw new Error(`${where}: '${objectName}' has no array '${arrayName}' with a column '${sourceColumn}'`);
+    }
+  }
+}
+
 const CONDITION_TYPES = new Set<PropertyConfig['type']>(['enum', 'boolean', 'text', 'integer', 'ref']);
 
 function checkVisibleWhen(where: string, cond: VisibleWhen | undefined, propByName: Map<string, PropertyConfig>): void {
@@ -109,10 +129,38 @@ function checkVisibleWhen(where: string, cond: VisibleWhen | undefined, propByNa
   const prop = propByName.get(cond.property);
   if (prop === undefined) throw new Error(`${where} visibleWhen names unknown property '${cond.property}'`);
   if (!CONDITION_TYPES.has(prop.type)) throw new Error(`${where} visibleWhen cannot test a ${prop.type} property`);
-  if (prop.type === 'enum' && !prop.values.includes(String(cond.equals))) {
-    throw new Error(`${where} visibleWhen: '${String(cond.equals)}' is not a value of '${cond.property}' (${prop.values.join(', ')})`);
+  const value = 'equals' in cond ? cond.equals : cond.notEquals;
+  if (prop.type === 'enum' && !prop.values.includes(String(value))) {
+    throw new Error(`${where} visibleWhen: '${String(value)}' is not a value of '${cond.property}' (${prop.values.join(', ')})`);
   }
-  if (prop.type === 'boolean' && typeof cond.equals !== 'boolean') throw new Error(`${where} visibleWhen: '${cond.property}' is boolean, so equals must be true or false`);
+  if (prop.type === 'boolean' && typeof value !== 'boolean') throw new Error(`${where} visibleWhen: '${cond.property}' is boolean, so the value must be true or false`);
+}
+
+function checkLabelSource(where: string, path: string, objectsByName: Map<string, ObjectConfig>): void {
+  const [objectName, propertyName, ...rest] = path.split('.');
+  const source = objectName === undefined ? undefined : objectsByName.get(objectName);
+  if (source === undefined || propertyName === undefined || rest.length > 0) throw new Error(`${where} '${path}' must name '<object>.<property>' of an existing object`);
+  if (source.singleton !== true) throw new Error(`${where}: '${objectName}' is not a singleton, so it has no one value to show`);
+  if (source.properties.find((p) => p.name === propertyName)?.type !== 'text') throw new Error(`${where}: '${objectName}.${propertyName}' is not a text property`);
+}
+
+function checkFieldLabels(obj: ObjectConfig, viewName: string, field: ViewFieldConfig, propByName: Map<string, PropertyConfig>, objectsByName: Map<string, ObjectConfig>): void {
+  const where = `view field '${obj.name}.${viewName}.${field.property}'`;
+  if (field.labelFrom !== undefined) checkLabelSource(`${where} labelFrom`, field.labelFrom, objectsByName);
+  if (field.columnLabelsFrom === undefined && field.columnVisibleWhen === undefined) return;
+  const own = propByName.get(field.property);
+  if (own?.type !== 'array') throw new Error(`${where}: only an array property has columns`);
+  const assertColumn = (column: string) => {
+    if (!own.item.properties.some((p) => p.name === column)) throw new Error(`${where}: '${column}' is not one of its item properties`);
+  };
+  for (const [column, path] of Object.entries(field.columnLabelsFrom ?? {})) {
+    assertColumn(column);
+    checkLabelSource(`${where} columnLabelsFrom`, path, objectsByName);
+  }
+  for (const [column, cond] of Object.entries(field.columnVisibleWhen ?? {})) {
+    assertColumn(column);
+    checkVisibleWhen(`${where} column '${column}'`, cond, propByName);
+  }
 }
 
 const PLACEHOLDER_SOURCES = new Set<PropertyConfig['type']>(['text', 'markdown', 'code', 'integer', 'money', 'date', 'datetime', 'enum']);
@@ -139,6 +187,8 @@ function checkViewField(
   objectsByName: Map<string, ObjectConfig>,
 ): void {
   checkPlaceholderFrom(obj, viewName, field, objectsByName);
+  checkColumnOptions(obj, viewName, field, propByName, objectsByName);
+  checkFieldLabels(obj, viewName, field, propByName, objectsByName);
   checkVisibleWhen(`view field '${obj.name}.${viewName}.${field.property}'`, field.visibleWhen, propByName);
   if (field.layout === 'table' && propByName.get(field.property)?.type !== 'array') {
     throw new Error(`view field '${obj.name}.${viewName}.${field.property}' uses layout 'table', which only an array property has`);
@@ -304,8 +354,10 @@ function checkProperties(
     if (prop.type === 'object') {
       checkProperties(`${scope}.${prop.name}`, prop.properties, knownObjects, hasLocales, true);
     }
-    if (prop.type === 'array' && prop.uniqueBy !== undefined && !prop.item.properties.some((p) => p.name === prop.uniqueBy)) {
-      throw new Error(`array property '${scope}.${prop.name}' has uniqueBy '${prop.uniqueBy}', not one of its item properties`);
+    if (prop.type === 'array') {
+      for (const key of [prop.uniqueBy ?? []].flat()) {
+        if (!prop.item.properties.some((p) => p.name === key)) throw new Error(`array property '${scope}.${prop.name}' has uniqueBy '${key}', not one of its item properties`);
+      }
     }
   }
 }

@@ -60,6 +60,10 @@ export interface ObjectFormState {
   refData: Record<string, RefData>;
   // Raw values of each field's placeholderFrom source, by field path.
   placeholderValues: Record<string, unknown>;
+  // Choices for array columns that declare columnOptions: field path, then column.
+  columnChoices: Record<string, Record<string, string[]>>;
+  // Raw label sources by field path; `columns` holds them per array column.
+  liveLabels: { fields: Record<string, unknown>; columns: Record<string, Record<string, unknown>> } | null;
   displayFor: (spec: ViewFieldSpec) => string;
   error: string | null;
   setError: Dispatch<SetStateAction<string | null>>;
@@ -81,6 +85,8 @@ export function useObjectForm(
   const [inputs, setInputs] = useState<Record<string, string>>(() => initInputs(specs, mode, row));
   const [refData, setRefData] = useState<Record<string, RefData>>({});
   const [placeholderValues, setPlaceholderValues] = useState<Record<string, unknown>>({});
+  const [columnChoices, setColumnChoices] = useState<Record<string, Record<string, string[]>>>({});
+  const [liveLabels, setLiveLabels] = useState<ObjectFormState['liveLabels']>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [locale, setLocale] = useState<string | undefined>(appConfig.locales?.[0]);
@@ -137,6 +143,60 @@ export function useObjectForm(
     };
   }, [api, specs, resolveObject]);
 
+  useEffect(() => {
+    let alive = true;
+    const sourced = specs.filter((s) => s.columnOptions !== undefined);
+    if (sourced.length === 0) return;
+    const names = [...new Set(sourced.flatMap((s) => Object.values(s.columnOptions!).map((c) => c.object)))];
+    Promise.all(
+      names.map(async (name) => {
+        const target = resolveObject(name);
+        return [name, target === undefined ? null : await api.object<Row>(name).get(singletonId(target))] as const;
+      }),
+    )
+      .then((records) => {
+        if (!alive) return;
+        const byObject = new Map(records);
+        const choicesFor = (c: { object: string; array: string; column: string }) => {
+          const rows = byObject.get(c.object)?.[c.array];
+          return Array.isArray(rows) ? rows.map((r) => displayText((r as Row)[c.column])).filter((v) => v !== '') : [];
+        };
+        setColumnChoices(
+          Object.fromEntries(sourced.map((s) => [s.path, Object.fromEntries(Object.entries(s.columnOptions!).map(([name, c]) => [name, choicesFor(c)]))])),
+        );
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [api, specs, resolveObject]);
+
+  useEffect(() => {
+    let alive = true;
+    const sourced = specs.filter((s) => s.labelFrom !== undefined || s.columnLabelsFrom !== undefined);
+    if (sourced.length === 0) return;
+    const names = [...new Set(sourced.flatMap((s) => [...(s.labelFrom === undefined ? [] : [s.labelFrom.object]), ...Object.values(s.columnLabelsFrom ?? {}).map((c) => c.object)]))];
+    Promise.all(
+      names.map(async (name) => {
+        const target = resolveObject(name);
+        return [name, target === undefined ? null : await api.object<Row>(name).get(singletonId(target))] as const;
+      }),
+    )
+      .then((records) => {
+        if (!alive) return;
+        const byObject = new Map(records);
+        const read = (c: { object: string; property: string }) => byObject.get(c.object)?.[c.property];
+        setLiveLabels({
+          fields: Object.fromEntries(sourced.flatMap((s) => (s.labelFrom === undefined ? [] : [[s.path, read(s.labelFrom)]]))),
+          columns: Object.fromEntries(sourced.map((s) => [s.path, Object.fromEntries(Object.entries(s.columnLabelsFrom ?? {}).map(([k, c]) => [k, read(c)]))])),
+        });
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [api, specs, resolveObject]);
+
   function setField(path: string, value: string) {
     setInputs((prev) => ({ ...prev, [path]: value }));
   }
@@ -175,7 +235,7 @@ export function useObjectForm(
     return formatCell(spec.property, raw, '');
   }
 
-  return { viewName, specs, inputs, setInputs, setField, refData, placeholderValues, displayFor, error, setError, busy, setBusy, locale, setLocale };
+  return { viewName, specs, inputs, setInputs, setField, refData, placeholderValues, columnChoices, liveLabels, displayFor, error, setError, busy, setBusy, locale, setLocale };
 }
 
 function sections(specs: ViewFieldSpec[]): Array<{ title: string | null; specs: ViewFieldSpec[] }> {
@@ -237,17 +297,25 @@ export function FormLocales({ form }: { form: ObjectFormState }) {
 }
 
 export function ObjectFields({ form, locales = true }: { form: ObjectFormState; locales?: boolean }) {
-  const { specs, inputs, setInputs, setField, refData, placeholderValues, displayFor, locale, setLocale } = form;
+  const { specs, inputs, setInputs, setField, refData, placeholderValues, columnChoices, liveLabels, displayFor, locale, setLocale } = form;
   const translated = locale !== undefined && hasTranslated(form);
   return (
     <>
       {locales && translated && (appConfig.locales ?? []).length > 1 && <LocaleSwitch locale={locale} setLocale={setLocale} />}
-      {sections(specs.filter((s) => isVisible(s, inputs))).map((section, i) => (
+      {sections(
+        specs
+          .filter((s) => isVisible(s, inputs))
+          .flatMap((s) => {
+            if (s.labelFrom === undefined) return [s];
+            const label = displayText(liveLabels?.fields[s.path], locale);
+            return label === '' ? [] : [{ ...s, label }];
+          }),
+      ).map((section, i) => (
         <div key={section.title ?? `s${i}`} className={section.title !== null ? styles.fieldset : undefined}>
           {section.title !== null && <div className={styles.legend}>{section.title}</div>}
           <div className={styles.fields}>
             {section.specs.map((spec) =>
-              spec.editable && spec.property.type === 'array' ? (
+              spec.property.type === 'array' ? (
                 <RepeatingGroup
                   key={spec.path}
                   label={spec.label}
@@ -256,6 +324,10 @@ export function ObjectFields({ form, locales = true }: { form: ObjectFormState; 
                   inputs={inputs}
                   setInputs={setInputs}
                   layout={spec.layout}
+                  readOnly={!spec.editable}
+                  columnChoices={columnChoices[spec.path]}
+                  columnLabels={spec.columnLabelsFrom === undefined ? undefined : Object.fromEntries(Object.keys(spec.columnLabelsFrom).map((k) => [k, displayText(liveLabels?.columns[spec.path]?.[k], locale)]))}
+                  columnVisibleWhen={spec.columnVisibleWhen}
                 />
               ) : translated && spec.derivedFromRef === null && isTranslated(spec.property) ? (
                 <Field

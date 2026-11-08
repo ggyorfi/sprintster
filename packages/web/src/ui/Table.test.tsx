@@ -47,6 +47,13 @@ describe('Table', () => {
     expect(screen.getByText('No clients yet')).toBeInTheDocument();
   });
 
+  it('renders a per-row view action that calls onView with the row id', async () => {
+    const onView = vi.fn();
+    render(<Table columns={columns} rows={rows} onView={onView} />);
+    await userEvent.click(screen.getAllByRole('button', { name: 'View' })[1]!);
+    expect(onView).toHaveBeenCalledWith('b2');
+  });
+
   it('renders a per-row edit action that calls onEdit with the row id', async () => {
     const onEdit = vi.fn();
     render(<Table columns={columns} rows={rows} onEdit={onEdit} />);

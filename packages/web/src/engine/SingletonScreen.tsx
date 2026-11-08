@@ -75,8 +75,10 @@ export function SingletonScreen({ api, obj, resolveObject }: SingletonScreenProp
       {error !== null && <div className={styles.error}>{error}</div>}
       {saved && error === null && <div className={styles.muted}>Saved.</div>}
 
-      {!loading && <RecordTimes row={row} />}
-      {loading ? <div className={styles.muted}>Loading {obj.title.toLowerCase()}...</div> : <ObjectFields form={form} />}
+      <div className={styles.formScroll}>
+        {!loading && <RecordTimes row={row} />}
+        {loading ? <div className={styles.muted}>Loading {obj.title.toLowerCase()}...</div> : <ObjectFields form={form} />}
+      </div>
     </div>
   );
 }

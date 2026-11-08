@@ -79,14 +79,23 @@ A view is the form used to create, edit, or view a record.
   to fall back on a shop-wide default can show the default. `loadConfig`
   rejects a source that is not a singleton or has no text form. The web GUI
   reads it; the terminal form shows only a plain `placeholder`.
-- `visibleWhen: { "property": "stockBy", "equals": "Per size" }` on a field
-  or a fieldset shows it only while that property of the same record holds
-  the value, live as the form changes; both frontends follow it. A hidden
+- `visibleWhen: { "property": "stockBy", "equals": "Per variant" }` (or
+  `"notEquals"`) on a field or a fieldset shows it only while that property of
+  the same record holds the value, live as the form changes; both frontends follow it. A hidden
   field keeps its value and is saved unchanged. `loadConfig` checks the
   property exists, and that the value is one of an enum's values or a boolean
   for a boolean.
 - `layout: "table"` on an array field edits it as a table: one row per item,
   its sub-properties as columns (enums as selects), a remove button per row.
+- `columnOptions: { "size": "settings.sizes.first" }` on an array field offers
+  a column's choices from an array on a singleton, as a select (web GUI). A
+  saved value no longer on the list stays visible. `loadConfig` checks both
+  ends.
+- `labelFrom: "<singleton>.<property>"` takes a field's label from a singleton
+  (web GUI); while that value is empty the field is hidden, so an unconfigured
+  option disappears. `columnLabelsFrom` does the same for an array's columns,
+  and `columnVisibleWhen` shows a column on a condition. Hidden columns keep
+  their values.
 - `readOnly: true` shows a field but does not let it be edited.
 - A dotted property like `"author.name"` shows a read-only field pulled from a
   referenced object.

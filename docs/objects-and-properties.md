@@ -184,7 +184,7 @@ Every property has these common fields:
 | `sequence` | number | Server-allocated incrementing number (read-only). |
 | `image` | object | Uploaded image reference: `{ hash, filename, contentType, size, width?, height?, alt?, thumb? }`; `thumb` is the hash of a small preview the web GUI makes at upload. Bytes stored on the filesystem; see [blobs](./configuration.md#blobs). |
 | `object` | object | A nested group: `"properties": [ ... ]`. |
-| `array` | array | A repeating group of items: `"item": { "properties": [ ... ] }`. Honors `minItems`/`maxItems`; `"uniqueBy": "<sub-property>"` refuses two items with the same value there. |
+| `array` | array | A repeating group of items: `"item": { "properties": [ ... ] }`. Honors `minItems`/`maxItems`; `"uniqueBy": "<sub-property>"` (or a list of them, for a combination) refuses two items with the same value there. |
 
 ### Images in a markdown body
 

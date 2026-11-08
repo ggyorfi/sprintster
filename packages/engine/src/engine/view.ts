@@ -19,6 +19,11 @@ export interface ViewFieldSpec {
   // From the field or its fieldset; the frontends hide the field while the condition does not hold.
   visibleWhen: VisibleWhen | null;
   layout: 'stack' | 'table';
+  // Read live by a frontend: where each array column takes its choices from.
+  columnOptions?: Record<string, { object: string; array: string; column: string }>;
+  labelFrom?: { object: string; property: string };
+  columnLabelsFrom?: Record<string, { object: string; property: string }>;
+  columnVisibleWhen?: Record<string, VisibleWhen>;
   rows: number;
   group: string | null;
   editable: boolean;
@@ -199,6 +204,28 @@ export function toStorage(property: PropertyConfig, input: string): unknown {
   }
 }
 
+function columnSources(field: ViewFieldConfig): Pick<ViewFieldSpec, 'columnOptions'> | Record<string, never> {
+  if (field.columnOptions === undefined) return {};
+  const out: NonNullable<ViewFieldSpec['columnOptions']> = {};
+  for (const [name, path] of Object.entries(field.columnOptions)) {
+    const [object, array, column] = path.split('.');
+    if (object !== undefined && array !== undefined && column !== undefined) out[name] = { object, array, column };
+  }
+  return { columnOptions: out };
+}
+
+function labelSources(field: ViewFieldConfig): Pick<ViewFieldSpec, 'labelFrom' | 'columnLabelsFrom' | 'columnVisibleWhen'> {
+  const toSource = (path: string) => {
+    const [object = '', property = ''] = path.split('.');
+    return { object, property };
+  };
+  return {
+    ...(field.labelFrom === undefined ? {} : { labelFrom: toSource(field.labelFrom) }),
+    ...(field.columnLabelsFrom === undefined ? {} : { columnLabelsFrom: Object.fromEntries(Object.entries(field.columnLabelsFrom).map(([k, v]) => [k, toSource(v)])) }),
+    ...(field.columnVisibleWhen === undefined ? {} : { columnVisibleWhen: field.columnVisibleWhen }),
+  };
+}
+
 function placeholderSource(field: ViewFieldConfig): ViewFieldSpec['placeholderFrom'] {
   const [object, property] = field.placeholderFrom?.split('.') ?? [];
   return object !== undefined && property !== undefined ? { object, property } : null;
@@ -227,6 +254,8 @@ function processField(
       placeholderFrom: placeholderSource(field),
       visibleWhen: field.visibleWhen ?? null,
       layout: field.layout ?? 'stack',
+      ...columnSources(field),
+      ...labelSources(field),
       rows: field.rows ?? 1,
       group,
       editable: resolveEditable(root, mode, field.readOnly),
@@ -282,9 +311,13 @@ function processField(
 }
 
 // Compares against the form's current input for the property, the same string toInput produces from a stored value.
+export function conditionHolds(cond: VisibleWhen, inputs: Record<string, string>): boolean {
+  const input = inputs[cond.property] ?? '';
+  return 'equals' in cond ? input === String(cond.equals) : input !== String(cond.notEquals);
+}
+
 export function isVisible(spec: ViewFieldSpec, inputs: Record<string, string>): boolean {
-  if (spec.visibleWhen === null || spec.visibleWhen === undefined) return true;
-  return (inputs[spec.visibleWhen.property] ?? '') === String(spec.visibleWhen.equals);
+  return spec.visibleWhen === null || spec.visibleWhen === undefined || conditionHolds(spec.visibleWhen, inputs);
 }
 
 export function viewFields(

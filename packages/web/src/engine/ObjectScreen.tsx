@@ -39,6 +39,7 @@ function ListScreen({ api, obj, resolveObject }: ObjectScreenProps) {
   const actions = obj.lists[0]?.actions ?? [];
   const canCreate = actions.some((a) => a.kind === 'create');
   const canEditObj = actions.some((a) => a.kind === 'edit');
+  const canViewObj = actions.some((a) => a.kind === 'view');
 
   const visible = useMemo(
     () => (query.trim() !== '' && search !== undefined ? filterByConfig(rows, query, search as SearchSpec) : rows),
@@ -53,6 +54,11 @@ function ListScreen({ api, obj, resolveObject }: ObjectScreenProps) {
     return cells;
   });
   const byId = new Map(visible.map((r) => [String(r['id']), r]));
+
+  function openView(id: string) {
+    const r = byId.get(id);
+    if (r !== undefined) setPanel({ mode: 'view', row: r });
+  }
 
   function openEdit(id: string) {
     const r = byId.get(id);
@@ -101,6 +107,7 @@ function ListScreen({ api, obj, resolveObject }: ObjectScreenProps) {
             rows={tableRows}
             rowId={(row) => String(row['__rowId'] ?? '')}
             onEdit={canEditObj ? openEdit : undefined}
+            onView={canViewObj ? openView : undefined}
             emptyLabel="No matches"
           />
         </div>

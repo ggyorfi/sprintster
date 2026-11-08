@@ -1,4 +1,4 @@
-import { arrayItemCount, toInput, type PropertyConfig } from '@sprintster/engine';
+import { arrayItemCount, conditionHolds, toInput, type PropertyConfig, type VisibleWhen } from '@sprintster/engine';
 import { Button, Select, TextField } from '../ui/index.js';
 import styles from './RepeatingGroup.module.css';
 
@@ -9,6 +9,11 @@ export interface RepeatingGroupProps {
   inputs: Record<string, string>;
   setInputs: (updater: (prev: Record<string, string>) => Record<string, string>) => void;
   layout?: 'stack' | 'table';
+  columnChoices?: Record<string, string[]> | undefined;
+  // A column with an entry here is titled by it, and hidden while it is empty.
+  columnLabels?: Record<string, string> | undefined;
+  columnVisibleWhen?: Record<string, VisibleWhen> | undefined;
+  readOnly?: boolean | undefined;
 }
 
 type Item = Record<string, string>;
@@ -24,16 +29,25 @@ function itemsFromInputs(path: string, subs: PropertyConfig[], inputs: Record<st
   return items;
 }
 
-function SubField({ sub, label, value, onChange }: { sub: PropertyConfig; label: string; value: string; onChange: (v: string) => void }) {
+function SubField({ sub, label, value, onChange, choices }: { sub: PropertyConfig; label: string; value: string; onChange: (v: string) => void; choices?: string[] | undefined }) {
+  if (choices !== undefined && choices.length > 0) {
+    // A saved value no longer on the list stays visible instead of silently changing.
+    const all = value === '' || choices.includes(value) ? choices : [value, ...choices];
+    return <Select label={label} value={value} onChange={onChange} options={all.map((v) => ({ value: v, label: v }))} placeholder="" />;
+  }
   if (sub.type === 'enum') {
     return <Select label={label} value={value} onChange={onChange} options={sub.values.map((v) => ({ value: v, label: v }))} placeholder="" />;
   }
+  if (sub.type === 'money') return <TextField label={label} value={value} onChange={onChange} prefix="£" inputMode="decimal" />;
   if (sub.type === 'integer') return <TextField label={label} value={value} onChange={onChange} inputMode="numeric" />;
   return <TextField label={label} value={value} onChange={onChange} />;
 }
 
-export function RepeatingGroup({ label, path, itemProperties, inputs, setInputs, layout = 'stack' }: RepeatingGroupProps) {
+export function RepeatingGroup({ label, path, itemProperties, inputs, setInputs, layout = 'stack', columnChoices, columnLabels, columnVisibleWhen, readOnly = false }: RepeatingGroupProps) {
   const items = itemsFromInputs(path, itemProperties, inputs);
+  const titleOf = (s: PropertyConfig) => columnLabels?.[s.name] || s.title || s.name;
+  // Hidden columns keep their values, so switching a condition back loses nothing.
+  const shown = itemProperties.filter((s) => columnLabels?.[s.name] !== '' && (columnVisibleWhen?.[s.name] === undefined || conditionHolds(columnVisibleWhen[s.name]!, inputs)));
 
   function commit(next: Item[]) {
     setInputs((prev) => {
@@ -50,6 +64,36 @@ export function RepeatingGroup({ label, path, itemProperties, inputs, setInputs,
   const change = (i: number, name: string, v: string) => commit(items.map((it, idx) => (idx === i ? { ...it, [name]: v } : it)));
   const remove = (i: number) => commit(items.filter((_, idx) => idx !== i));
 
+  if (readOnly) {
+    // A raw reference id means nothing to a reader; such columns are left out.
+    const readable = shown.filter((s) => s.type !== 'ref' && s.type !== 'refs');
+    return (
+      <div className={styles.group}>
+        <div className={styles.legend}>{label}</div>
+        {items.length > 0 && (
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                {readable.map((s) => (
+                  <th key={s.name}>{titleOf(s)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, i) => (
+                <tr key={i}>
+                  {readable.map((s) => (
+                    <td key={s.name}>{item[s.name] === '' || item[s.name] === undefined ? '\u2013' : item[s.name]}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    );
+  }
+
   if (layout === 'table') {
     return (
       <div className={styles.group}>
@@ -58,8 +102,8 @@ export function RepeatingGroup({ label, path, itemProperties, inputs, setInputs,
           <table className={styles.table}>
             <thead>
               <tr>
-                {itemProperties.map((s) => (
-                  <th key={s.name}>{s.title ?? s.name}</th>
+                {shown.map((s) => (
+                  <th key={s.name}>{titleOf(s)}</th>
                 ))}
                 <th aria-label="Remove" />
               </tr>
@@ -67,9 +111,9 @@ export function RepeatingGroup({ label, path, itemProperties, inputs, setInputs,
             <tbody>
               {items.map((item, i) => (
                 <tr key={i}>
-                  {itemProperties.map((s) => (
+                  {shown.map((s) => (
                     <td key={s.name}>
-                      <SubField sub={s} label={`${s.title ?? s.name} ${i + 1}`} value={item[s.name] ?? ''} onChange={(v) => change(i, s.name, v)} />
+                      <SubField sub={s} label={`${titleOf(s)} ${i + 1}`} value={item[s.name] ?? ''} onChange={(v) => change(i, s.name, v)} choices={columnChoices?.[s.name]} />
                     </td>
                   ))}
                   <td className={styles.removeCell}>
@@ -98,7 +142,7 @@ export function RepeatingGroup({ label, path, itemProperties, inputs, setInputs,
         <div key={i} className={styles.item}>
           <div className={styles.itemFields}>
             {itemProperties.map((s) => (
-              <SubField key={s.name} sub={s} label={s.title ?? s.name} value={item[s.name] ?? ''} onChange={(v) => change(i, s.name, v)} />
+              <SubField key={s.name} sub={s} label={s.title ?? s.name} value={item[s.name] ?? ''} onChange={(v) => change(i, s.name, v)} choices={columnChoices?.[s.name]} />
             ))}
           </div>
           <Button variant="destructive" onClick={() => remove(i)}>

@@ -84,15 +84,16 @@ function baseSchema(prop: PropertyConfig): z.ZodTypeAny {
       const v = prop.validation;
       if (v?.minItems !== undefined) s = s.min(v.minItems);
       if (v?.maxItems !== undefined) s = s.max(v.maxItems);
-      const key = prop.uniqueBy;
-      if (key === undefined) return s;
+      if (prop.uniqueBy === undefined) return s;
+      const keys = [prop.uniqueBy].flat();
       return s.superRefine((items, ctx) => {
-        const seen = new Set<unknown>();
+        const seen = new Set<string>();
         items.forEach((item, i) => {
-          const value = (item as Record<string, unknown>)[key];
-          if (value === null || value === undefined || value === '') return;
-          if (seen.has(value)) ctx.addIssue({ code: 'custom', path: [i, key], message: `${String(value)} is already in the list` });
-          seen.add(value);
+          const values = keys.map((k) => (item as Record<string, unknown>)[k] ?? '');
+          if (values.every((v) => v === '')) return;
+          const id = JSON.stringify(values);
+          if (seen.has(id)) ctx.addIssue({ code: 'custom', path: [i, keys[0]!], message: `${values.filter((v) => v !== '').join(' / ')} is already in the list` });
+          seen.add(id);
         });
       });
     }

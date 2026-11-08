@@ -70,7 +70,7 @@ export function ObjectPanel({ api, obj, resolveObject, initialMode, row, onClose
     void run(() => api.object(obj.name).transition(String(row!['id']), name));
   }
 
-  const title = mode === 'create' ? `New ${obj.title}` : `Edit ${obj.title}`;
+  const title = mode === 'create' ? `New ${obj.title}` : mode === 'view' ? obj.title : `Edit ${obj.title}`;
 
   const footer = (
     <>
@@ -97,9 +97,11 @@ export function ObjectPanel({ api, obj, resolveObject, initialMode, row, onClose
       <Button variant="neutral" onClick={onClose}>
         Close
       </Button>
-      <Button variant="primary" disabled={busy} onClick={save}>
-        Save
-      </Button>
+      {mode !== 'view' && (
+        <Button variant="primary" disabled={busy} onClick={save}>
+          Save
+        </Button>
+      )}
     </>
   );
 

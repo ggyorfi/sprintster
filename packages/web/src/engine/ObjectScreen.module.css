@@ -80,3 +80,12 @@
 .tableWrap:focus-within::-webkit-scrollbar-thumb {
   background-color: var(--border-2);
 }
+
+.formScroll {
+  display: grid;
+  flex: 1;
+  align-content: start;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+}
