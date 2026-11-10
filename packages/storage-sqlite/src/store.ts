@@ -6,6 +6,7 @@ import {
   type EventStore,
   type StateStore,
   type StoredState,
+  type StreamRewrite,
 } from '@sprintster/engine';
 
 const DDL = `
@@ -88,6 +89,8 @@ function isSqliteUnique(err: unknown): boolean {
 }
 
 export function createSqliteEventStore(db: Database.Database): EventStore & { states: StateStore } {
+  // Erased rows are overwritten with zeros rather than left in free pages (ADR 18).
+  db.pragma('secure_delete = ON');
   db.exec(DDL);
 
   const insert = db.prepare(
@@ -131,6 +134,9 @@ export function createSqliteEventStore(db: Database.Database): EventStore & { st
      ) AS stale`,
   );
   const clearStates = db.prepare(`DELETE FROM states WHERE partition_id = ? AND stream_type = ?`);
+  const deleteStream = db.prepare(`DELETE FROM events WHERE partition_id = ? AND stream_type = ? AND stream_id = ?`);
+  const deleteState = db.prepare(`DELETE FROM states WHERE partition_id = ? AND stream_type = ? AND stream_id = ?`);
+  const setPayload = db.prepare(`UPDATE events SET payload = ? WHERE id = ? AND partition_id = ? AND stream_type = ? AND stream_id = ?`);
 
   function insertEvent(input: EventInput): EventRow {
     const info = insert.run({
@@ -169,6 +175,23 @@ export function createSqliteEventStore(db: Database.Database): EventStore & { st
     for (const s of states) upsertState.run(partitionId, streamType, s.streamId, s.version, JSON.stringify(s.state));
   });
 
+  const rewriteStreams = db.transaction((marker: EventInput, rewrites: readonly StreamRewrite[]): EventRow => {
+    for (const r of rewrites) {
+      if ((headStmt.get(r.partitionId, r.streamType, r.streamId) as { head: number }).head !== r.expectedVersion) throw new UniqueViolationError();
+    }
+    const row = insertEvent(marker);
+    for (const r of rewrites) {
+      if (r.payloads === null) {
+        deleteStream.run(r.partitionId, r.streamType, r.streamId);
+        deleteState.run(r.partitionId, r.streamType, r.streamId);
+        continue;
+      }
+      for (const [id, payload] of r.payloads) setPayload.run(JSON.stringify(payload), Number(id), r.partitionId, r.streamType, r.streamId);
+      if ('state' in r) upsertState.run(r.partitionId, r.streamType, r.streamId, r.expectedVersion, JSON.stringify(r.state));
+    }
+    return row;
+  });
+
   return {
     async append(input: EventInput): Promise<EventRow> {
       return mapUnique(() => insertEvent(input));
@@ -193,6 +216,10 @@ export function createSqliteEventStore(db: Database.Database): EventStore & { st
 
     async findSince(position) {
       return (sinceStmt.all(position) as Row[]).map(toEventRow);
+    },
+
+    async rewriteStreams(marker, rewrites) {
+      return mapUnique(() => rewriteStreams(marker, rewrites));
     },
 
     states: {

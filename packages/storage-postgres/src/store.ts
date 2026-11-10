@@ -4,6 +4,7 @@ import {
   type EventInput,
   type EventRow,
   type EventStore,
+  type StreamRewrite,
 } from '@sprintster/engine';
 
 interface EventsTable {
@@ -66,24 +67,67 @@ function isPgUniqueViolation(err: unknown): boolean {
   );
 }
 
+function eventValues(input: EventInput) {
+  return {
+    partition_id: String(input.partitionId),
+    stream_type: input.streamType,
+    stream_id: input.streamId,
+    stream_version: String(input.streamVersion),
+    event_type: input.eventType,
+    event_version: input.eventVersion,
+    payload: input.payload,
+    occurred_at: new Date(input.occurredAt),
+    actor: input.actor,
+    correlation_id: input.correlationId,
+  };
+}
+
 export function createPgEventStore(db: Kysely<EventStoreDatabase>): EventStore {
   return {
+    async rewriteStreams(marker: EventInput, rewrites: readonly StreamRewrite[]): Promise<EventRow> {
+      try {
+        return await db.transaction().execute(async (tx) => {
+          for (const r of rewrites) {
+            const head = await tx
+              .selectFrom('events')
+              .select(sql<string>`COALESCE(MAX(stream_version::bigint), 0)`.as('head'))
+              .where('partition_id', '=', String(r.partitionId))
+              .where('stream_type', '=', r.streamType)
+              .where('stream_id', '=', r.streamId)
+              .executeTakeFirst();
+            if (Number(head?.head ?? 0) !== r.expectedVersion) throw new UniqueViolationError();
+          }
+          const row = await tx.insertInto('events').values(eventValues(marker)).returningAll().executeTakeFirstOrThrow();
+          for (const r of rewrites) {
+            const stream = tx
+              .updateTable('events')
+              .where('partition_id', '=', String(r.partitionId))
+              .where('stream_type', '=', r.streamType)
+              .where('stream_id', '=', r.streamId);
+            if (r.payloads === null) {
+              await tx
+                .deleteFrom('events')
+                .where('partition_id', '=', String(r.partitionId))
+                .where('stream_type', '=', r.streamType)
+                .where('stream_id', '=', r.streamId)
+                .execute();
+              continue;
+            }
+            for (const [id, payload] of r.payloads) await stream.set({ payload }).where('id', '=', id).execute();
+          }
+          return toEventRow(row as RawRow);
+        });
+      } catch (err) {
+        if (isPgUniqueViolation(err)) throw new UniqueViolationError();
+        throw err;
+      }
+    },
+
     async append(input: EventInput): Promise<EventRow> {
       try {
         const row = await db
           .insertInto('events')
-          .values({
-            partition_id: String(input.partitionId),
-            stream_type: input.streamType,
-            stream_id: input.streamId,
-            stream_version: String(input.streamVersion),
-            event_type: input.eventType,
-            event_version: input.eventVersion,
-            payload: input.payload,
-            occurred_at: new Date(input.occurredAt),
-            actor: input.actor,
-            correlation_id: input.correlationId,
-          })
+          .values(eventValues(input))
           .returningAll()
           .executeTakeFirstOrThrow();
         return toEventRow(row as RawRow);

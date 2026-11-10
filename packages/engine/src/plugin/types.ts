@@ -22,6 +22,9 @@ export interface PluginObjectApi<S extends { id: string }> {
   update?(id: string, input: unknown, actor?: string): Promise<S>;
   remove?(id: string, actor?: string): Promise<S>;
   runCommand?(id: string, name: string, actor?: string): Promise<S>;
+  // ADR 18: gone for good, or the fields nulled in every event.
+  erase?(id: string, actor?: string): Promise<void>;
+  redact?(id: string, fields: readonly string[], actor?: string): Promise<S>;
   createSchema?: z.ZodTypeAny;
   updateSchema?: z.ZodTypeAny;
   /** Freshness/health of an externally-backed object's cache. Mounts GET /<plural>/_status. */
@@ -113,7 +116,7 @@ export interface DaemonRegistries {
   channels: { open(name: string): Channel };
   gui: { action(a: GuiAction): void; badge(b: GuiBadge): void };
   data: PluginData;
-  // Exactly the secrets the manifest declares, each one present and non-empty.
+  // Exactly the secrets the manifest declares; every required one is present and non-empty, an optional one only when set.
   secrets: Readonly<Record<string, string>>;
 }
 
@@ -145,6 +148,7 @@ export interface PluginManifest<Ctx extends PluginContext = PluginContext> {
   // Static, so a host can read them without running init: routes left open by its gate, and the secret names to hand over.
   publicRoutes?: ReadonlyArray<PublicRoute>;
   secrets?: ReadonlyArray<string>;
+  optionalSecrets?: ReadonlyArray<string>;
   init(ctx: Ctx): void | Promise<void>;
 }
 

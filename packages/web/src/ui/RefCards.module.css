@@ -116,9 +116,21 @@
   color: var(--accent);
 }
 
-.search {
-  width: 100%;
+.toolbar {
+  display: flex;
+  gap: 8px;
   margin-bottom: 12px;
+}
+
+.uploadError {
+  margin: 0 0 12px;
+  color: var(--red);
+  font-size: 12px;
+}
+
+.search {
+  flex: 1;
+  min-width: 0;
   padding: var(--field-y) 10px;
   border: 1px solid var(--field-border);
   border-radius: var(--radius);

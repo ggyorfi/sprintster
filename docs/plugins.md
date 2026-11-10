@@ -56,7 +56,11 @@ export const plugin = {
   On Cloudflare the Durable Object hibernates while sockets are idle.
 - **`ctx.data`** reads the app: `object(name)` is the same object API the
   routes use, `position()` is the event log's position, and
-  `changesSince(position)` lists what changed after it.
+  `changesSince(position)` lists what changed after it. The object API also
+  offers `erase(id)` (every event of the record deleted for good) and
+  `redact(id, fields)` (the fields set to null in every event), for retention
+  and short-lived records (ADR 18); a change list reports either as
+  `RecordErased` or `RecordRedacted` on the record.
 
 The web GUI and the TUI show badges and actions from the daemon's `/config`;
 no plugin code runs in either.
@@ -78,7 +82,7 @@ secrets: ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'],
 - **Secrets** arrive in `ctx.secrets`, exactly the declared names: Worker
   secrets on Cloudflare, environment variables on Node. A missing or empty one
   fails loading with an error naming it; names starting with `SPRINTSTER_` are
-  reserved.
+  reserved. Names in `optionalSecrets` follow the same rules, but may be absent.
 
 ## The event log
 

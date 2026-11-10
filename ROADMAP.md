@@ -544,3 +544,26 @@ daemon plugin") and the plugin context carries no secrets
 
 - **Rate limiting** of public routes: the plugin's job, the host's, or
   Cloudflare's rules in front of both.
+
+## Epic: erasing records from the log
+
+**Goal.** Code can remove a record, or some of its fields, from storage for
+good: personal data past a retention limit, short-lived records past their
+use. Design: [ADR 18](./docs/ADR/0018-erasing-records-from-the-log.md).
+
+### Steps
+
+- [x] **1. Store primitive.** `EventStore.rewriteStreams` in every store
+      (memory, SQLite with `secure_delete`, Postgres, Durable Object), in the
+      shared contract tests.
+      *Done when:* each store deletes or rewrites a stream in one transaction,
+      the position still grows, and a moved head changes nothing.
+- [x] **2. `erase` and `redact`** on the object API and to plugins, with the
+      unique claims of the values, reported by `changesSince`.
+      *Done when:* after an erase no event in the log holds the record's
+      values, and the values are free for another record.
+
+### Still open
+
+- **Retention of exports and backups**: copies made before an erase keep the
+  data; a Durable Object keeps 30 days of recovery history.

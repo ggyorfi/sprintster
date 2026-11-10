@@ -30,6 +30,7 @@ lifecycle, a set of **properties** (fields), one or more **list** screens, and
 | `properties` | yes | The fields (at least one). |
 | `lists` | no | Table screens; see [Views and lists](./views-and-lists.md). |
 | `views` | no | Forms; see [Views and lists](./views-and-lists.md). |
+| `hidden` | no | `true` leaves the object out of the menus. Its API and data are unchanged. |
 | `commands` | no | Named status transitions (requires a `statusField` lifecycle). |
 
 ## Route

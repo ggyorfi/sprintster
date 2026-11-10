@@ -131,6 +131,41 @@ export function describeEventStore(
       await store.append(input({ streamId: 'B', streamVersion: 9 }));
       expect(await store.streamHead(0, 'client', 'A')).toBe(5);
     });
+
+    const marker = (streamVersion = 1) => input({ streamType: '__erased', streamId: 'A', streamVersion, eventType: 'RecordErased', payload: {} });
+
+    it('rewriteStreams deletes a stream and moves the position past the deleted last event', async () => {
+      const store = await freshStore();
+      await store.append(input({ streamId: 'B' }));
+      await store.append(input({ streamVersion: 1 }));
+      const last = await store.append(input({ streamVersion: 2 }));
+      const row = await store.rewriteStreams(marker(), [{ partitionId: 0, streamType: 'client', streamId: 'A', expectedVersion: 2, payloads: null }]);
+      expect(await store.findByStream(0, 'client', 'A')).toEqual([]);
+      expect(await store.findByStream(0, 'client', 'B')).toHaveLength(1);
+      expect(Number(row.id)).toBeGreaterThan(Number(last.id));
+      expect(await store.position()).toBe(Number(row.id));
+      expect((await store.findSince(Number(last.id))).map((r) => r.streamType)).toEqual(['__erased']);
+    });
+
+    it('rewriteStreams replaces payloads by event id and leaves the rest', async () => {
+      const store = await freshStore();
+      const a = await store.append(input({ streamVersion: 1, payload: { name: 'Ann', city: 'X' } }));
+      await store.append(input({ streamVersion: 2, payload: { field: 'city', value: 'Y' } }));
+      await store.rewriteStreams(marker(), [{ partitionId: 0, streamType: 'client', streamId: 'A', expectedVersion: 2, payloads: new Map([[a.id, { name: null, city: 'X' }]]) }]);
+      expect((await store.findByStream(0, 'client', 'A')).map((r) => r.payload)).toEqual([{ name: null, city: 'X' }, { field: 'city', value: 'Y' }]);
+    });
+
+    it('rewriteStreams refuses a stream whose head moved, and changes nothing', async () => {
+      const store = await freshStore();
+      await store.append(input({ streamVersion: 1 }));
+      await store.append(input({ streamVersion: 2 }));
+      const before = await store.position();
+      await expect(
+        store.rewriteStreams(marker(), [{ partitionId: 0, streamType: 'client', streamId: 'A', expectedVersion: 1, payloads: null }]),
+      ).rejects.toBeInstanceOf(UniqueViolationError);
+      expect(await store.findByStream(0, 'client', 'A')).toHaveLength(2);
+      expect(await store.position()).toBe(before);
+    });
   });
 }
 
@@ -168,6 +203,17 @@ export function describeStateStore(
       ).rejects.toThrow('refused');
       expect(await store.streamHead(0, 'client', 'A')).toBe(1);
       expect(await store.states.getState(0, 'client', 'A')).toMatchObject({ version: 1, state: { n: 1 } });
+    });
+
+    it('rewriteStreams stores the given state, and removes it with the stream', async () => {
+      const store = await freshStore();
+      await store.states.appendWithState(input(), () => ({ name: 'Ann' }));
+      const rewrite = { partitionId: 0, streamType: 'client', streamId: 'A', expectedVersion: 1 };
+      await store.rewriteStreams(input({ streamType: '__erased', eventType: 'RecordRedacted' }), [{ ...rewrite, payloads: new Map(), state: { name: null } }]);
+      expect(await store.states.getState(0, 'client', 'A')).toEqual({ streamId: 'A', version: 1, state: { name: null } });
+      await store.rewriteStreams(input({ streamType: '__erased', streamVersion: 2, eventType: 'RecordErased' }), [{ ...rewrite, payloads: null }]);
+      expect(await store.states.getState(0, 'client', 'A')).toBeNull();
+      expect(await store.states.statesStale(0, 'client')).toBe(false);
     });
 
     it('keeps the old state when the append loses a version race', async () => {

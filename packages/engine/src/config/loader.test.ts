@@ -612,3 +612,27 @@ describe('loadConfig: reserved timestamp names (ADR 17)', () => {
     }
   });
 });
+
+describe('loadConfig: column sums', () => {
+  function withSum(column: Record<string, unknown>): any {
+    const raw = clone();
+    const obj = raw.objects[0];
+    obj.properties.push({ name: 'rows', type: 'array', item: { properties: [{ name: 'n', type: 'integer' }, { name: 't', type: 'text' }] } });
+    obj.lists[0].columns.push({ property: obj.lists[0].columns[0].property, ...column });
+    return raw;
+  }
+
+  it('accepts an integer item property and a condition on a real property', () => {
+    expect(() => loadConfig(withSum({ sumOf: 'rows.n', sumWhen: { property: 'rows', notEquals: '' } }))).not.toThrow();
+  });
+
+  it('refuses a sum of anything but an integer item property', () => {
+    expect(() => loadConfig(withSum({ sumOf: 'rows.t' }))).toThrow(/sumOf 'rows.t'/);
+    expect(() => loadConfig(withSum({ sumOf: 'nope.n' }))).toThrow(/sumOf 'nope.n'/);
+  });
+
+  it('refuses a condition without a sum, or on a missing property', () => {
+    expect(() => loadConfig(withSum({ sumWhen: { property: 'rows', equals: 'x' } }))).toThrow(/sumWhen needs sumOf/);
+    expect(() => loadConfig(withSum({ sumOf: 'rows.n', sumWhen: { property: 'ghost', equals: 'x' } }))).toThrow(/'ghost'/);
+  });
+});

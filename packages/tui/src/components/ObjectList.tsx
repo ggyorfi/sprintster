@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { formatCell, listColumns } from '@sprintster/engine';
+import { columnValue, formatCell, listColumns } from '@sprintster/engine';
 import { THEME } from '../theme.js';
 
 const CAP_LEFT = '\u{E0B6}';
@@ -44,7 +44,7 @@ export function ObjectList({ rows, columns, idField, selectedIndex, width, scrol
         const isSel = i === selectedIndex;
         const key = String(row[idField]);
         const cells = columns.map((col) => ({
-          text: pad(formatCell(col.property, row[col.key], col.suffix), col.width),
+          text: pad(formatCell(col.property, columnValue(col, row), col.suffix), col.width),
           dim: col.property.type === 'id',
         }));
         const rowText = cells.map((cell) => cell.text).join('');

@@ -1,7 +1,8 @@
 import { formatGBP, fromPence } from '../money/index.js';
 import { formatIsoMinute } from '../time/index.js';
-import type { ObjectConfig, PropertyConfig } from '../config/schema.js';
+import type { ObjectConfig, PropertyConfig, VisibleWhen } from '../config/schema.js';
 import { displayText } from './locale.js';
+import { conditionHolds } from './view.js';
 
 export function formatCell(property: PropertyConfig, value: unknown, suffix = ''): string {
   if (value === null || value === undefined) return '';
@@ -42,6 +43,8 @@ export interface ListColumnSpec {
   width: number;
   suffix: string;
   thumbnail: boolean;
+  sumOf: { array: string; item: string } | null;
+  sumWhen: VisibleWhen | null;
 }
 
 export type ObjectResolver = (name: string) => ObjectConfig | undefined;
@@ -72,6 +75,8 @@ export function listColumns(
         width: col.width ?? DEFAULT_COLUMN_WIDTH,
         suffix: col.suffix ?? '',
         thumbnail: false,
+        sumOf: null,
+        sumWhen: null,
       };
     }
     const property: PropertyConfig = byName.get(col.property) ?? { name: col.property, type: 'text' };
@@ -82,8 +87,19 @@ export function listColumns(
       width: col.width ?? DEFAULT_COLUMN_WIDTH,
       suffix: col.suffix ?? '',
       thumbnail: col.thumbnail === true,
+      sumOf: col.sumOf === undefined ? null : { array: col.sumOf.slice(0, col.sumOf.indexOf('.')), item: col.sumOf.slice(col.sumOf.indexOf('.') + 1) },
+      sumWhen: col.sumWhen ?? null,
     };
   });
+}
+
+// What a list cell shows: the row's value, or the total of an array column while its condition holds.
+export function columnValue(col: ListColumnSpec, row: Readonly<Record<string, unknown>>): unknown {
+  if (col.sumOf === null) return row[col.key];
+  if (col.sumWhen !== null && !conditionHolds(col.sumWhen, { [col.sumWhen.property]: String(row[col.sumWhen.property] ?? '') })) return row[col.key];
+  const { array, item } = col.sumOf;
+  const items = row[array];
+  return Array.isArray(items) ? items.reduce((sum: number, it) => sum + (Number((it as Record<string, unknown> | null)?.[item]) || 0), 0) : 0;
 }
 
 // The blob to show for an image value in a list or picker: its thumbnail when it has one, else the image itself.

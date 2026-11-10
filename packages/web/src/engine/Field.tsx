@@ -9,6 +9,11 @@ const CodeEditor = lazy(() => import('../ui/CodeEditor.js').then((m) => ({ defau
 const MarkdownEditor = lazy(() => import('../ui/MarkdownEditor.js').then((m) => ({ default: m.MarkdownEditor })));
 const ComboEditor = lazy(() => import('../ui/ComboEditor.js').then((m) => ({ default: m.ComboEditor })));
 
+const uploadRecord = async (file: File): Promise<SelectOption> => {
+  const { id, title, thumb } = await attachAsset(file, { titled: true });
+  return { value: id, label: title, thumb };
+};
+
 const MISSING = String.fromCharCode(0x2014);
 
 export interface FieldProps {
@@ -18,6 +23,8 @@ export interface FieldProps {
   refOptions?: SelectOption[] | undefined;
   // The ref's targets carry pictures: pick from cards rather than a typeahead.
   refVisual?: boolean | undefined;
+  // The ref's target is the app's assets object, so its dialog can upload new ones.
+  refUpload?: boolean | undefined;
   display?: string | undefined;
 }
 
@@ -34,7 +41,7 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function Field({ spec, value, onChange, refOptions, refVisual, display }: FieldProps) {
+export function Field({ spec, value, onChange, refOptions, refVisual, refUpload, display }: FieldProps) {
   const { property, label, placeholder } = spec;
 
   if (!spec.editable) {
@@ -65,10 +72,10 @@ export function Field({ spec, value, onChange, refOptions, refVisual, display }:
     case 'image':
       return <ImageField label={label} value={value} onChange={onChange} upload={uploadAsset} assetUrl={assetUrl} />;
     case 'ref':
-      if (refVisual === true) return <RefCards label={label} value={value} onChange={onChange} options={refOptions ?? []} />;
+      if (refVisual === true) return <RefCards label={label} value={value} onChange={onChange} options={refOptions ?? []} upload={refUpload === true ? uploadRecord : undefined} />;
       return <RefPicker label={label} value={value} onChange={onChange} options={refOptions ?? []} placeholder="Search..." />;
     case 'refs':
-      if (refVisual === true) return <RefCards label={label} value={value} onChange={onChange} options={refOptions ?? []} multiple />;
+      if (refVisual === true) return <RefCards label={label} value={value} onChange={onChange} options={refOptions ?? []} multiple upload={refUpload === true ? uploadRecord : undefined} />;
       return <RefPicker label={label} value={value} onChange={onChange} options={refOptions ?? []} multiple placeholder="Search..." />;
     case 'money':
       return (

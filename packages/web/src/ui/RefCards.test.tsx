@@ -66,3 +66,32 @@ describe('RefCards (ref)', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
+
+describe('RefCards upload', () => {
+  const png = () => new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0, 0, 0, 0, 0])], 'new-ring.png', { type: 'image/png' });
+
+  it('uploads into the dialog, preselected, and adds it with Add', async () => {
+    const onChange = vi.fn();
+    const upload = vi.fn(async () => ({ value: 'n1', label: 'new-ring', thumb: '/assets/n' }));
+    render(<RefCards label="Images" value='["a"]' options={options} onChange={onChange} multiple upload={upload} />);
+    await userEvent.click(screen.getByRole('button', { name: /Add/ }));
+    await userEvent.upload(screen.getByLabelText('Upload files'), png());
+    expect(await within(screen.getByRole('dialog')).findByRole('button', { name: /new-ring/, pressed: true })).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add 1' }));
+    expect(onChange).toHaveBeenLastCalledWith('["a","n1"]');
+  });
+
+  it('reports a failed upload and offers no upload without the prop', async () => {
+    const upload = vi.fn(async () => {
+      throw new Error('too big');
+    });
+    const { unmount } = render(<RefCards label="Images" value="[]" options={options} onChange={() => {}} multiple upload={upload} />);
+    await userEvent.click(screen.getByRole('button', { name: /Add/ }));
+    await userEvent.upload(screen.getByLabelText('Upload files'), png());
+    expect(await screen.findByRole('alert')).toHaveTextContent('new-ring.png: too big');
+    unmount();
+    render(<RefCards label="Images" value="[]" options={options} onChange={() => {}} multiple />);
+    await userEvent.click(screen.getByRole('button', { name: /Add/ }));
+    expect(screen.queryByLabelText('Upload files')).toBeNull();
+  });
+});

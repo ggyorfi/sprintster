@@ -45,6 +45,19 @@ export interface StateStore {
   replaceStates(partitionId: number, streamType: string, states: readonly StoredState[]): Promise<void>;
 }
 
+// One stream's part of an erasure (ADR 18).
+export interface StreamRewrite {
+  partitionId: number;
+  streamType: string;
+  streamId: string;
+  // The stream's head when the rewrite was planned; any other head refuses the whole call.
+  expectedVersion: number;
+  // New payloads by event id, or null to delete the stream's events and state.
+  payloads: ReadonlyMap<string, unknown> | null;
+  // The stream's state after new payloads, for a store that keeps states.
+  state?: unknown;
+}
+
 export interface EventStore {
   append(input: EventInput): Promise<EventRow>;
   findByStream(
@@ -66,6 +79,8 @@ export interface EventStore {
   position(): Promise<number>;
   // Every event after a position, in log order.
   findSince(position: number): Promise<EventRow[]>;
+  // One transaction: appends `marker` first, so the position still only grows, then applies every rewrite. A head that moved throws UniqueViolationError.
+  rewriteStreams(marker: EventInput, rewrites: readonly StreamRewrite[]): Promise<EventRow>;
   states?: StateStore;
 }
 
@@ -178,6 +193,26 @@ export class InMemoryEventStore implements EventStore {
 
   async position(): Promise<number> {
     return this.nextId - 1;
+  }
+
+  async rewriteStreams(marker: EventInput, rewrites: readonly StreamRewrite[]): Promise<EventRow> {
+    for (const r of rewrites) {
+      if ((await this.streamHead(r.partitionId, r.streamType, r.streamId)) !== r.expectedVersion) throw new UniqueViolationError();
+    }
+    const row = await this.append(marker);
+    for (const r of rewrites) {
+      const inStream = (e: EventRow) => e.partitionId === r.partitionId && e.streamType === r.streamType && e.streamId === r.streamId;
+      const states = this.statesOf(r.partitionId, r.streamType);
+      if (r.payloads === null) {
+        this.rows = this.rows.filter((e) => !inStream(e));
+        states.delete(r.streamId);
+        continue;
+      }
+      const payloads = r.payloads;
+      this.rows = this.rows.map((e) => (inStream(e) && payloads.has(e.id) ? { ...e, payload: payloads.get(e.id) } : e));
+      if ('state' in r) states.set(r.streamId, { streamId: r.streamId, version: r.expectedVersion, state: r.state });
+    }
+    return row;
   }
 
   async findSince(position: number): Promise<EventRow[]> {

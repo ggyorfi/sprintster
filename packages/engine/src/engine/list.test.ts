@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatCell, listColumns, filterByConfig } from './list.js';
+import { columnValue, formatCell, listColumns, filterByConfig } from './list.js';
 import { fixtureClientConfig, fixtureRefConfig, fixtureMemoObject } from '../config/fixture.js';
 import type { PropertyConfig } from '../config/schema.js';
 
@@ -109,5 +109,24 @@ describe('filterByConfig', () => {
 
   it('does not match the id when idPrefix is off', () => {
     expect(filterByConfig(rows, 'bbbb', { fields: ['name'] })).toEqual([]);
+  });
+});
+
+describe('columnValue', () => {
+  const obj = {
+    name: 'product',
+    properties: [
+      { name: 'stockBy', type: 'enum', values: ['In total', 'Per variant'] },
+      { name: 'stock', type: 'integer' },
+      { name: 'rows', type: 'array', item: { properties: [{ name: 'stock', type: 'integer' }] } },
+    ],
+    lists: [{ name: 'default', columns: [{ property: 'stock', sumOf: 'rows.stock', sumWhen: { property: 'stockBy', equals: 'Per variant' } }] }],
+  } as unknown as Parameters<typeof listColumns>[0];
+  const [col] = listColumns(obj);
+
+  it('totals the array while the condition holds, and shows the property otherwise', () => {
+    expect(columnValue(col!, { stockBy: 'Per variant', stock: 9, rows: [{ stock: 2 }, { stock: 3 }, { stock: null }] })).toBe(5);
+    expect(columnValue(col!, { stockBy: 'Per variant', stock: 9, rows: null })).toBe(0);
+    expect(columnValue(col!, { stockBy: 'In total', stock: 9, rows: [{ stock: 2 }] })).toBe(9);
   });
 });

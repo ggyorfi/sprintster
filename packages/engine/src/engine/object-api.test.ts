@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { createObjectApi, rebuildObjectStates } from './object-api.js';
+import { changesSince } from '../events/log.js';
 import {
   fixtureClientConfig,
   fixtureStatusObject,
@@ -650,5 +651,79 @@ describe('record timestamps (ADR 17)', () => {
     await store.states.replaceStates(0, 'client', [{ streamId: created.id, version: 1, state: old }]);
     const fresh = createObjectApi<Record<string, unknown> & { id: string }>(store, fixtureClientConfig);
     expect(await fresh.get(created.id)).toMatchObject({ createdAt: created.createdAt, updatedAt: created.updatedAt });
+  });
+});
+
+describe('createObjectApi: erase and redact (ADR 18)', () => {
+  const person: ObjectConfig = {
+    name: 'person',
+    title: 'Person',
+    titlePlural: 'People',
+    route: 'people',
+    lifecycle: { softDelete: 'removed' },
+    properties: [
+      { name: 'id', type: 'id', strategy: 'uuid', system: true },
+      { name: 'email', type: 'text', nullable: true, validation: { unique: true } },
+      { name: 'phone', type: 'text', nullable: true },
+      { name: 'total', type: 'integer' },
+      { name: 'removed', type: 'boolean', system: true },
+    ],
+    lists: [],
+  };
+  type Person = Record<string, unknown> & { id: string };
+
+  function build() {
+    const store = new InMemoryEventStore();
+    return { store, api: createObjectApi<Person>(store, person) };
+  }
+  const payloads = async (store: InMemoryEventStore, type: string, id: string) => (await store.findByStream(0, type, id)).map((e) => e.payload);
+  const claimStream = (value: string) => JSON.stringify(['person', 'email', value]);
+
+  it('erase deletes every event and frees the unique values the record held', async () => {
+    const { store, api } = build();
+    await api.add({ id: ID_A, email: 'old@x.test', phone: '1', total: 5 });
+    await api.update(ID_A, { email: 'new@x.test' });
+    const before = await store.position();
+    await api.erase(ID_A);
+    expect(await api.get(ID_A)).toBeNull();
+    expect(await api.list()).toEqual([]);
+    expect(await store.findByStream(0, 'person', ID_A)).toEqual([]);
+    expect(await store.findByStream(0, '__unique', claimStream('old@x.test'))).toEqual([]);
+    expect(await store.findByStream(0, '__unique', claimStream('new@x.test'))).toEqual([]);
+    expect(JSON.stringify(await store.findSince(0))).not.toContain('x.test');
+    expect(await changesSince(store, before)).toMatchObject([{ object: 'person', id: ID_A, event: 'RecordErased' }]);
+    await api.add({ id: ID_B, email: 'new@x.test', phone: null, total: 1 });
+    await api.add({ id: ID_A, email: 'old@x.test', phone: null, total: 2 });
+  });
+
+  it('erase leaves a claim another record holds now', async () => {
+    const { store, api } = build();
+    await api.add({ id: ID_A, email: 'shared@x.test', phone: null, total: 1 });
+    await api.update(ID_A, { email: 'other@x.test' });
+    await api.add({ id: ID_B, email: 'shared@x.test', phone: null, total: 1 });
+    await api.erase(ID_A);
+    expect(await store.streamHead(0, '__unique', claimStream('shared@x.test'))).toBeGreaterThan(0);
+    await expect(api.add({ id: ID_UNKNOWN, email: 'shared@x.test', phone: null, total: 1 })).rejects.toBeInstanceOf(UniqueFieldError);
+  });
+
+  it('redact nulls the fields in every event and keeps the rest of the record', async () => {
+    const { store, api } = build();
+    await api.add({ id: ID_A, email: 'a@x.test', phone: '+44 1', total: 5 });
+    await api.update(ID_A, { phone: '+44 2', total: 6 });
+    const record = await api.redact(ID_A, ['email', 'phone']);
+    expect(record).toMatchObject({ id: ID_A, email: null, phone: null, total: 6 });
+    expect(await api.get(ID_A)).toMatchObject({ email: null, phone: null, total: 6 });
+    expect(JSON.stringify(await payloads(store, 'person', ID_A))).not.toMatch(/x\.test|\+44/);
+    expect(await store.findByStream(0, '__unique', claimStream('a@x.test'))).toEqual([]);
+    await rebuildObjectStates(store, person);
+    expect(await api.get(ID_A)).toMatchObject({ email: null, phone: null, total: 6 });
+  });
+
+  it('redact refuses the id, system and unknown fields, and a missing record', async () => {
+    const { api } = build();
+    await api.add({ id: ID_A, email: null, phone: null, total: 1 });
+    for (const fields of [[], ['id'], ['removed'], ['nope']]) await expect(api.redact(ID_A, fields)).rejects.toBeInstanceOf(InvalidStateError);
+    await expect(api.redact(ID_UNKNOWN, ['phone'])).rejects.toBeInstanceOf(NotFoundError);
+    await expect(api.erase(ID_UNKNOWN)).rejects.toBeInstanceOf(NotFoundError);
   });
 });

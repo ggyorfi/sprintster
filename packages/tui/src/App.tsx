@@ -112,7 +112,7 @@ function panelTitle(obj: ObjectConfig, viewName: string, mode: ViewMode): string
 export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
   const CONTEXTS = useMemo<ReadonlyArray<ContextDef>>(
     () => [
-      ...appConfig.objects.map((obj) => ({
+      ...appConfig.objects.filter((obj) => obj.hidden !== true).map((obj) => ({
         id: obj.name,
         label: obj.titlePlural,
         hotkey: obj.titlePlural.charAt(0).toLowerCase(),

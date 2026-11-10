@@ -20,6 +20,7 @@ function fresh(): Store {
     streamHead: (...args) => inObject((s) => s.streamHead(...args)),
     position: () => inObject((s) => s.position()),
     findSince: (...args) => inObject((s) => s.findSince(...args)),
+    rewriteStreams: (...args) => inObject((s) => s.rewriteStreams(...args)),
     states: {
       appendWithState: (input, project) => inObject((s) => s.states.appendWithState(input, project)),
       getState: (...args) => inObject((s) => s.states.getState(...args)),

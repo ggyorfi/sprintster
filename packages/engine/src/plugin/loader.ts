@@ -101,13 +101,15 @@ export function readPluginSecrets(
   pluginName: string,
   names: ReadonlyArray<string>,
   read: (name: string) => string | undefined,
+  optional: ReadonlyArray<string> = [],
 ): Readonly<Record<string, string>> {
   const out: Record<string, string> = {};
-  for (const name of names) {
+  for (const name of [...names, ...optional]) {
     if (name.startsWith(RESERVED_SECRET_PREFIX)) {
       throw new Error(`plugin '${pluginName}' declares secret '${name}': names starting with ${RESERVED_SECRET_PREFIX} are reserved`);
     }
     const value = read(name);
+    if (optional.includes(name) && (value === undefined || value === '')) continue;
     if (value === undefined || value === '') throw new Error(`plugin '${pluginName}' needs secret '${name}', which is not set`);
     out[name] = value;
   }

@@ -128,6 +128,13 @@ describe('plugin secrets', () => {
     await expect(load(keyed(['EMPTY_KEY'], []))).rejects.toThrow(/EMPTY_KEY/);
   });
 
+  it('leaves out an optional secret that is not set and hands over one that is', async () => {
+    const seen: Array<Readonly<Record<string, string>>> = [];
+    const mod: PluginModule = { plugin: { ...counter, name: 'plugin-keyed', namespace: 'keyed', optionalSecrets: ['SHOP_KEY', 'NOT_SET'], init: (ctx) => void seen.push(ctx.secrets) } };
+    await load(mod);
+    expect(seen).toEqual([{ SHOP_KEY: 'sk_test' }]);
+  });
+
   it('refuses names the engine reserves', async () => {
     await expect(load(keyed(['SPRINTSTER_PASSWORD'], []))).rejects.toThrow(/reserved/);
   });

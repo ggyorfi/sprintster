@@ -128,6 +128,14 @@ export const Lifecycle = z.union([
 ]);
 export type Lifecycle = z.infer<typeof Lifecycle>;
 
+// Shows a field or fieldset only while another property of the same record holds this value.
+const ConditionValue = z.union([z.string(), z.number(), z.boolean()]);
+export const VisibleWhen = z.union([
+  z.object({ property: z.string().min(1), equals: ConditionValue }).strict(),
+  z.object({ property: z.string().min(1), notEquals: ConditionValue }).strict(),
+]);
+export type VisibleWhen = z.infer<typeof VisibleWhen>;
+
 export const ColumnConfig = z
   .object({
     property: z.string().min(1),
@@ -136,6 +144,9 @@ export const ColumnConfig = z
     suffix: z.string().optional(),
     // Shows the image of an image property, or of the first record a ref/refs property points at, as a small picture.
     thumbnail: z.boolean().optional(),
+    // "<array>.<integer item property>": shows the items' total instead of the column's property, while `sumWhen` holds (always without one).
+    sumOf: z.string().min(1).optional(),
+    sumWhen: VisibleWhen.optional(),
   })
   .strict();
 
@@ -167,14 +178,6 @@ export const ListConfig = z
   })
   .strict();
 export type ListConfig = z.infer<typeof ListConfig>;
-
-// Shows a field or fieldset only while another property of the same record holds this value.
-const ConditionValue = z.union([z.string(), z.number(), z.boolean()]);
-export const VisibleWhen = z.union([
-  z.object({ property: z.string().min(1), equals: ConditionValue }).strict(),
-  z.object({ property: z.string().min(1), notEquals: ConditionValue }).strict(),
-]);
-export type VisibleWhen = z.infer<typeof VisibleWhen>;
 
 export const ViewFieldConfig = z
   .object({
@@ -246,6 +249,8 @@ export const ObjectConfig = z
     lists: z.array(ListConfig).default([]),
     views: z.array(ViewConfig).optional(),
     commands: z.array(CommandConfig).optional(),
+    // Left out of the frontends' menus; the object and its API are otherwise unchanged.
+    hidden: z.boolean().optional(),
   })
   .strict();
 export type ObjectConfig = z.infer<typeof ObjectConfig>;

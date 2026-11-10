@@ -5,6 +5,7 @@ import {
   type EventStore,
   type StateStore,
   type StoredState,
+  type StreamRewrite,
 } from '@sprintster/engine';
 
 type SqlValue = string | number | null;
@@ -179,6 +180,44 @@ export function createDurableObjectEventStore(storage: DurableObjectSqlStorage):
 
     async findSince(position) {
       return sql.exec<Row>(`SELECT * FROM events WHERE id > ? ORDER BY id ASC`, position).toArray().map(toEventRow);
+    },
+    async rewriteStreams(marker: EventInput, rewrites: readonly StreamRewrite[]) {
+      return mapUnique(() =>
+        storage.transactionSync(() => {
+          for (const r of rewrites) {
+            const head = sql
+              .exec<{ head: number }>(
+                `SELECT COALESCE(MAX(stream_version), 0) AS head FROM events WHERE partition_id = ? AND stream_type = ? AND stream_id = ?`,
+                r.partitionId,
+                r.streamType,
+                r.streamId,
+              )
+              .one().head;
+            if (head !== r.expectedVersion) throw new UniqueViolationError();
+          }
+          // First, so the new id is above every id deleted below: plain rowids would otherwise be reused.
+          const row = insertEvent(marker);
+          for (const r of rewrites) {
+            if (r.payloads === null) {
+              sql.exec(`DELETE FROM events WHERE partition_id = ? AND stream_type = ? AND stream_id = ?`, r.partitionId, r.streamType, r.streamId);
+              sql.exec(`DELETE FROM states WHERE partition_id = ? AND stream_type = ? AND stream_id = ?`, r.partitionId, r.streamType, r.streamId);
+              continue;
+            }
+            for (const [id, payload] of r.payloads) {
+              sql.exec(
+                `UPDATE events SET payload = ? WHERE id = ? AND partition_id = ? AND stream_type = ? AND stream_id = ?`,
+                JSON.stringify(payload),
+                Number(id),
+                r.partitionId,
+                r.streamType,
+                r.streamId,
+              );
+            }
+            if ('state' in r) upsertState(r.partitionId, r.streamType, r.streamId, r.expectedVersion, r.state);
+          }
+          return row;
+        }),
+      );
     },
 
     states: {

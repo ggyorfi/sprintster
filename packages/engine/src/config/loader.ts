@@ -32,6 +32,7 @@ function validateSemantics(config: Config): void {
       checkCommands(obj);
       checkListActions(obj);
       checkThumbnails(obj, objectsByName);
+      checkColumnSums(obj);
     }
   }
 }
@@ -279,6 +280,23 @@ function checkThumbnails(obj: ObjectConfig, objectsByName: Map<string, ObjectCon
       const target = objectsByName.get(prop.target);
       if (target !== undefined && !target.properties.some((p) => p.type === 'image')) {
         throw new Error(`${where} is a thumbnail, but its target '${prop.target}' has no image property`);
+      }
+    }
+  }
+}
+
+function checkColumnSums(obj: ObjectConfig): void {
+  for (const list of obj.lists) {
+    for (const col of list.columns) {
+      const where = `list column '${obj.name}.${list.name}.${col.property}'`;
+      if (col.sumWhen !== undefined && col.sumOf === undefined) throw new Error(`${where}: sumWhen needs sumOf`);
+      if (col.sumOf === undefined) continue;
+      const [arrayName, itemName] = col.sumOf.split('.');
+      const array = obj.properties.find((p) => p.name === arrayName);
+      const item = array?.type === 'array' ? array.item.properties.find((p) => p.name === itemName) : undefined;
+      if (item?.type !== 'integer') throw new Error(`${where}: sumOf '${col.sumOf}' must name an array property and an integer property of its items`);
+      if (col.sumWhen !== undefined && !obj.properties.some((p) => p.name === col.sumWhen?.property)) {
+        throw new Error(`${where}: sumWhen names '${col.sumWhen.property}', which is not a property of '${obj.name}'`);
       }
     }
   }

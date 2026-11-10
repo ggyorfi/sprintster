@@ -38,6 +38,12 @@ A list is a table over an object's records.
   property points at, which must have an image property. The web GUI shows the
   thumbnail stored with the image (made at upload), or the image itself for one
   uploaded without. The terminal list leaves thumbnail columns out.
+- **`sumOf: "<array>.<item property>"`** shows the total of an integer item
+  property of an array instead of the column's property, in both frontends.
+  With **`sumWhen`** (the `visibleWhen` shape, read from the row) the total is
+  shown only while the condition holds and the property otherwise, e.g. a
+  stock column that totals a per-variant table only for products stocked per
+  variant.
 - **`search`**: `fields` are matched case-insensitively; `idPrefix: true` also
   matches on an id prefix.
 - **`filters`**: quick filters by a property (typically an `enum`).

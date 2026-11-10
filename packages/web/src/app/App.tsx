@@ -53,7 +53,7 @@ export function App() {
           <span className={styles.logo}>{appTitle().charAt(0).toUpperCase()}</span> {appTitle()}
         </div>
         <nav className={styles.nav}>
-          {objects.map((o) => (
+          {objects.filter((o) => o.hidden !== true).map((o) => (
             <button
               key={o.name}
               type="button"

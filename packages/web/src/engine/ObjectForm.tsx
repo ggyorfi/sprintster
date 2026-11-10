@@ -345,6 +345,7 @@ export function ObjectFields({ form, locales = true }: { form: ObjectFormState; 
                   onChange={(v) => setField(spec.path, v)}
                   refOptions={refData[spec.path]?.options}
                   refVisual={refData[spec.path]?.visual === true}
+                  refUpload={(spec.property.type === 'ref' || spec.property.type === 'refs') && spec.property.target === appConfig.assets}
                   display={displayFor(spec)}
                 />
               ),

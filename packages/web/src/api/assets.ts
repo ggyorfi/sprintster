@@ -1,4 +1,4 @@
-import { appConfig, objectRoute } from '@sprintster/engine';
+import { appConfig, isTranslated, objectRoute } from '@sprintster/engine';
 import { resolveApiBaseUrl, type ApiEnv } from './config.js';
 import { authFetch } from './auth.js';
 
@@ -61,7 +61,7 @@ export function displayedAssetUrl(src: string, env?: ApiEnv): string {
 }
 
 // A body image points at the asset record, not at the bytes, so inserting one has to create that record.
-export async function attachAsset(file: File): Promise<{ id: string }> {
+export async function attachAsset(file: File, opts: { titled?: boolean } = {}): Promise<{ id: string; title: string; thumb: string | undefined }> {
   const name = appConfig.assets;
   const obj = appConfig.objects.find((o) => o.name === name);
   const fileProperty = obj?.properties.find((p) => p.type === 'image');
@@ -70,14 +70,19 @@ export async function attachAsset(file: File): Promise<{ id: string }> {
   }
   const asset = await uploadAsset(file);
   const id = globalThis.crypto.randomUUID();
+  const title = file.name.replace(/\.[^.]+$/, '');
+  // The record is otherwise nameless, so a picker could only label it by its id.
+  const textProperty = opts.titled === true ? obj.properties.find((p) => p.type === 'text' && p.system !== true) : undefined;
+  const named =
+    textProperty === undefined ? {} : { [textProperty.name]: isTranslated(textProperty) ? { [appConfig.locales?.[0] ?? 'en']: title } : title };
   const res = await authFetch(`${resolveApiBaseUrl()}/${objectRoute(obj)}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ id, [fileProperty.name]: asset }),
+    body: JSON.stringify({ id, [fileProperty.name]: asset, ...named }),
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { message?: string } | null;
     throw new Error(body?.message ?? `could not create the ${obj.name} record (${res.status})`);
   }
-  return { id };
+  return { id, title, thumb: assetUrl(asset.thumb ?? asset.hash) };
 }

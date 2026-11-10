@@ -1,8 +1,8 @@
 import type { z } from 'zod';
-import { AlreadyExistsError, InvalidStateError, NotFoundError, UniqueFieldError } from '../errors/api-error.js';
+import { AlreadyExistsError, ConcurrencyError, InvalidStateError, NotFoundError, UniqueFieldError } from '../errors/api-error.js';
 import { createEntityApi, type EntityApi } from '../entity-api/factory.js';
 import { applyUpdate } from './diff.js';
-import { SYSTEM_ACTOR, UniqueViolationError, type EventStore } from '../events/store.js';
+import { SYSTEM_ACTOR, UniqueViolationError, type EventInput, type EventRow, type EventStore, type StreamRewrite } from '../events/store.js';
 import { compileCreateSchema, compileUpdateSchema } from '../config/compile.js';
 import type { CommandConfig, ObjectConfig } from '../config/schema.js';
 import type { PropertyConfig } from '../config/schema.js';
@@ -11,6 +11,7 @@ import { commandEventInfos, lifecycleInfo } from './lifecycle.js';
 import { singletonId, synthesizeSingleton } from './singleton.js';
 import { hasTimestamps, makeReducer } from './reducer.js';
 import { nowAsIso } from '../time/index.js';
+import { ERASED_STREAM_TYPE } from '../events/log.js';
 
 // Internal stream type backing daemon-allocated `sequence` fields; one stream per object.field (+ scope later).
 const SEQUENCE_STREAM_TYPE = '__seq';
@@ -24,6 +25,10 @@ export interface ObjectApi<State extends { id: string }> {
   update(id: string, input: unknown, actor?: string): Promise<State>;
   remove?(id: string, actor?: string): Promise<State>;
   runCommand(id: string, name: string, actor?: string): Promise<State>;
+  // ADR 18: deletes every event of the record for good.
+  erase(id: string, actor?: string): Promise<void>;
+  // ADR 18: sets the fields to null in every event of the record.
+  redact(id: string, fields: readonly string[], actor?: string): Promise<State>;
   get(id: string): Promise<State | null>;
   list(): Promise<State[]>;
   requireGet(id: string): Promise<State>;
@@ -70,10 +75,11 @@ export function createObjectApi<State extends { id: string }>(
   const uniqueByName = new Map(uniqueFields.map((u) => [u.name, u] as const));
   const commandByName = new Map(commandEventInfos(obj).map((ce) => [ce.command.name, ce] as const));
 
+  const reducer = makeReducer<State>(obj);
   const base = createEntityApi<State>(store, {
     partitionId,
     streamType: obj.name,
-    reducer: makeReducer<State>(obj),
+    reducer,
     isCurrent: hasTimestamps,
   });
 
@@ -356,8 +362,102 @@ export function createObjectApi<State extends { id: string }>(
     });
   }
 
+  function redactedPayload(event: EventRow, fields: readonly string[]): unknown {
+    const p = event.payload as Record<string, unknown>;
+    if (event.eventType === names.added) {
+      const hits = fields.filter((f) => f in p);
+      return hits.length === 0 ? event.payload : { ...p, ...Object.fromEntries(hits.map((f) => [f, null])) };
+    }
+    if (event.eventType === names.fieldChanged && fields.includes(String(p['field']))) return { ...p, value: null };
+    return event.payload;
+  }
+
+  // Every value of the fields the record ever held, by the claim stream that records it.
+  function heldClaims(events: readonly EventRow[], fields: readonly string[] | null): Map<string, Claim> {
+    const held = new Map<string, Claim>();
+    for (const u of uniqueFields) {
+      if (fields !== null && !fields.includes(u.name)) continue;
+      for (const e of events) {
+        const p = e.payload as Record<string, unknown>;
+        const value = e.eventType === names.added ? p[u.name] : e.eventType === names.fieldChanged && p['field'] === u.name ? p['value'] : undefined;
+        if (isClaimable(value)) held.set(uniqueStreamId(u.name, value), { field: u.name, value });
+      }
+    }
+    return held;
+  }
+
+  // ADR 18: one transaction rewrites the record (deleted when `fields` is null) and deletes the claims of its values.
+  async function rewriteRecord(id: string, fields: readonly string[] | null, actor: string): Promise<State | null> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const current = await base.findOneById(id);
+      const events = await store.findByStream(partitionId, obj.name, id);
+      const last = events[events.length - 1];
+      if (last === undefined) throw new NotFoundError(obj.name, id);
+      const live = current !== null && !(kind === 'softDelete' && lifecycleField !== null && (current as Record<string, unknown>)[lifecycleField] === true);
+      const rewrites: StreamRewrite[] = [];
+      for (const [streamId, c] of heldClaims(events, fields)) {
+        const claimHead = await store.streamHead(partitionId, UNIQUE_STREAM_TYPE, streamId);
+        const ownsNow = live && normalizeUnique(c.field, (current as Record<string, unknown>)[c.field]) === normalizeUnique(c.field, c.value);
+        // Held by another record now: its claim, not ours to delete.
+        if (claimHead % 2 === 1 && !ownsNow) continue;
+        rewrites.push({ partitionId, streamType: UNIQUE_STREAM_TYPE, streamId, expectedVersion: claimHead, payloads: null });
+      }
+      let state: State | null = null;
+      if (fields === null) {
+        rewrites.push({ partitionId, streamType: obj.name, streamId: id, expectedVersion: last.streamVersion, payloads: null });
+      } else {
+        const payloads = new Map<string, unknown>();
+        for (const e of events) {
+          const payload = redactedPayload(e, fields);
+          if (payload !== e.payload) payloads.set(e.id, payload);
+          state = reducer(state, { ...e, payload });
+        }
+        rewrites.push({ partitionId, streamType: obj.name, streamId: id, expectedVersion: last.streamVersion, payloads, ...(store.states !== undefined ? { state } : {}) });
+      }
+      const markerStream = JSON.stringify([obj.name, id]);
+      const marker: EventInput = {
+        partitionId,
+        streamType: ERASED_STREAM_TYPE,
+        streamId: markerStream,
+        streamVersion: (await store.streamHead(partitionId, ERASED_STREAM_TYPE, markerStream)) + 1,
+        eventType: fields === null ? 'RecordErased' : 'RecordRedacted',
+        eventVersion: 1,
+        payload: { object: obj.name, id, ...(fields === null ? {} : { fields: [...fields] }) },
+        occurredAt: nowAsIso(),
+        actor,
+        correlationId: null,
+      };
+      try {
+        await store.rewriteStreams(marker, rewrites);
+        return state;
+      } catch (err) {
+        if (!(err instanceof UniqueViolationError)) throw err;
+      }
+    }
+    throw new ConcurrencyError(`${obj.name} '${id}' kept changing during an erase`);
+  }
+
+  const unredactable = new Set(['id', ...(lifecycleField !== null ? [lifecycleField] : []), ...sequenceFields]);
+
+  async function erase(id: string, actor: string = defaultActor): Promise<void> {
+    await rewriteRecord(id, null, actor);
+  }
+
+  async function redact(id: string, fields: readonly string[], actor: string = defaultActor): Promise<State> {
+    const known = new Set(obj.properties.map((p) => p.name));
+    const bad = fields.find((f) => !known.has(f) || unredactable.has(f));
+    if (fields.length === 0 || bad !== undefined) {
+      throw new InvalidStateError(bad === undefined ? 'redact needs at least one field' : `'${obj.name}.${bad}' cannot be redacted`);
+    }
+    const state = await rewriteRecord(id, fields, actor);
+    if (state === null) throw new NotFoundError(obj.name, id);
+    return state;
+  }
+
   const api: ObjectApi<State> = {
     base,
+    erase,
+    redact,
     add: isSingleton
       ? async () => {
           throw new InvalidStateError(`'${obj.name}' is a singleton; it always exists and cannot be created`);

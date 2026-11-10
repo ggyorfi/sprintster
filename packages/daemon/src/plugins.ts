@@ -80,7 +80,7 @@ export async function loadDaemonPlugins(opts: {
     buildContext: (entry, namespace, config, manifest) => ({
       config,
       logger,
-      secrets: readPluginSecrets(entry.name, manifest.secrets ?? [], opts.secret ?? (() => undefined)),
+      secrets: readPluginSecrets(entry.name, manifest.secrets ?? [], opts.secret ?? (() => undefined), manifest.optionalSecrets ?? []),
       objects: { register: (o) => out.objects.push(o) },
       routes: { register: (r) => out.routes.push({ ...r, namespace }) },
       channels: {
