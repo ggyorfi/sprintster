@@ -77,9 +77,11 @@
 }
 
 .content {
+  --content-pad-y: 24px;
+  --content-pad-x: 28px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  padding: 24px 28px;
+  padding: var(--content-pad-y) var(--content-pad-x);
   width: 100%;
 }

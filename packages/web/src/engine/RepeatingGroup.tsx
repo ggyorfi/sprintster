@@ -105,7 +105,7 @@ export function RepeatingGroup({ label, path, itemProperties, inputs, setInputs,
                 {shown.map((s) => (
                   <th key={s.name}>{titleOf(s)}</th>
                 ))}
-                <th aria-label="Remove" />
+                <th className={styles.removeCell} aria-label="Remove" />
               </tr>
             </thead>
             <tbody>

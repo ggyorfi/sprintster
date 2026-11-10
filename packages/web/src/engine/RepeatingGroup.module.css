@@ -39,6 +39,7 @@
 
 .table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
 }
 
@@ -65,7 +66,7 @@
 }
 
 .removeCell {
-  width: 1%;
+  width: 38px;
 }
 
 .removeRow {

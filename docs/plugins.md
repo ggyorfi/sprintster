@@ -50,6 +50,10 @@ export const plugin = {
   and after any action.
 - **Actions** are buttons that POST to their route and show the reply's
   `message`. In the TUI they run on Ctrl plus their `hotkey`.
+- **Placement:** the web GUI shows badges and actions in the sidebar, or, with
+  `placement: 'maintenance'`, on the Maintenance page, for switches used rarely
+  enough that they should not sit next to everyday buttons. The TUI lists them
+  all.
 - **Channels** push to listening clients: `ctx.channels.open('jobs')` returns
   `{ send(message) }`, and clients open a WebSocket on
   `/plugins/<namespace>/channels/jobs`. Messages are JSON; clients only listen.

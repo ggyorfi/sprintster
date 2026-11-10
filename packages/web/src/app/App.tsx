@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { appConfig, version, type ObjectConfig } from '@sprintster/engine';
+import { appConfig, extensionsAt, version, type ObjectConfig } from '@sprintster/engine';
 import { resolveApiBaseUrl } from '../api/config.js';
 import { createWebApiClient } from '../api/client.js';
 import { makeResolveObject, ObjectScreen } from '../engine/index.js';
@@ -71,7 +71,7 @@ export function App() {
             Maintenance
           </button>
         </nav>
-        <Extensions baseUrl={baseUrl} extensions={serverExtensions} />
+        <Extensions baseUrl={baseUrl} extensions={extensionsAt(serverExtensions, 'sidebar')} />
         {authEnabled() && (
           <Button variant="neutral" className={styles.signOut} onClick={() => void logOut(baseUrl)}>
             Sign out
@@ -83,7 +83,7 @@ export function App() {
           {activeObj !== null ? (
             <ObjectScreen key={activeObj.name} api={api} obj={activeObj} resolveObject={resolveObject} />
           ) : (
-            <Maintenance baseUrl={baseUrl} />
+            <Maintenance baseUrl={baseUrl} extensions={extensionsAt(serverExtensions, 'maintenance')} />
           )}
         </div>
         <StatusBar baseUrl={baseUrl} version={version} />

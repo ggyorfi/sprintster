@@ -82,10 +82,17 @@
 }
 
 .formScroll {
+  /* The positioning container for hidden file inputs and pickers inside, so they scroll with it instead of stretching the page. */
+  position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   flex: 1;
   align-content: start;
   gap: 12px;
   min-height: 0;
   overflow-y: auto;
+  /* Reaches into the content padding, so the scrollbar sits at the edge and the last field can scroll clear of the bottom. */
+  margin: 0 calc(-1 * var(--content-pad-x, 0px)) calc(-1 * var(--content-pad-y, 0px));
+  padding: 16px var(--content-pad-x, 0px) var(--content-pad-y, 0px);
+  border-top: 1px solid var(--border);
 }

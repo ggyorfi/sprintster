@@ -67,6 +67,9 @@ export interface PublicRoute {
   path: string;
 }
 
+// Where the web GUI shows an action or badge: the sidebar (default), or the Maintenance page for rarely used switches.
+export type GuiPlacement = 'sidebar' | 'maintenance';
+
 // A button; pressing it POSTs to `route` and shows the reply's `message`. `hotkey` is for the TUI.
 export interface GuiAction {
   id: string;
@@ -74,6 +77,7 @@ export interface GuiAction {
   route: string;
   confirm?: string;
   hotkey?: string;
+  placement?: GuiPlacement;
 }
 
 export type BadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
@@ -83,12 +87,18 @@ export interface GuiBadge {
   id: string;
   route: string;
   refresh?: number;
+  placement?: GuiPlacement;
 }
 
 // What /config lists: ids prefixed with the namespace, routes as full daemon paths.
 export interface GuiExtensions {
   actions: GuiAction[];
   badges: GuiBadge[];
+}
+
+export function extensionsAt(extensions: GuiExtensions, placement: GuiPlacement): GuiExtensions {
+  const here = (e: { placement?: GuiPlacement }) => (e.placement ?? 'sidebar') === placement;
+  return { actions: extensions.actions.filter(here), badges: extensions.badges.filter(here) };
 }
 
 export interface LogChange {

@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../ui/index.js';
+import type { GuiExtensions } from '@sprintster/engine';
 import { formatError } from '../engine/index.js';
+import { Extensions } from './Extensions.js';
 import { fetchHealth, type Health } from './health.js';
 import styles from './Maintenance.module.css';
 
 export interface MaintenanceProps {
   baseUrl: string;
+  extensions?: GuiExtensions;
 }
 
-export function Maintenance({ baseUrl }: MaintenanceProps) {
+export function Maintenance({ baseUrl, extensions }: MaintenanceProps) {
   const [health, setHealth] = useState<Health | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,6 +40,11 @@ export function Maintenance({ baseUrl }: MaintenanceProps) {
           Refresh
         </Button>
       </div>
+      {extensions !== undefined && (extensions.actions.length > 0 || extensions.badges.length > 0) && (
+        <div className={styles.card}>
+          <Extensions baseUrl={baseUrl} extensions={extensions} />
+        </div>
+      )}
       <div className={styles.card}>
         <h2 className={styles.cardTitle}>Health</h2>
         {loading ? (
