@@ -13,10 +13,11 @@ export interface ComboEditorProps {
   onChange: (value: string) => void;
   defaultMode?: ComboMode;
   attach?: ((file: File) => Promise<{ id: string }>) | undefined;
+  attachDocument?: ((file: File) => Promise<{ id: string; title: string }>) | undefined;
 }
 
 // Strictly composes the WYSIWYG (MarkdownEditor) and source (CodeEditor) widgets over one shared markdown string.
-export function ComboEditor({ label, value, onChange, defaultMode = 'wysiwyg', attach }: ComboEditorProps) {
+export function ComboEditor({ label, value, onChange, defaultMode = 'wysiwyg', attach, attachDocument }: ComboEditorProps) {
   const [mode, setMode] = useState<ComboMode>(defaultMode);
   return (
     <div className={styles.field}>
@@ -45,7 +46,7 @@ export function ComboEditor({ label, value, onChange, defaultMode = 'wysiwyg', a
       </div>
       <Suspense fallback={<div className={styles.loading}>Loading…</div>}>
         {mode === 'wysiwyg' ? (
-          <MarkdownEditor value={value} onChange={onChange} attach={attach} />
+          <MarkdownEditor value={value} onChange={onChange} attach={attach} attachDocument={attachDocument} />
         ) : (
           <CodeEditor value={value} onChange={onChange} language="markdown" />
         )}

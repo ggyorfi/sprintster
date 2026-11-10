@@ -78,7 +78,7 @@ export function RefCards({ label, value, onChange, options: given, multiple = fa
       setProgress(`Uploading ${i + 1} of ${files.length}...`);
       try {
         const header = new Uint8Array(await file.slice(0, ASSET_HEADER_BYTES).arrayBuffer());
-        const problem = assetUploadProblem(file.size, header);
+        const problem = assetUploadProblem(file.size, header, { imagesOnly: true });
         if (problem !== null) throw new Error(problem);
         const option = await upload(file);
         setUploaded((list) => [option, ...list]);

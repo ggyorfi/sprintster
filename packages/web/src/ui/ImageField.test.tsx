@@ -104,7 +104,7 @@ describe('ImageField failure cases', () => {
     const pdf = pdfFile();
     // applyAccept: false, because the point is to test our check rather than the browser's accept filter.
     await userEvent.upload(container.querySelector('input[type=file]')!, pdf, { applyAccept: false });
-    expect(screen.getByRole('alert')).toHaveTextContent(/unrecognised image data/);
+    expect(screen.getByRole('alert')).toHaveTextContent(/AVIF only/);
     expect(upload).not.toHaveBeenCalled();
   });
 
@@ -116,5 +116,21 @@ describe('ImageField failure cases', () => {
     expect(img.hasAttribute('data-missing')).toBe(false);
     fireEvent.error(img);
     expect(img.getAttribute('data-missing')).toBe('true');
+  });
+
+  it('as a file field, takes a PDF and shows its name without a picture or alt text', async () => {
+    const onChange = vi.fn();
+    const pdf = { hash: 'p1', filename: 'notes.pdf', contentType: 'application/pdf', size: 8 };
+    const upload = vi.fn(async (_file: File) => pdf);
+    const { container, rerender } = render(
+      <ImageField label="File" value="" onChange={onChange} upload={upload} assetUrl={assetUrl} files />,
+    );
+    expect(screen.getByText(/Upload file/)).toBeInTheDocument();
+    await userEvent.upload(container.querySelector('input[type=file]')!, pdfFile());
+    expect(onChange).toHaveBeenCalledWith(JSON.stringify(pdf));
+    rerender(<ImageField label="File" value={JSON.stringify(pdf)} onChange={onChange} upload={upload} assetUrl={assetUrl} files />);
+    expect(screen.getByText('notes.pdf')).toBeInTheDocument();
+    expect(screen.queryByRole('img')).toBeNull();
+    expect(screen.queryByLabelText('Alt text')).toBeNull();
   });
 });

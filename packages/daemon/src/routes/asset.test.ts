@@ -87,11 +87,27 @@ describe('POST /assets limits (the API is where they are enforced, not the widge
     expect((await app.request('/assets', upload(exact, 'image/png'))).status).toBe(201);
   });
 
-  it('refuses bytes that are not an accepted image with 400', async () => {
+  it('refuses bytes that are not an accepted type with 400', async () => {
     const { app } = buildApp();
-    const res = await app.request('/assets', upload(pdf, 'image/png', 'notes.pdf'));
+    const res = await app.request('/assets', upload(new TextEncoder().encode('just text'), 'image/png', 'notes.txt'));
     expect(res.status).toBe(400);
-    expect(((await res.json()) as { message: string }).message).toMatch(/unrecognised image data/);
+    expect(((await res.json()) as { message: string }).message).toMatch(/unrecognised file data/);
+  });
+
+  it('accepts a PDF by its bytes and serves it as a download, never inline', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/assets', upload(pdf, 'application/octet-stream', 'notes.pdf'));
+    expect(res.status).toBe(201);
+    expect((await res.clone().json()) as { contentType: string }).toMatchObject({ contentType: 'application/pdf' });
+    const served = await app.request(`/assets/${await hashOf(res)}`);
+    expect(served.headers.get('content-type')).toBe('application/pdf');
+    expect(served.headers.get('content-disposition')).toBe('attachment');
+  });
+
+  it('serves images inline', async () => {
+    const { app } = buildApp();
+    const served = await app.request(`/assets/${await hashOf(await app.request('/assets', upload(png, 'image/png')))}`);
+    expect(served.headers.get('content-disposition')).toBeNull();
   });
 
   it('refuses SVG however it is labelled, which is what the exclusion is worth', async () => {

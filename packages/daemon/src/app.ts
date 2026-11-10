@@ -1,6 +1,7 @@
 import { Hono, type MiddlewareHandler } from 'hono';
 import {
   appConfig,
+  assetFileProperty,
   changesSince,
   objectRoute,
   rebuildObjectStates,
@@ -37,12 +38,12 @@ function looksLikeFile(path: string): boolean {
   return last.includes('.');
 }
 
-// The nominated assets object holds its file in exactly one image property (loadConfig enforces that), so /assets/<id> reads the hash from there.
+// The nominated assets object holds its file in exactly one image or file property (loadConfig enforces that), so /assets/<id> reads the hash from there.
 function assetHashResolver(deps: AppDeps): AssetHashResolver | undefined {
   const named = appConfig.assets;
   if (named === undefined) return undefined;
   const mounted = deps.apis.find((d) => d.obj.name === named);
-  const file = mounted?.obj.properties.find((p) => p.type === 'image');
+  const file = assetFileProperty(mounted?.obj);
   if (mounted === undefined || file === undefined) return undefined;
   const lifecycle = mounted.obj.lifecycle;
   const removedField = lifecycle !== undefined && 'softDelete' in lifecycle ? lifecycle.softDelete : undefined;

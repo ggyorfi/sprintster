@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { assetUploadProblem, MAX_ASSET_BYTES, sniffImageType } from './limits.js';
+import { assetUploadProblem, MAX_ASSET_BYTES, sniffAssetType, sniffImageType } from './limits.js';
 
 const ascii = (s: string): number[] => Array.from(s, (c) => c.charCodeAt(0));
 
@@ -64,8 +64,15 @@ describe('assetUploadProblem', () => {
     expect(assetUploadProblem(100, xmlDeclared)).toMatch(/SVG is not accepted/);
   });
 
-  it('rejects bytes that are not an image at all', () => {
-    expect(assetUploadProblem(100, new Uint8Array([0x25, 0x50, 0x44, 0x46]))).toMatch(/unrecognised image data/);
+  it('rejects bytes of no accepted type', () => {
+    expect(assetUploadProblem(100, new TextEncoder().encode('%PD plain text'))).toMatch(/unrecognised file data/);
+  });
+
+  it('accepts a PDF, except where only images are', () => {
+    const pdf = new TextEncoder().encode('%PDF-1.7\n');
+    expect(sniffAssetType(pdf)).toBe('application/pdf');
+    expect(assetUploadProblem(100, pdf)).toBeNull();
+    expect(assetUploadProblem(100, pdf, { imagesOnly: true })).toMatch(/AVIF only/);
   });
 
   it('judges the bytes, so a label cannot make an SVG acceptable nor a WebP unacceptable', () => {

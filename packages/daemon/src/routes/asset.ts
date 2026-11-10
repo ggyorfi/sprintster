@@ -1,7 +1,7 @@
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { Hono } from 'hono';
-import { assetUploadProblem, isApiError, MAX_ASSET_BYTES, sniffImageType, type BlobApi } from '@sprintster/engine';
+import { assetUploadProblem, isApiError, isImageType, MAX_ASSET_BYTES, sniffAssetType, type BlobApi } from '@sprintster/engine';
 
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 // An asset URL resolves to whatever file the record holds now, so it is revalidated rather than cached forever.
@@ -25,7 +25,7 @@ export function createAssetRoute(blobApi: BlobApi, resolveAssetHash?: AssetHashR
         const tooLarge = bytes.byteLength > MAX_ASSET_BYTES;
         return c.json({ code: tooLarge ? 'too_large' : 'bad_request', message: problem }, tooLarge ? 413 : 400);
       }
-      const contentType = sniffImageType(bytes);
+      const contentType = sniffAssetType(bytes);
       const ref = await blobApi.upload(bytes, contentType);
       return c.json({ hash: ref.hash, size: ref.size, contentType, filename: field.name }, 201);
     } catch (err) {
@@ -50,11 +50,14 @@ async function serveBlob(c: Context, blobApi: BlobApi, hash: string, cacheContro
   const blob = await blobApi.get(hash);
   if (blob === null) return c.json({ code: 'not_found', message: 'blob not found' }, 404);
   const etag = `"${hash}"`;
-  const headers = {
-    'Content-Type': blob.contentType ?? 'application/octet-stream',
+  const contentType = blob.contentType ?? 'application/octet-stream';
+  const headers: Record<string, string> = {
+    'Content-Type': contentType,
     'Cache-Control': cacheControl,
     'X-Content-Type-Options': 'nosniff',
     ETag: etag,
+    // Only images render on the app's origin, where the session lives (ADR 19).
+    ...(isImageType(contentType) ? {} : { 'Content-Disposition': 'attachment' }),
   };
   if (c.req.header('if-none-match') === etag) return new Response(null, { status: 304, headers });
   const body = c.req.method === 'HEAD' ? null : (blob.bytes as BodyInit);

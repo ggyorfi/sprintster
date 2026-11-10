@@ -173,7 +173,7 @@ Every property has these common fields:
 | `id` | string | Primary key. `"strategy": "uuid"` (client-minted) or `"sequence"` (server-allocated number). Usually `system: true`. |
 | `text` | string | Single or multi-line (see `rows` in a view). `"translated": true` makes it [translated](#translated-fields). |
 | `code` | string | Source code editor with highlighting. `"language"`: e.g. `markdown`, `html`, `css`, `json`, `plaintext`. |
-| `markdown` | string | Rich Markdown editor; stores raw CommonMark. `"editor"`: `wysiwyg`, `source`, or `combo` (default). `"images": true` allows [in-body images](#images-in-a-markdown-body) and requires an [assets](#assets) object. `"translated": true` makes it [translated](#translated-fields). |
+| `markdown` | string | Rich Markdown editor; stores raw CommonMark. `"editor"`: `wysiwyg`, `source`, or `combo` (default). `"images": true` allows [in-body images](#images-in-a-markdown-body) and requires an [assets](#assets) object. `"documents": true` allows [document links](#documents-in-a-markdown-body) and requires an assets object whose file is a `file` property. `"translated": true` makes it [translated](#translated-fields). |
 | `enum` | string | One of `"values": ["a", "b"]`. Renders as a select. |
 | `money` | string | Integer minor units as a string (e.g. pence). `"currency": "GBP"`. |
 | `integer` | number | Whole number. |
@@ -184,6 +184,7 @@ Every property has these common fields:
 | `boolean` | boolean | true/false. |
 | `sequence` | number | Server-allocated incrementing number (read-only). |
 | `image` | object | Uploaded image reference: `{ hash, filename, contentType, size, width?, height?, alt?, thumb? }`; `thumb` is the hash of a small preview the web GUI makes at upload. Bytes stored on the filesystem; see [blobs](./configuration.md#blobs). |
+| `file` | object | Like `image`, but also takes a PDF. The same shape; `width`, `height`, `alt` and `thumb` appear only for images. The daemon serves a PDF as a download, never inline. |
 | `object` | object | A nested group: `"properties": [ ... ]`. |
 | `array` | array | A repeating group of items: `"item": { "properties": [ ... ] }`. Honors `minItems`/`maxItems`; `"uniqueBy": "<sub-property>"` (or a list of them, for a combination) refuses two items with the same value there. |
 
@@ -241,6 +242,26 @@ Example fields:
 { "name": "slug",      "type": "text", "validation": { "required": true, "unique": true, "caseInsensitive": true } }
 ```
 
+### Documents in a markdown body
+
+With `"documents": true` on a `markdown` property, the rich editor's PDF button
+uploads a PDF, creates an asset record for it, and inserts a link named after
+the file at the cursor:
+
+```markdown
+[Annual report](/assets/<asset record id>)
+```
+
+The link is root-relative like a body image, and it points at the asset record,
+so uploading a replacement file into that record reaches every link. The assets
+object must hold its file in a `file` property, since an `image` property takes
+images only; loading a config that asks for documents otherwise fails.
+
+`GET /assets/<id>` answers a PDF with `Content-Disposition: attachment`: only
+images ever render on the app's own origin
+([ADR 19](./ADR/0019-pdf-documents-as-assets.md)). A site generator copies the
+file into its output and rewrites the link.
+
 ## Assets
 
 An `image` property holds a file inline on the record that uses it. That is the
@@ -250,7 +271,7 @@ own copy of its alt text, and editing one does not touch the other.
 
 For anything shared, give pictures an object of their own. There is no built-in
 asset type: an asset is an ordinary object that holds its file in an `image`
-property, plus whatever else the project wants, and records attach one with
+property (or a `file` property, to also hold PDFs), plus whatever else the project wants, and records attach one with
 `ref` or `refs`.
 
 ```jsonc
@@ -338,7 +359,7 @@ Set on a property's `validation` object. Rules apply per type.
 | `min` / `max` | integer | Numeric bounds. |
 | `minItems` / `maxItems` | array, refs | Item-count bounds. |
 | `format: "email"` | text | Must be a valid email. |
-| `unique` | scalar fields | Value must be unique across live records of the object (frees up when a record is removed). Rejected on `id`, `sequence`, `object`, `array`, `refs`, `image`, and nested fields. |
+| `unique` | scalar fields | Value must be unique across live records of the object (frees up when a record is removed). Rejected on `id`, `sequence`, `object`, `array`, `refs`, `image`, `file`, and nested fields. |
 | `caseInsensitive` | with `unique` | `Foo` and `foo` collide (for slugs, emails). Only valid alongside `unique`. |
 
 Uniqueness is enforced atomically, so two concurrent writes of the same value

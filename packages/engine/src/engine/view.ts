@@ -76,6 +76,7 @@ export function toInput(property: PropertyConfig, value: unknown): string {
     case 'refs':
       return JSON.stringify(Array.isArray(value) ? value : []);
     case 'image':
+    case 'file':
       return JSON.stringify(value);
     case 'datetime':
       return isoToLocalInput(String(value));
@@ -171,7 +172,8 @@ export function toStorage(property: PropertyConfig, input: string): unknown {
         return [];
       }
     }
-    case 'image': {
+    case 'image':
+    case 'file': {
       if (s === '') return null;
       try {
         return JSON.parse(s);
@@ -410,7 +412,7 @@ export function assembleValues(
       continue;
     }
 
-    if (root.type === 'ref' || root.type === 'refs' || root.type === 'image') {
+    if (root.type === 'ref' || root.type === 'refs' || root.type === 'image' || root.type === 'file') {
       const direct = info.items.find((i) => i.property === rootName);
       if (direct === undefined) continue;
       if (!resolveEditable(root, mode, direct.readOnly)) continue;

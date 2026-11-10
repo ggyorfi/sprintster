@@ -1,5 +1,6 @@
 import { ConfigSchema, type Config, type ObjectConfig, type PropertyConfig, type ViewFieldConfig, type ViewFieldsetConfig, type VisibleWhen } from './schema.js';
 import { objectRoute, slugify, RESERVED_ROUTES } from './route.js';
+import { isAssetFileProperty } from './assets.js';
 import { TIMESTAMP_FIELDS } from '../engine/reducer.js';
 
 export function loadConfig(raw: unknown): Config {
@@ -330,7 +331,7 @@ function checkCommands(obj: ObjectConfig): void {
 }
 
 // `unique` is enforced per-object over live records via a reserved stream, so it only applies to top-level scalar fields.
-const UNIQUE_INCAPABLE_TYPES = new Set(['id', 'sequence', 'object', 'array', 'refs', 'image']);
+const UNIQUE_INCAPABLE_TYPES = new Set(['id', 'sequence', 'object', 'array', 'refs', 'image', 'file']);
 
 function checkProperties(
   scope: string,
@@ -407,27 +408,38 @@ function checkAssets(config: Config): void {
         `'assets' names unknown object '${named}'; define that object, or point 'assets' at an existing one. See ${ASSETS_DOC}`,
       );
     }
-    const files = obj.properties.filter((p) => p.type === 'image');
+    const files = obj.properties.filter(isAssetFileProperty);
     if (files.length === 0) {
       throw new Error(
-        `'assets' object '${named}' has no image property; an asset object needs one to hold its file. See ${ASSETS_DOC}`,
+        `'assets' object '${named}' has no image or file property; an asset object needs one to hold its file. See ${ASSETS_DOC}`,
       );
     }
     if (files.length > 1) {
       throw new Error(
-        `'assets' object '${named}' has ${files.length} image properties ` +
+        `'assets' object '${named}' has ${files.length} image or file properties ` +
           `(${files.map((p) => `'${p.name}'`).join(', ')}); it must have exactly one, so /assets/<id> knows which file to ` +
           `serve. See ${ASSETS_DOC}`,
       );
+    }
+    const holdsDocuments = files[0]?.type === 'file';
+    for (const other of config.objects) {
+      for (const prop of other.properties) {
+        if (prop.type === 'markdown' && prop.documents === true && !holdsDocuments) {
+          throw new Error(
+            `property '${other.name}.${prop.name}' asks for document links, but the 'assets' object '${named}' holds ` +
+              `its file in an image property, which takes images only; make it a file property. See ${ASSETS_DOC}`,
+          );
+        }
+      }
     }
     return;
   }
   for (const obj of config.objects) {
     for (const prop of obj.properties) {
-      if (prop.type === 'markdown' && prop.images === true) {
+      if (prop.type === 'markdown' && (prop.images === true || prop.documents === true)) {
         throw new Error(
-          `property '${obj.name}.${prop.name}' asks for in-body images, but no 'assets' object is named; ` +
-            `define an asset object and set 'assets' to its name. See ${ASSETS_DOC}`,
+          `property '${obj.name}.${prop.name}' asks for in-body ${prop.images === true ? 'images' : 'document links'}, ` +
+            `but no 'assets' object is named; define an asset object and set 'assets' to its name. See ${ASSETS_DOC}`,
         );
       }
     }

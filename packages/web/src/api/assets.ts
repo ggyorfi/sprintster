@@ -1,4 +1,4 @@
-import { appConfig, isTranslated, objectRoute } from '@sprintster/engine';
+import { appConfig, assetFileProperty, isTranslated, objectRoute } from '@sprintster/engine';
 import { resolveApiBaseUrl, type ApiEnv } from './config.js';
 import { authFetch } from './auth.js';
 
@@ -64,7 +64,7 @@ export function displayedAssetUrl(src: string, env?: ApiEnv): string {
 export async function attachAsset(file: File, opts: { titled?: boolean } = {}): Promise<{ id: string; title: string; thumb: string | undefined }> {
   const name = appConfig.assets;
   const obj = appConfig.objects.find((o) => o.name === name);
-  const fileProperty = obj?.properties.find((p) => p.type === 'image');
+  const fileProperty = assetFileProperty(obj);
   if (obj === undefined || fileProperty === undefined) {
     throw new Error('no assets object is configured');
   }

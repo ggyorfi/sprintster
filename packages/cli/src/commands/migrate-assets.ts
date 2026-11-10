@@ -1,5 +1,6 @@
 import { defineCommand } from 'citty';
 import {
+  assetFileProperty,
   assetIdsByHash,
   createObjectApi,
   rewriteAssetUrls,
@@ -58,8 +59,8 @@ export async function migrateAssetBodies(
 ): Promise<Report> {
   const assetObj = objects.find((o) => o.name === assetsName);
   if (assetObj === undefined) throw new Error(`'assets' names unknown object '${assetsName}'`);
-  const fileProperty = assetObj.properties.find((p) => p.type === 'image');
-  if (fileProperty === undefined) throw new Error(`assets object '${assetsName}' has no image property`);
+  const fileProperty = assetFileProperty(assetObj);
+  if (fileProperty === undefined) throw new Error(`assets object '${assetsName}' has no image or file property`);
 
   const assetApi = createObjectApi<{ id: string }>(store, assetObj);
   const byHash = assetIdsByHash((await assetApi.list()) as Array<Record<string, unknown>>, fileProperty.name);

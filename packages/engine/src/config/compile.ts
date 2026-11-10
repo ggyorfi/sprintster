@@ -3,6 +3,21 @@ import { PenceString } from '../money/index.js';
 import { IsoInstant } from '../time/index.js';
 import type { ObjectConfig, PropertyConfig } from './schema.js';
 import { appConfig } from './app-config.js';
+import { isImageType } from '../blobs/limits.js';
+
+const storedFile = z
+  .object({
+    hash: z.string().min(1),
+    filename: z.string(),
+    contentType: z.string(),
+    size: z.number().int().nonnegative(),
+    width: z.number().int().positive().optional(),
+    height: z.number().int().positive().optional(),
+    alt: z.string().optional(),
+    // A small preview of the same image, stored as its own blob.
+    thumb: z.string().min(1).optional(),
+  })
+  .strict();
 
 // A translated value maps each locale to its text; only the default locale can be required.
 function translatedSchema(text: z.ZodString, required: boolean): z.ZodTypeAny {
@@ -60,19 +75,9 @@ function baseSchema(prop: PropertyConfig): z.ZodTypeAny {
     case 'boolean':
       return z.boolean();
     case 'image':
-      return z
-        .object({
-          hash: z.string().min(1),
-          filename: z.string(),
-          contentType: z.string(),
-          size: z.number().int().nonnegative(),
-          width: z.number().int().positive().optional(),
-          height: z.number().int().positive().optional(),
-          alt: z.string().optional(),
-          // A small preview of the same image, stored as its own blob.
-          thumb: z.string().min(1).optional(),
-        })
-        .strict();
+      return storedFile.refine((v) => isImageType(v.contentType), { message: 'expected an image', path: ['contentType'] });
+    case 'file':
+      return storedFile;
     case 'sequence':
       return z.number().int();
     case 'object':

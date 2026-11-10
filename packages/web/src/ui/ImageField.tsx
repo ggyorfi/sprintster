@@ -1,3 +1,4 @@
+import { isImageType } from '@sprintster/engine';
 import { TextField } from './TextField.js';
 import { useAssetUpload } from './useAssetUpload.js';
 import type { UploadedAsset } from '../api/assets.js';
@@ -21,6 +22,8 @@ export interface ImageFieldProps {
   upload: (file: File) => Promise<UploadedAsset>;
   assetUrl: (hash: string) => string;
   readOnly?: boolean;
+  // A file property: also takes a PDF, which shows as its name rather than a picture.
+  files?: boolean;
 }
 
 export function parseImageValue(value: string): ImageValue | null {
@@ -48,9 +51,10 @@ async function readImageSize(file: File): Promise<{ width: number; height: numbe
   }
 }
 
-export function ImageField({ label, value, onChange, upload, assetUrl, readOnly = false }: ImageFieldProps) {
+export function ImageField({ label, value, onChange, upload, assetUrl, readOnly = false, files = false }: ImageFieldProps) {
   const image = parseImageValue(value);
-  const { busy, error, select } = useAssetUpload(upload);
+  const pictured = image !== null && isImageType(image.contentType);
+  const { busy, error, select } = useAssetUpload(upload, { imagesOnly: !files });
 
   async function onFile(file: File | undefined) {
     if (file === undefined) return;
@@ -78,12 +82,14 @@ export function ImageField({ label, value, onChange, upload, assetUrl, readOnly 
 
       {image !== null && (
         <div className={styles.preview}>
-          <img
-            className={styles.thumb}
-            src={assetUrl(image.hash)}
-            alt={image.alt ?? ''}
-            onError={(e) => e.currentTarget.setAttribute('data-missing', 'true')}
-          />
+          {pictured && (
+            <img
+              className={styles.thumb}
+              src={assetUrl(image.hash)}
+              alt={image.alt ?? ''}
+              onError={(e) => e.currentTarget.setAttribute('data-missing', 'true')}
+            />
+          )}
           <div className={styles.meta}>
             <span className={styles.filename}>{image.filename}</span>
             {!readOnly && (
@@ -97,10 +103,10 @@ export function ImageField({ label, value, onChange, upload, assetUrl, readOnly 
 
       {!readOnly && (
         <label className={styles.upload}>
-          {busy ? 'Uploading…' : image !== null ? 'Replace…' : 'Upload image…'}
+          {busy ? 'Uploading…' : image !== null ? 'Replace…' : files ? 'Upload file…' : 'Upload image…'}
           <input
             type="file"
-            accept="image/*"
+            accept={files ? 'image/*,application/pdf' : 'image/*'}
             className={styles.fileInput}
             disabled={busy}
             onChange={(e) => void onFile(e.target.files?.[0])}
@@ -108,7 +114,7 @@ export function ImageField({ label, value, onChange, upload, assetUrl, readOnly 
         </label>
       )}
 
-      {image !== null && (
+      {pictured && (
         <TextField label="Alt text" value={image.alt ?? ''} onChange={setAlt} readOnly={readOnly} placeholder="Describe the image" />
       )}
 

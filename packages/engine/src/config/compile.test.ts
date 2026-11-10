@@ -141,6 +141,13 @@ describe('compileProperty: image', () => {
     expect(compileProperty({ name: 'hero', type: 'image', nullable: true }).parse(null)).toBeNull();
     expect(compileProperty({ name: 'hero', type: 'image' }).parse(undefined)).toBeUndefined();
   });
+
+  it('refuses a document, which only a file property holds', () => {
+    const pdf = { ...valid, filename: 'notes.pdf', contentType: 'application/pdf' };
+    expect(() => compileProperty({ name: 'hero', type: 'image' }).parse(pdf)).toThrow(/expected an image/);
+    expect(compileProperty({ name: 'doc', type: 'file' }).parse(pdf)).toMatchObject(pdf);
+    expect(compileProperty({ name: 'doc', type: 'file' }).parse(valid)).toMatchObject(valid);
+  });
 });
 
 describe('compileProperty: code and markdown', () => {

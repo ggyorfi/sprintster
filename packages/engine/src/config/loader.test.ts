@@ -506,7 +506,7 @@ describe('loadConfig: assets', () => {
     const raw = clone();
     raw.objects.push({ ...assetObject, properties: assetObject.properties.filter((p) => p.type !== 'image') });
     raw.assets = 'asset';
-    expect(() => loadConfig(raw)).toThrow(/has no image property/);
+    expect(() => loadConfig(raw)).toThrow(/has no image or file property/);
   });
 
   it('refuses an assets object with more than one image property, since /assets/<id> must know which to serve', () => {
@@ -516,8 +516,33 @@ describe('loadConfig: assets', () => {
       properties: [...assetObject.properties, { name: 'thumbnail', type: 'image', title: 'Thumbnail' }],
     });
     raw.assets = 'asset';
-    expect(() => loadConfig(raw)).toThrow(/has 2 image properties/);
+    expect(() => loadConfig(raw)).toThrow(/has 2 image or file properties/);
     expect(() => loadConfig(raw)).toThrow(/'file', 'thumbnail'/);
+  });
+
+  function withDocuments(fileType: 'image' | 'file' | undefined) {
+    const raw = clone();
+    raw.objects[0].properties.push({ name: 'body', type: 'markdown', title: 'Body', documents: true });
+    if (fileType !== undefined) {
+      raw.objects.push({
+        ...assetObject,
+        properties: assetObject.properties.map((p) => (p.name === 'file' ? { ...p, type: fileType } : p)),
+      });
+      raw.assets = 'asset';
+    }
+    return raw;
+  }
+
+  it('refuses document links without an assets object', () => {
+    expect(() => loadConfig(withDocuments(undefined))).toThrow(/asks for in-body document links/);
+  });
+
+  it('refuses document links when the assets object holds images only', () => {
+    expect(() => loadConfig(withDocuments('image'))).toThrow(/make it a file property/);
+  });
+
+  it('accepts document links when the assets object holds a file property', () => {
+    expect(() => loadConfig(withDocuments('file'))).not.toThrow();
   });
 
   it('keeps the assets name on the loaded config', () => {

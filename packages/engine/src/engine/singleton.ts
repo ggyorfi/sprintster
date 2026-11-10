@@ -29,6 +29,7 @@ function zeroValue(prop: PropertyConfig): unknown {
     case 'datetime':
     case 'ref':
     case 'image':
+    case 'file':
       return null;
   }
 }

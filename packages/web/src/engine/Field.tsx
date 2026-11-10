@@ -52,8 +52,10 @@ export function Field({ spec, value, onChange, refOptions, refVisual, refUpload,
         </Suspense>
       );
     }
-    if (property.type === 'image') {
-      return <ImageField label={label} value={value} onChange={() => {}} upload={uploadAsset} assetUrl={assetUrl} readOnly />;
+    if (property.type === 'image' || property.type === 'file') {
+      return (
+        <ImageField label={label} value={value} onChange={() => {}} upload={uploadAsset} assetUrl={assetUrl} readOnly files={property.type === 'file'} />
+      );
     }
     return <ReadOnlyField label={label} value={display ?? value} />;
   }
@@ -70,7 +72,8 @@ export function Field({ spec, value, onChange, refOptions, refVisual, refUpload,
         />
       );
     case 'image':
-      return <ImageField label={label} value={value} onChange={onChange} upload={uploadAsset} assetUrl={assetUrl} />;
+    case 'file':
+      return <ImageField label={label} value={value} onChange={onChange} upload={uploadAsset} assetUrl={assetUrl} files={property.type === 'file'} />;
     case 'ref':
       if (refVisual === true) return <RefCards label={label} value={value} onChange={onChange} options={refOptions ?? []} upload={refUpload === true ? uploadRecord : undefined} />;
       return <RefPicker label={label} value={value} onChange={onChange} options={refOptions ?? []} placeholder="Search..." />;
@@ -97,14 +100,15 @@ export function Field({ spec, value, onChange, refOptions, refVisual, refUpload,
       const mode = property.editor ?? 'combo';
       // Images are opt in per property, and loadConfig has already refused the config if one asks without an assets object.
       const attach = property.images === true ? attachAsset : undefined;
+      const attachDocument = property.documents === true ? attachAsset : undefined;
       return (
         <Suspense fallback={<div className={styles.loading}>Loading editor…</div>}>
           {mode === 'source' ? (
             <CodeEditor label={label} value={value} onChange={onChange} language="markdown" placeholder={placeholder} />
           ) : mode === 'wysiwyg' ? (
-            <MarkdownEditor label={label} value={value} onChange={onChange} attach={attach} />
+            <MarkdownEditor label={label} value={value} onChange={onChange} attach={attach} attachDocument={attachDocument} />
           ) : (
-            <ComboEditor label={label} value={value} onChange={onChange} attach={attach} />
+            <ComboEditor label={label} value={value} onChange={onChange} attach={attach} attachDocument={attachDocument} />
           )}
         </Suspense>
       );

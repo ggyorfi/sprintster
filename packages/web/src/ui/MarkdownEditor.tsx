@@ -30,6 +30,7 @@ export interface MarkdownEditorProps {
   onChange: (value: string) => void;
   readOnly?: boolean;
   attach?: ((file: File) => Promise<{ id: string }>) | undefined;
+  attachDocument?: ((file: File) => Promise<{ id: string; title: string }>) | undefined;
 }
 
 function imageFilesOf(data: DataTransfer | null): File[] {
@@ -100,6 +101,56 @@ function ImageButton({ editor, uploader }: { editor: Editor; uploader: AssetUplo
   );
 }
 
+// The link stays root-relative, as stored content must (ADR 9), so the body does not depend on where the API is mounted.
+function insertDocumentLink(editor: Editor, asset: { id: string; title: string }) {
+  if (editor.isDestroyed) return;
+  editor
+    .chain()
+    .focus()
+    .insertContent({ type: 'text', text: asset.title, marks: [{ type: 'link', attrs: { href: `/assets/${asset.id}` } }] })
+    .unsetMark('link')
+    .run();
+}
+
+function DocumentButton({ editor, uploader }: { editor: Editor; uploader: AssetUpload<{ id: string; title: string }> }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { busy, error, select } = uploader;
+
+  async function onFile(file: File | undefined) {
+    const asset = await select(file);
+    if (asset !== null) insertDocumentLink(editor, asset);
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className={styles.tbtn}
+        aria-label="Link a document"
+        title="Link a document"
+        disabled={busy}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => inputRef.current?.click()}
+      >
+        {busy ? '…' : 'PDF'}
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="application/pdf"
+        className={styles.fileInput}
+        disabled={busy}
+        onChange={(e) => void onFile(e.target.files?.[0])}
+      />
+      {error !== null && (
+        <span role="alert" className={styles.error}>
+          {error}
+        </span>
+      )}
+    </>
+  );
+}
+
 // Alt text lives in the markdown, so it has to be authorable; a prompt on insert would be hostile when pasting screenshots.
 function AltTextRow({ editor }: { editor: Editor }) {
   const s = useEditorState({
@@ -129,7 +180,15 @@ function AltTextRow({ editor }: { editor: Editor }) {
   );
 }
 
-function Toolbar({ editor, uploader }: { editor: Editor; uploader: AssetUpload<{ id: string }> | null }) {
+function Toolbar({
+  editor,
+  uploader,
+  documents,
+}: {
+  editor: Editor;
+  uploader: AssetUpload<{ id: string }> | null;
+  documents: AssetUpload<{ id: string; title: string }> | null;
+}) {
   const s = useEditorState({
     editor,
     // The editor can be torn down mid-render (React strict/concurrent, combo toggles); guard against a destroyed instance.
@@ -190,6 +249,8 @@ function Toolbar({ editor, uploader }: { editor: Editor; uploader: AssetUpload<{
       {btn('Code block', '{ }', s.codeBlock, () => chain().toggleCodeBlock().run())}
       {uploader !== null && <span className={styles.sep} />}
       {uploader !== null && <ImageButton editor={editor} uploader={uploader} />}
+      {documents !== null && uploader === null && <span className={styles.sep} />}
+      {documents !== null && <DocumentButton editor={editor} uploader={documents} />}
       <span className={styles.sep} />
       {btn('Undo', '↺', false, () => chain().undo().run(), !s.canUndo)}
       {btn('Redo', '↻', false, () => chain().redo().run(), !s.canRedo)}
@@ -198,11 +259,12 @@ function Toolbar({ editor, uploader }: { editor: Editor; uploader: AssetUpload<{
 }
 
 // WYSIWYG markdown editor: markdown shortcuts format in place, value stays a raw markdown string.
-export function MarkdownEditor({ label, value, onChange, readOnly = false, attach }: MarkdownEditorProps) {
+export function MarkdownEditor({ label, value, onChange, readOnly = false, attach, attachDocument }: MarkdownEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  const uploader = useAssetUpload(attach);
+  const uploader = useAssetUpload(attach, { imagesOnly: true });
+  const documents = useAssetUpload(attachDocument);
   const uploadRef = useRef(uploader);
   uploadRef.current = uploader;
   const editorRef = useRef<Editor | null>(null);
@@ -273,7 +335,7 @@ export function MarkdownEditor({ label, value, onChange, readOnly = false, attac
     <div className={styles.field}>
       {label !== undefined && <span className={styles.label}>{label}</span>}
       <div className={styles.editor}>
-        {editor !== null && !readOnly && <Toolbar editor={editor} uploader={attach === undefined ? null : uploader} />}
+        {editor !== null && !readOnly && <Toolbar editor={editor} uploader={attach === undefined ? null : uploader} documents={attachDocument === undefined ? null : documents} />}
         {editor !== null && !readOnly && <AltTextRow editor={editor} />}
         <EditorContent editor={editor} />
       </div>

@@ -567,3 +567,25 @@ use. Design: [ADR 18](./docs/ADR/0018-erasing-records-from-the-log.md).
 
 - **Retention of exports and backups**: copies made before an erase keep the
   data; a Durable Object keeps 30 days of recovery history.
+
+## Epic: PDF documents as assets
+
+**Goal.** An app keeps its PDFs (a report, a proposal) with the rest of its
+content, and prose links to them the way it embeds images. Design:
+[ADR 19](./docs/ADR/0019-pdf-documents-as-assets.md).
+
+### Steps
+
+- [x] **1. Uploads and serving.** `application/pdf` sniffed and accepted; every
+      non-image blob served with `Content-Disposition: attachment`.
+      *Done when:* a PDF uploads by its bytes and downloads from both asset
+      routes, and an image still opens inline.
+- [x] **2. `file` property.** Holds an image or a PDF; `image` refuses a PDF.
+      The assets object may hold its file in either.
+      *Done when:* both value schemas, `loadConfig` and every switch over
+      property types handle it.
+- [x] **3. Document links.** `documents: true` on a markdown property gives the
+      web editor a button that uploads a PDF and inserts
+      `[name](/assets/<id>)`; `loadConfig` refuses it without a `file` assets
+      object.
+      *Done when:* an inserted link is stored root-relative.

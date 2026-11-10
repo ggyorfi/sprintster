@@ -1,7 +1,10 @@
 export const MAX_ASSET_BYTES = 10 * 1024 * 1024;
 
 // SVG is excluded on purpose: blobs are served from the app's own origin, so an SVG opened directly would run its scripts there.
-export const ACCEPTED_ASSET_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif'] as const;
+export const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif'] as const;
+// Documents are served as downloads, never rendered on the app's origin (ADR 19).
+export const ACCEPTED_DOCUMENT_TYPES = ['application/pdf'] as const;
+export const ACCEPTED_ASSET_TYPES = [...ACCEPTED_IMAGE_TYPES, ...ACCEPTED_DOCUMENT_TYPES] as const;
 
 // Enough leading bytes to identify every accepted format; AVIF needs 12.
 export const ASSET_HEADER_BYTES = 16;
@@ -29,6 +32,15 @@ export function sniffImageType(header: Uint8Array): string | null {
   return null;
 }
 
+export function sniffAssetType(header: Uint8Array): string | null {
+  if (startsWith(header, 0, '%PDF-')) return 'application/pdf';
+  return sniffImageType(header);
+}
+
+export function isImageType(contentType: string): boolean {
+  return (ACCEPTED_IMAGE_TYPES as readonly string[]).includes(contentType);
+}
+
 function looksLikeSvg(header: Uint8Array): boolean {
   const text = new TextDecoder().decode(header.subarray(0, ASSET_HEADER_BYTES)).trimStart().toLowerCase();
   return text.startsWith('<svg') || text.startsWith('<?xml');
@@ -38,13 +50,15 @@ function megabytes(bytes: number): string {
   return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
 }
 
-const ACCEPTED = 'PNG, JPEG, GIF, WebP or AVIF only';
+const ACCEPTED_IMAGES = 'PNG, JPEG, GIF, WebP or AVIF only';
+const ACCEPTED = 'PNG, JPEG, GIF, WebP, AVIF or PDF only';
 
 // One definition of an acceptable upload, shared by the daemon that enforces it and the widgets that check before sending.
-export function assetUploadProblem(size: number, header: Uint8Array): string | null {
+export function assetUploadProblem(size: number, header: Uint8Array, opts: { imagesOnly?: boolean } = {}): string | null {
+  const accepted = opts.imagesOnly === true ? ACCEPTED_IMAGES : ACCEPTED;
   if (size === 0) return 'empty upload';
   if (size > MAX_ASSET_BYTES) return `file is ${megabytes(size)}, over the ${megabytes(MAX_ASSET_BYTES)} limit`;
-  if (sniffImageType(header) !== null) return null;
-  if (looksLikeSvg(header)) return `SVG is not accepted: ${ACCEPTED}`;
-  return `unrecognised image data: ${ACCEPTED}`;
+  if ((opts.imagesOnly === true ? sniffImageType(header) : sniffAssetType(header)) !== null) return null;
+  if (looksLikeSvg(header)) return `SVG is not accepted: ${accepted}`;
+  return `unrecognised file data: ${accepted}`;
 }

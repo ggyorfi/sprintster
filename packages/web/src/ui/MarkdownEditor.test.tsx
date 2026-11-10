@@ -4,7 +4,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MAX_ASSET_BYTES } from '@sprintster/engine';
 import { MarkdownEditor } from './MarkdownEditor.js';
-import { pngFile, pngFileOfSize, svgFile } from '../test-files.js';
+import { pdfFile, pngFile, pngFileOfSize, svgFile } from '../test-files.js';
 
 const attached = { id: 'a1' };
 
@@ -285,5 +285,30 @@ describe('MarkdownEditor', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Heading 1' }));
     await waitFor(() => expect(latest).not.toBe(''));
     expect(latest).toContain('![A blue cover](/assets/abc123)');
+  });
+
+  it('has no document button unless an attachDocument function is supplied', () => {
+    render(<MarkdownEditor value={'hello'} onChange={() => {}} attach={async () => attached} />);
+    expect(screen.queryByRole('button', { name: 'Link a document' })).toBeNull();
+  });
+
+  it('uploads a PDF and inserts a root-relative link named after it', async () => {
+    vi.stubEnv('VITE_API_URL', 'https://app.example.com');
+    let latest = '';
+    const attachDocument = vi.fn(async (_file: File) => ({ id: 'd1', title: 'Proposal' }));
+    const { container } = render(
+      <MarkdownEditor value={'Intro'} onChange={(v) => (latest = v)} attachDocument={attachDocument} />,
+    );
+    await userEvent.upload(container.querySelector('input[accept="application/pdf"]')!, pdfFile());
+    await waitFor(() => expect(latest).toContain('[Proposal](/assets/d1)'));
+    expect(latest).not.toContain('app.example.com');
+  });
+
+  it('refuses a PDF where only images are attached', async () => {
+    const attach = vi.fn(async (_file: File) => attached);
+    const { container } = render(<MarkdownEditor value={'Intro'} onChange={() => {}} attach={attach} />);
+    await userEvent.upload(container.querySelector('input[type=file]')!, pdfFile(), { applyAccept: false });
+    expect(screen.getByRole('alert')).toHaveTextContent(/AVIF only/);
+    expect(attach).not.toHaveBeenCalled();
   });
 });

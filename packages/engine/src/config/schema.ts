@@ -37,6 +37,7 @@ export type PropertyConfig =
       type: 'markdown';
       editor?: 'wysiwyg' | 'source' | 'combo' | undefined;
       images?: boolean | undefined;
+      documents?: boolean | undefined;
       translated?: boolean | undefined;
     })
   | (PropertyBase & { type: 'enum'; values: string[] })
@@ -49,6 +50,7 @@ export type PropertyConfig =
   | (PropertyBase & { type: 'boolean' })
   | (PropertyBase & { type: 'sequence' })
   | (PropertyBase & { type: 'image' })
+  | (PropertyBase & { type: 'file' })
   | (PropertyBase & { type: 'object'; properties: PropertyConfig[] })
   | (PropertyBase & { type: 'array'; item: { properties: PropertyConfig[] }; uniqueBy?: string | string[] | undefined });
 
@@ -71,6 +73,7 @@ const MarkdownProperty = z
     type: z.literal('markdown'),
     editor: z.enum(['wysiwyg', 'source', 'combo']).optional(),
     images: z.boolean().optional(),
+    documents: z.boolean().optional(),
     translated: z.boolean().optional(),
   })
   .strict();
@@ -87,6 +90,7 @@ const RefsProperty = z
   .strict();
 const BooleanProperty = z.object({ ...baseProperty, type: z.literal('boolean') }).strict();
 const ImageProperty = z.object({ ...baseProperty, type: z.literal('image') }).strict();
+const FileProperty = z.object({ ...baseProperty, type: z.literal('file') }).strict();
 const SequenceProperty = z.object({ ...baseProperty, type: z.literal('sequence') }).strict();
 const ObjectProperty = z
   .object({ ...baseProperty, type: z.literal('object'), properties: z.array(z.lazy(() => PropertyConfigSchema)) })
@@ -116,6 +120,7 @@ export const PropertyConfigSchema: z.ZodType<PropertyConfig> = z.lazy(() =>
     RefsProperty,
     BooleanProperty,
     ImageProperty,
+    FileProperty,
     SequenceProperty,
     ObjectProperty,
     ArrayProperty,
