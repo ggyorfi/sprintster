@@ -5,12 +5,12 @@ import { RecordTimes } from './ObjectForm.js';
 describe('RecordTimes', () => {
   it('shows created and updated as local date and time', () => {
     render(<RecordTimes row={{ id: 'x', createdAt: '2025-07-25T13:36:00Z', updatedAt: '2026-11-07T09:00:00Z' }} />);
-    expect(screen.getByText(/^Created \d{4}-\d\d-\d\d \d\d:\d\d – Updated 2026-11-0\d \d\d:\d\d$/)).toBeInTheDocument();
+    expect(screen.getByText(/^Created \d{1,2} Jul 2025, \d\d:\d\d · Updated \d{1,2} Nov 2026, \d\d:\d\d$/)).toBeInTheDocument();
   });
 
   it('shows both even when the record never changed, and nothing before its first save', () => {
     const { container, rerender } = render(<RecordTimes row={{ id: 'x', createdAt: '2025-07-25T13:36:00Z', updatedAt: '2025-07-25T13:36:00Z' }} />);
-    expect(screen.getByText(/ – Updated /)).toBeInTheDocument();
+    expect(screen.getByText(/ · Updated /)).toBeInTheDocument();
     rerender(<RecordTimes row={null} />);
     expect(container).toBeEmptyDOMElement();
   });

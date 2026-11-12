@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   assembleValues,
   lifecycleInfo,
+  recordExtensions,
   type ApiClient,
   type ObjectConfig,
   type ObjectResolver,
@@ -10,6 +11,9 @@ import {
 import { Modal, Button, ConfirmDialog, type ButtonVariant } from '../ui/index.js';
 import { FormLocales, ObjectFields, RecordTimes, useObjectForm } from './ObjectForm.js';
 import { formatError, primaryLabel, type Row } from './resolve.js';
+import { Extensions } from '../app/Extensions.js';
+import { resolveApiBaseUrl } from '../api/config.js';
+import { serverExtensions } from '../app/bootstrap.js';
 import styles from './ObjectPanel.module.css';
 
 type Confirm = { kind: 'delete' } | { kind: 'command'; command: string; to: string };
@@ -22,13 +26,15 @@ export interface ObjectPanelProps {
   row: Row | null;
   onClose: () => void;
   onChanged: () => void;
+  // A record action's reply, shown by the list once the dialog closes.
+  onReply?: (reply: { text: string; failed: boolean }) => void;
 }
 
 function commandTone(to: string): ButtonVariant {
   return to === 'cancelled' ? 'destructive' : 'additive';
 }
 
-export function ObjectPanel({ api, obj, resolveObject, initialMode, row, onClose, onChanged }: ObjectPanelProps) {
+export function ObjectPanel({ api, obj, resolveObject, initialMode, row, onClose, onChanged, onReply }: ObjectPanelProps) {
   const [mode] = useState<ViewMode>(initialMode);
   const form = useObjectForm(api, obj, resolveObject, mode, row);
   const { viewName, inputs, error, setError, busy, setBusy } = form;
@@ -93,7 +99,7 @@ export function ObjectPanel({ api, obj, resolveObject, initialMode, row, onClose
             {c.name}
           </Button>
         ))}
-      <div className={styles.spacer}>{mode !== 'create' && <RecordTimes row={row} />}</div>
+      <div className={styles.spacer} />
       <Button variant="neutral" onClick={onClose}>
         Close
       </Button>
@@ -114,6 +120,23 @@ export function ObjectPanel({ api, obj, resolveObject, initialMode, row, onClose
         headerCenter={<FormLocales form={form} />}
         width={obj.views?.find((v) => v.name === viewName)?.width}
       >
+        {mode !== 'create' && row !== null && (
+          <div className={styles.status}>
+            <Extensions
+              baseUrl={resolveApiBaseUrl()}
+              extensions={recordExtensions(serverExtensions, obj.name)}
+              record={{ object: obj.name, id: String(row['id']) }}
+              inline
+              disabled={(a) => a.disabledWhen !== undefined && (row[a.disabledWhen.column] as { text?: string } | null | undefined)?.text === a.disabledWhen.equals}
+              onActed={(reply) => {
+                onReply?.(reply);
+                onChanged();
+                onClose();
+              }}
+            />
+            <RecordTimes row={row} />
+          </div>
+        )}
         {error !== null && <div className={styles.error}>{error}</div>}
         <ObjectFields form={form} locales={false} />
       </Modal>

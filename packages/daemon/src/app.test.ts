@@ -54,6 +54,41 @@ function patch(body: unknown): RequestInit {
   return { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) };
 }
 
+describe('the actor (ADR 20)', () => {
+  const actorOfLastEvent = async (store: InMemoryEventStore) => (await store.findSince(0)).at(-1)?.actor;
+  const create = (trustActor: boolean) => {
+    const store = new InMemoryEventStore();
+    const app = createApp({ apis: [{ obj: fixtureClientConfig, api: createObjectApi<{ id: string }>(store, fixtureClientConfig) }], trustActor });
+    return { store, app };
+  };
+  const withActor = (init: RequestInit) => ({ ...init, headers: { ...(init.headers as Record<string, string>), 'Sprintster-Actor': 'anna' } });
+
+  it('records the header\'s user on create, update and delete when the host vouches for it', async () => {
+    const { store, app } = create(true);
+    await app.request('/clients', withActor(json(validInput)));
+    expect(await actorOfLastEvent(store)).toBe('anna');
+    await app.request(`/clients/${ID_A}`, withActor(patch({ name: 'Renamed' })));
+    expect(await actorOfLastEvent(store)).toBe('anna');
+  });
+
+  it('ignores the header unless the host vouches for it', async () => {
+    const { store, app } = create(false);
+    await app.request('/clients', withActor(json(validInput)));
+    expect(await actorOfLastEvent(store)).toBe('system');
+  });
+});
+
+describe('GET /<route>?at= (ADR 21)', () => {
+  it('lists records as they were at the position, and refuses a bad one', async () => {
+    const { store, app } = buildApp();
+    await app.request('/clients', json(validInput));
+    const before = await store.position();
+    await app.request(`/clients/${ID_A}`, patch({ name: 'Renamed' }));
+    expect(((await (await app.request(`/clients?at=${before}`)).json()) as Array<{ name: string }>).map((r) => r.name)).toEqual([validInput.name]);
+    expect((await app.request('/clients?at=-1')).status).toBe(400);
+  });
+});
+
 describe('createApp', () => {
   it('GET /health returns 200', async () => {
     const { app } = buildApp();
@@ -562,5 +597,35 @@ describe('object route paths', () => {
     const app = mount(objWith({}));
     expect((await app.request('/site settings')).status).toBe(404);
     expect((await app.request('/site%20settings')).status).toBe(404);
+  });
+});
+
+describe('plugin list columns (ADR 25)', () => {
+  it('adds each column\'s value to the rows a list returns, in one call per list', async () => {
+    const store = new InMemoryEventStore();
+    const api = createObjectApi<{ id: string }>(store, fixtureClientConfig);
+    const calls: string[][] = [];
+    const plugins = {
+      objects: [],
+      routes: [],
+      channels: [],
+      extensions: { actions: [], badges: [], columns: [{ id: 'pub.state', label: 'State' }] },
+      columns: [
+        {
+          id: 'pub.state',
+          label: 'State',
+          objects: [fixtureClientConfig.name],
+          values: async (_object: string, ids: string[]) => {
+            calls.push(ids);
+            return Object.fromEntries(ids.map((id) => [id, { text: 'Pending', tone: 'danger' as const }]));
+          },
+        },
+      ],
+    };
+    const app = createApp({ apis: [{ obj: fixtureClientConfig, api }], plugins });
+    await app.request('/clients', json(validInput));
+    const rows = (await (await app.request('/clients')).json()) as Array<Record<string, unknown>>;
+    expect(rows[0]!['pub.state']).toEqual({ text: 'Pending', tone: 'danger' });
+    expect(calls).toEqual([[ID_A]]);
   });
 });

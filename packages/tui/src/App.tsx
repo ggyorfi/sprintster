@@ -21,6 +21,7 @@ import {
   type ObjectStatus,
   type ViewFieldSpec,
   type ViewMode,
+  singletonId,
 } from '@sprintster/engine';
 import { MenuBar, type MenuTitle } from './components/MenuBar.js';
 import { ObjectList } from './components/ObjectList.js';
@@ -145,11 +146,12 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
   const [contextIndex, setContextIndex] = useState(0);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const extensions = useExtensions(daemonUrl);
-  const [pendingAction, setPendingAction] = useState<(typeof extensions.actions)[number] | null>(null);
+  type PendingAction = { action: (typeof extensions.actions)[number]; record?: { object: string; id: string } };
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
-  function runAction(action: (typeof extensions.actions)[number]): void {
+  function runAction({ action, record }: PendingAction): void {
     setStatusMessage(`${action.label}...`);
-    void extensions.run(action).then(setStatusMessage);
+    void extensions.run(action, record).then(setStatusMessage);
   }
   const [loading, setLoading] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
@@ -438,14 +440,24 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
     if (pendingAction !== null) {
       setPendingAction(null);
       if (input === 'y' || input === 'Y') runAction(pendingAction);
-      else setStatusMessage(`${pendingAction.label} cancelled.`);
+      else setStatusMessage(`${pendingAction.action.label} cancelled.`);
       return;
     }
 
     const action = key.ctrl ? extensions.actions.find((a) => a.hotkey === input) : undefined;
     if (action !== undefined) {
-      if (action.confirm !== undefined) setPendingAction(action);
-      else runAction(action);
+      let pending: PendingAction = { action };
+      // A record action (ADR 22) acts on the selected record of the list, or on the singleton shown.
+      if (action.placement === 'record') {
+        const id = activeObj === null ? undefined : activeObj.singleton === true ? singletonId(activeObj) : visibleRows[selected]?.['id'];
+        if (activeObj === null || id === undefined || (action.objects !== undefined && !action.objects.includes(activeObj.name))) {
+          setStatusMessage(`${action.label}: select a record it applies to first.`);
+          return;
+        }
+        pending = { action, record: { object: activeObj.name, id: String(id) } };
+      }
+      if (action.confirm !== undefined) setPendingAction(pending);
+      else runAction(pending);
       return;
     }
 
@@ -595,7 +607,7 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
     helpText = `${pendingDelete.message} (y/N)`;
     helpColor = THEME.errorColor;
   } else if (pendingAction !== null) {
-    helpText = `${pendingAction.confirm ?? pendingAction.label} (y/N)`;
+    helpText = `${pendingAction.action.confirm ?? pendingAction.action.label} (y/N)`;
     helpColor = THEME.errorColor;
   } else if (searching) {
     helpText = `Search: ${query}▌`;

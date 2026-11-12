@@ -31,10 +31,17 @@ export interface ObjectApi<State extends { id: string }> {
   redact(id: string, fields: readonly string[], actor?: string): Promise<State>;
   get(id: string): Promise<State | null>;
   list(): Promise<State[]>;
+  listAt(at: ListAt): Promise<State[]>;
   requireGet(id: string): Promise<State>;
   createSchema: z.ZodTypeAny;
   updateSchema: z.ZodTypeAny;
   commands: ReadonlyArray<CommandConfig>;
+}
+
+// ADR 21: `position` for every record, or the record's own entry in `positions`.
+export interface ListAt {
+  position: number;
+  positions?: Readonly<Record<string, number>>;
 }
 
 // Resolves a ref target's api so a write can verify the referenced object exists (and is not removed).
@@ -342,6 +349,19 @@ export function createObjectApi<State extends { id: string }>(
     return all;
   }
 
+  async function listAt(at: ListAt): Promise<State[]> {
+    const positionOf = (id: string) => at.positions?.[id] ?? at.position;
+    const all = await base.findManyAt(positionOf);
+    if (isSingleton) {
+      const stored = all.find((s) => s.id === singletonKey);
+      return [{ ...synthesizeSingleton(obj), ...(stored ?? {}), id: singletonKey } as unknown as State];
+    }
+    if (kind === 'softDelete' && lifecycleField !== null) {
+      return all.filter((r) => (r as Record<string, unknown>)[lifecycleField] !== true);
+    }
+    return all;
+  }
+
   async function runCommand(id: string, name: string, actor: string = defaultActor): Promise<State> {
     const ce = commandByName.get(name);
     if (ce === undefined) {
@@ -467,6 +487,7 @@ export function createObjectApi<State extends { id: string }>(
     runCommand,
     get,
     list,
+    listAt,
     requireGet,
     createSchema,
     updateSchema,

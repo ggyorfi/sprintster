@@ -30,6 +30,8 @@ export interface ApplyEventInput {
 export interface EntityApi<State> {
   findOneById(streamId: string): Promise<State | null>;
   findMany(): Promise<State[]>;
+  // ADR 21: each stream folded from its events up to `positionOf(streamId)`; a stream with none that early is left out.
+  findManyAt(positionOf: (streamId: string) => number): Promise<State[]>;
   createEvent(streamId: string, build: (state: State | null) => ApplyEventInput): Promise<State>;
   // Refolds every stream from the log into the store's states; a no-op for a store without them.
   rebuildStates(): Promise<void>;
@@ -67,6 +69,24 @@ export function createEntityApi<State>(
       let s: State | null = null;
       for (const e of list) s = reducer(s, e);
       out.set(streamId, { state: s, version: list[list.length - 1]?.streamVersion ?? 0 });
+    }
+    return out;
+  }
+
+  async function findManyAt(positionOf: (streamId: string) => number): Promise<State[]> {
+    const byStream = new Map<string, EventRow[]>();
+    for (const e of await store.findByStreamType(partitionId, streamType)) {
+      if (Number(e.id) > positionOf(e.streamId)) continue;
+      const arr = byStream.get(e.streamId);
+      if (arr === undefined) byStream.set(e.streamId, [e]);
+      else arr.push(e);
+    }
+    const out: State[] = [];
+    for (const list of byStream.values()) {
+      list.sort((a, b) => a.streamVersion - b.streamVersion);
+      let s: State | null = null;
+      for (const e of list) s = reducer(s, e);
+      if (s !== null) out.push(s);
     }
     return out;
   }
@@ -163,5 +183,5 @@ export function createEntityApi<State>(
     );
   }
 
-  return { findOneById, findMany, createEvent, rebuildStates };
+  return { findOneById, findMany, findManyAt, createEvent, rebuildStates };
 }

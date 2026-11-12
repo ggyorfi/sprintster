@@ -727,3 +727,35 @@ describe('createObjectApi: erase and redact (ADR 18)', () => {
     await expect(api.erase(ID_UNKNOWN)).rejects.toBeInstanceOf(NotFoundError);
   });
 });
+
+describe('listAt (ADR 21)', () => {
+  it('reads each record as it was at a log position', async () => {
+    const { store, api } = buildApi();
+    await api.add(validInput({ id: ID_A, name: 'Before' }));
+    const before = await store.position();
+    await api.update(ID_A, { name: 'After' });
+    await api.add(validInput({ id: ID_B, name: 'Later' }));
+    const at = await api.listAt({ position: before });
+    expect(at.map((r) => [r.id, r['name']])).toEqual([[ID_A, 'Before']]);
+    expect((await api.listAt({ position: await store.position() })).map((r) => r['name']).sort()).toEqual(['After', 'Later']);
+  });
+
+  it('lets a record\'s own position win over the shared one', async () => {
+    const { store, api } = buildApi();
+    await api.add(validInput({ id: ID_A, name: 'Before' }));
+    const before = await store.position();
+    await api.update(ID_A, { name: 'After' });
+    await api.add(validInput({ id: ID_B, name: 'Later' }));
+    const at = await api.listAt({ position: before, positions: { [ID_B]: await store.position() } });
+    expect(at.map((r) => r['name']).sort()).toEqual(['Before', 'Later']);
+  });
+
+  it('keeps a soft-deleted record until the position of its removal', async () => {
+    const { store, api } = buildApi();
+    await api.add(validInput({ id: ID_A }));
+    const before = await store.position();
+    await api.remove!(ID_A);
+    expect(await api.listAt({ position: before })).toHaveLength(1);
+    expect(await api.listAt({ position: await store.position() })).toHaveLength(0);
+  });
+});

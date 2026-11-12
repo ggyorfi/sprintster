@@ -9,6 +9,7 @@
   border: 1px solid transparent;
   cursor: pointer;
   user-select: none;
+  white-space: nowrap;
 }
 
 .btn:focus-visible {

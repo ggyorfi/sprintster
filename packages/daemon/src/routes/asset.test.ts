@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { createBlobApi, InMemoryBlobStore, InMemoryEventStore, MAX_ASSET_BYTES } from '@sprintster/engine';
+import { createBlobApi, InMemoryBlobStore, InMemoryEventStore, loadConfig, MAX_ASSET_BYTES, setAppConfig } from '@sprintster/engine';
+import { blobResponse } from '../blob-response.js';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createApp, type StaticFiles } from '../app.js';
 
@@ -218,5 +219,51 @@ describe('/assets is not mounted without a blob api, nor shadowed by the web cat
     const events = new InMemoryEventStore();
     const app = createApp({ apis: [], blobApi: createBlobApi(events, new InMemoryBlobStore()), web: nodeWeb(dir) });
     expect((await app.request('/assets', upload(png, 'image/png'))).status).toBe(201);
+  });
+});
+
+describe('uploads config (ADR 23)', () => {
+  const doc = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 1, 2, 3]);
+  const withUploads = (uploads: { anyFile?: boolean; maxMegabytes?: number } | undefined) =>
+    setAppConfig(loadConfig({ version: '1', objects: [], ...(uploads === undefined ? {} : { uploads }) }));
+  afterEach(() => withUploads(undefined));
+
+  it('refuses an office file unless the app accepts any file', async () => {
+    const { app } = buildApp();
+    expect((await app.request('/assets', upload(doc, 'application/msword', 'lesson.doc'))).status).toBe(400);
+    withUploads({ anyFile: true });
+    const res = await app.request('/assets', upload(doc, 'text/html', 'lesson.doc'));
+    expect(res.status).toBe(201);
+    const served = await app.request(`/assets/${await hashOf(res)}`);
+    expect(served.headers.get('content-type')).toBe('application/msword');
+    expect(served.headers.get('content-disposition')).toBe('attachment');
+  });
+
+  it('downloads an unknown extension as bytes, and still recognises a PDF by its content', async () => {
+    withUploads({ anyFile: true });
+    const { app } = buildApp();
+    const unknown = await app.request('/assets', upload(doc, 'image/png', 'slides.xyz'));
+    expect(((await unknown.clone().json()) as { contentType: string }).contentType).toBe('application/octet-stream');
+    const named = await app.request('/assets', upload(pdf, 'application/msword', 'notes.doc'));
+    expect(((await named.json()) as { contentType: string }).contentType).toBe('application/pdf');
+  });
+
+  it('applies the app\'s own size limit', async () => {
+    withUploads({ maxMegabytes: 20 });
+    const { app } = buildApp();
+    expect((await app.request('/assets', upload(pngOfSize(MAX_ASSET_BYTES + 1), 'image/png'))).status).toBe(201);
+    expect((await app.request('/assets', upload(pngOfSize(20 * 1024 * 1024 + 1), 'image/png'))).status).toBe(413);
+  });
+});
+
+describe('blobResponse', () => {
+  it('names the download and answers a matching ETag with 304', async () => {
+    const blobs = new InMemoryBlobStore();
+    const { hash } = await blobs.putBlob(pdf, 'application/pdf');
+    const api = { get: (h: string) => blobs.getBlob(h) };
+    const res = (await blobResponse(api, hash, new Request('https://site.test/x'), { filename: 'Óra terv.pdf' }))!;
+    expect(res.headers.get('content-disposition')).toBe('attachment; filename="Ora-terv.pdf"');
+    expect((await blobResponse(api, hash, new Request('https://site.test/x', { headers: { 'if-none-match': `"${hash}"` } })))!.status).toBe(304);
+    expect(await blobResponse(api, '0'.repeat(64), new Request('https://site.test/x'))).toBeNull();
   });
 });

@@ -7,7 +7,7 @@ export const ERASED_STREAM_TYPE = '__erased';
 // Engine-internal streams (sequences, unique claims) start with '__' and are not changes to an object; an erase marker (ADR 18) reports the record it erased.
 export async function changesSince(store: EventStore, position: number): Promise<LogChange[]> {
   return (await store.findSince(position)).flatMap((r: EventRow) => {
-    const change = { position: Number(r.id), object: r.streamType, id: r.streamId, event: r.eventType, at: r.recordedAt };
+    const change = { position: Number(r.id), object: r.streamType, id: r.streamId, event: r.eventType, at: r.recordedAt, actor: r.actor };
     if (r.streamType === ERASED_STREAM_TYPE) {
       const { object, id } = r.payload as { object: string; id: string };
       return [{ ...change, object, id }];

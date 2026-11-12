@@ -75,6 +75,7 @@ describe('daemon plugins', () => {
     expect(body.extensions).toEqual({
       actions: [{ id: 'counter.count', label: 'Tally', route: '/plugins/counter/items/x', hotkey: 'c' }],
       badges: [{ id: 'counter.status', route: '/plugins/counter/status', refresh: 10 }],
+      columns: [],
     });
     expect(body.objects.map((o) => o.name)).toEqual(['note', 'marker']);
   });

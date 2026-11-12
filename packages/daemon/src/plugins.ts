@@ -9,6 +9,7 @@ import {
   type DaemonPlugin,
   type DaemonPluginContext,
   type EventStore,
+  type GuiColumnSource,
   type GuiExtensions,
   type Logger,
   type ObjectRegistration,
@@ -34,6 +35,8 @@ export interface LoadedDaemonPlugins {
   objects: ObjectRegistration[];
   routes: MountedRoute[];
   extensions: GuiExtensions;
+  // ADR 25: the columns with their value functions, ids already prefixed with the namespace.
+  columns: GuiColumnSource[];
   // Full paths a client may open a WebSocket on.
   channels: string[];
 }
@@ -66,7 +69,7 @@ export async function loadDaemonPlugins(opts: {
   // Where declared secrets come from: the environment on Node, the Worker's env on Cloudflare.
   secret?: (name: string) => string | undefined;
 }): Promise<LoadedDaemonPlugins> {
-  const out: LoadedDaemonPlugins = { objects: [], routes: [], extensions: { actions: [], badges: [] }, channels: [] };
+  const out: LoadedDaemonPlugins = { objects: [], routes: [], extensions: { actions: [], badges: [], columns: [] }, columns: [], channels: [] };
   const logger = opts.logger ?? consoleLogger;
   const base = (namespace: string) => `/plugins/${namespace}`;
   const loaded = await loadPlugins<DaemonPluginContext>({
@@ -79,6 +82,7 @@ export async function loadDaemonPlugins(opts: {
     },
     buildContext: (entry, namespace, config, manifest) => ({
       config,
+      app: opts.config,
       logger,
       secrets: readPluginSecrets(entry.name, manifest.secrets ?? [], opts.secret ?? (() => undefined), manifest.optionalSecrets ?? []),
       objects: { register: (o) => out.objects.push(o) },
@@ -93,6 +97,11 @@ export async function loadDaemonPlugins(opts: {
       gui: {
         action: (a) => out.extensions.actions.push({ ...a, id: `${namespace}.${a.id}`, route: `${base(namespace)}${a.route}` }),
         badge: (b) => out.extensions.badges.push({ ...b, id: `${namespace}.${b.id}`, route: `${base(namespace)}${b.route}` }),
+        column: (c) => {
+          const id = `${namespace}.${c.id}`;
+          out.columns.push({ ...c, id });
+          out.extensions.columns!.push({ id, label: c.label, ...(c.objects === undefined ? {} : { objects: c.objects }) });
+        },
       },
       data: {
         object: (name) => {

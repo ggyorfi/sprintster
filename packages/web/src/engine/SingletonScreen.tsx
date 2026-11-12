@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   assembleValues,
+  recordExtensions,
   singletonId,
   type ApiClient,
   type ObjectConfig,
@@ -9,6 +10,9 @@ import {
 import { Button } from '../ui/index.js';
 import { ObjectFields, RecordTimes, useObjectForm } from './ObjectForm.js';
 import { formatError, type Row } from './resolve.js';
+import { Extensions } from '../app/Extensions.js';
+import { serverExtensions } from '../app/bootstrap.js';
+import { resolveApiBaseUrl } from '../api/config.js';
 import styles from './ObjectScreen.module.css';
 
 export interface SingletonScreenProps {
@@ -65,6 +69,15 @@ export function SingletonScreen({ api, obj, resolveObject }: SingletonScreenProp
       <div className={styles.header}>
         <h1 className={styles.title}>{obj.titlePlural}</h1>
         <div className={styles.tools}>
+          {row !== null && (
+            <Extensions
+              key={String(row['updatedAt'] ?? '')}
+              baseUrl={resolveApiBaseUrl()}
+              extensions={recordExtensions(serverExtensions, obj.name)}
+              record={{ object: obj.name, id: singletonId(obj) }}
+              inline
+            />
+          )}
           <Button variant="primary" disabled={busy || loading} onClick={save}>
             Save
           </Button>

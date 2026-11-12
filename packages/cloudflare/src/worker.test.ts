@@ -29,6 +29,13 @@ describe('createWorker', () => {
     expect(await (await req('/notes')).json()).toEqual([expect.objectContaining({ id: ID, title: 'Edited' })]);
   });
 
+  it('drops a client\'s claim to be someone when nothing authenticates', async () => {
+    const id = '44444444-4444-4444-8444-444444444444';
+    await req('/notes', { method: 'POST', headers: { 'content-type': 'application/json', 'Sprintster-Actor': 'mallory' }, body: JSON.stringify({ id, title: 'Anon' }) });
+    const log = (await (await req('/log')).json()) as { changes: Array<{ id: string; actor: string }> };
+    expect(log.changes.find((c) => c.id === id)?.actor).toBe('system');
+  });
+
   it('stores uploads in R2 and serves them back by hash', async () => {
     const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]);
     const form = new FormData();
@@ -71,6 +78,15 @@ describe('basic auth', () => {
   it('lets the right credentials through and refuses wrong ones', async () => {
     expect((await call('/notes', secrets, auth('gabor', 's3cret'))).status).toBe(200);
     expect((await call('/notes', secrets, auth('gabor', 'wrong'))).status).toBe(401);
+  });
+
+  it('records the authenticated user as the actor and ignores a client\'s own claim', async () => {
+    const id = '33333333-3333-4333-8333-333333333333';
+    const headers = { ...auth('gabor', 's3cret'), 'content-type': 'application/json', 'Sprintster-Actor': 'mallory' };
+    const env2 = { ...(env as unknown as SprintsterEnv), ...secrets };
+    await worker.fetch(new Request('https://app.test/notes', { method: 'POST', headers, body: JSON.stringify({ id, title: 'Mine' }) }), env2);
+    const log = (await (await call('/log', secrets, auth('gabor', 's3cret'))).json()) as { changes: Array<{ id: string; actor: string }> };
+    expect(log.changes.find((c) => c.id === id)?.actor).toBe('gabor');
   });
 
   it('keeps /health open', async () => {

@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { ObjectConfig } from '../config/schema.js';
+import type { Config, ObjectConfig } from '../config/schema.js';
 
 export interface Logger {
   info(message: string, fields?: Record<string, unknown>): void;
@@ -16,6 +16,8 @@ export interface ObjectStatus {
 
 export interface PluginObjectApi<S extends { id: string }> {
   list(): Promise<S[]>;
+  // ADR 21; absent on objects backed by something other than the log.
+  listAt?(at: { position: number; positions?: Readonly<Record<string, number>> }): Promise<S[]>;
   get(id: string): Promise<S | null>;
   requireGet(id: string): Promise<S>;
   add?(input: unknown, actor?: string): Promise<S>;
@@ -67,8 +69,8 @@ export interface PublicRoute {
   path: string;
 }
 
-// Where the web GUI shows an action or badge: the sidebar (default), or the Maintenance page for rarely used switches.
-export type GuiPlacement = 'sidebar' | 'maintenance';
+// Where the GUIs show an action or badge: the sidebar (default), the Maintenance page for rarely used switches, or a record's dialog (ADR 22).
+export type GuiPlacement = 'sidebar' | 'maintenance' | 'record';
 
 // A button; pressing it POSTs to `route` and shows the reply's `message`. `hotkey` is for the TUI.
 export interface GuiAction {
@@ -78,6 +80,13 @@ export interface GuiAction {
   confirm?: string;
   hotkey?: string;
   placement?: GuiPlacement;
+  // With placement 'record': the objects it applies to, every object when absent. It POSTs { object, id }.
+  objects?: string[];
+  // ADR 25: also a button in each list row; disabled where a plugin column shows `equals`.
+  inList?: boolean;
+  disabledWhen?: { column: string; equals: string };
+  // ADR 25: asks for one value first; the POST body carries it as `value`, null when an optional one is left empty.
+  input?: { type: 'datetime'; label: string; optional?: boolean };
 }
 
 export type BadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
@@ -88,17 +97,44 @@ export interface GuiBadge {
   route: string;
   refresh?: number;
   placement?: GuiPlacement;
+  // With placement 'record': as for an action; the route is called with ?object=&id=.
+  objects?: string[];
+}
+
+// ADR 25: a value per record that lists show; rows carry it under the column's id.
+export interface GuiColumn {
+  id: string;
+  label: string;
+  objects?: string[];
+}
+
+export type ColumnValue = { text: string; tone: BadgeTone };
+
+export interface GuiColumnSource extends GuiColumn {
+  values(object: string, ids: string[]): Promise<Record<string, ColumnValue>>;
 }
 
 // What /config lists: ids prefixed with the namespace, routes as full daemon paths.
 export interface GuiExtensions {
   actions: GuiAction[];
   badges: GuiBadge[];
+  columns?: GuiColumn[];
+}
+
+export function columnsFor(extensions: GuiExtensions, object: string): GuiColumn[] {
+  return (extensions.columns ?? []).filter((c) => c.objects === undefined || c.objects.includes(object));
 }
 
 export function extensionsAt(extensions: GuiExtensions, placement: GuiPlacement): GuiExtensions {
   const here = (e: { placement?: GuiPlacement }) => (e.placement ?? 'sidebar') === placement;
   return { actions: extensions.actions.filter(here), badges: extensions.badges.filter(here) };
+}
+
+// The record actions and badges that apply to one object.
+export function recordExtensions(extensions: GuiExtensions, object: string): GuiExtensions {
+  const here = (e: { objects?: string[] }) => e.objects === undefined || e.objects.includes(object);
+  const at = extensionsAt(extensions, 'record');
+  return { actions: at.actions.filter(here), badges: at.badges.filter(here) };
 }
 
 export interface LogChange {
@@ -107,6 +143,7 @@ export interface LogChange {
   id: string;
   event: string;
   at: string;
+  actor: string;
 }
 
 export interface PluginData {
@@ -121,10 +158,12 @@ export interface Channel {
 }
 
 export interface DaemonRegistries {
+  // The loaded app config. Read it here, not from the engine's module state: a plugin bundled apart from the host has its own copy of that.
+  app: Config;
   objects: { register(o: ObjectRegistration): void };
   routes: { register(r: PluginRoute): void };
   channels: { open(name: string): Channel };
-  gui: { action(a: GuiAction): void; badge(b: GuiBadge): void };
+  gui: { action(a: GuiAction): void; badge(b: GuiBadge): void; column(c: GuiColumnSource): void };
   data: PluginData;
   // Exactly the secrets the manifest declares; every required one is present and non-empty, an optional one only when set.
   secrets: Readonly<Record<string, string>>;

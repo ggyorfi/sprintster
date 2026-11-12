@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { basicAuth } from 'hono/basic-auth';
 import {
+  ACTOR_HEADER,
   buildApis,
   createApp,
   loadDaemonPlugins,
@@ -21,6 +22,9 @@ import {
 interface Fetcher {
   fetch(request: Request): Promise<Response>;
 }
+
+// A public site in front of the app's bucket reads blobs with the same key scheme (ADR 23).
+export { createR2BlobStore, type R2BucketLike };
 
 // The bindings the project's wrangler config declares, typed by the slice used so the package needs no Workers type definitions.
 export interface SprintsterEnv {
@@ -66,6 +70,8 @@ export interface SprintsterWorker {
 export interface WorkerOptions {
   // A Worker cannot import a package by name at runtime, so each plugin the config lists is passed in under that name.
   plugins?: Record<string, PluginModule>;
+  // ADR 20: a gate wrapping `worker` strips a client's Sprintster-Actor header and sets its own; without this the Worker strips it.
+  trustActor?: boolean;
 }
 
 // One app per Worker: every request goes to the same Durable Object, whose SQLite storage holds the event log.
@@ -98,7 +104,7 @@ export function createWorker(projectConfig: { app: unknown }, opts: WorkerOption
         const secret = (name: string) => (typeof vars[name] === 'string' ? vars[name] : undefined);
         const plugins = await loadDaemonPlugins({ config, store, apis, resolve, sockets, secret });
         this.#channels = plugins.channels;
-        return createApp({ apis, blobApi: createBlobApi(store, createR2BlobStore(env.BLOBS)), web: assetFiles(env.ASSETS), store, plugins });
+        return createApp({ apis, blobApi: createBlobApi(store, createR2BlobStore(env.BLOBS)), web: assetFiles(env.ASSETS), store, plugins, trustActor: true });
       })();
     }
 
@@ -120,7 +126,16 @@ export function createWorker(projectConfig: { app: unknown }, opts: WorkerOption
   const toApp = (request: Request, env: SprintsterEnv) => env.APP.get(env.APP.idFromName('app')).fetch(request);
 
   // Checked here rather than in the Durable Object, so a refused request costs no Durable Object request.
-  const gate = new Hono<{ Bindings: SprintsterEnv }>()
+  // The Durable Object trusts the header, so a client's own copy never gets past this point (ADR 20).
+  const withActor = (request: Request, actor: string | undefined): Request => {
+    if (opts.trustActor === true && actor === undefined) return request;
+    const forwarded = new Request(request);
+    forwarded.headers.delete(ACTOR_HEADER);
+    if (actor !== undefined) forwarded.headers.set(ACTOR_HEADER, actor);
+    return forwarded;
+  };
+
+  const gate = new Hono<{ Bindings: SprintsterEnv; Variables: { actor: string | undefined } }>()
     .use('*', async (c, next) => {
       if (c.req.path === '/health' || isPublic(c.req.raw)) return next();
       const { SPRINTSTER_USER: username, SPRINTSTER_PASSWORD: password } = c.env;
@@ -128,9 +143,12 @@ export function createWorker(projectConfig: { app: unknown }, opts: WorkerOption
       if (!username || !password) {
         return c.json({ code: 'auth_misconfigured', message: 'set both SPRINTSTER_USER and SPRINTSTER_PASSWORD, or neither' }, 500);
       }
-      return basicAuth({ username, password, realm: 'sprintster' })(c, next);
+      return basicAuth({ username, password, realm: 'sprintster' })(c, async () => {
+        c.set('actor', username);
+        await next();
+      });
     })
-    .all('*', (c) => toApp(c.req.raw, c.env));
+    .all('*', (c) => toApp(withActor(c.req.raw, c.get('actor')), c.env));
 
   const worker = {
     fetch(request: Request, env: SprintsterEnv): Promise<Response> {

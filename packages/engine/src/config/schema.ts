@@ -339,6 +339,15 @@ export const AuthConfig = z
   .strict();
 export type AuthConfig = z.infer<typeof AuthConfig>;
 
+// ADR 23: an app that hands out downloads accepts any file, up to its own limit.
+export const UploadsConfig = z
+  .object({
+    anyFile: z.boolean().optional(),
+    maxMegabytes: z.number().int().positive().max(100).optional(),
+  })
+  .strict();
+export type UploadsConfig = z.infer<typeof UploadsConfig>;
+
 export const ConfigSchema = z
   .object({
     version: z.literal('1'),
@@ -350,6 +359,7 @@ export const ConfigSchema = z
     assets: z.string().min(1).optional(),
     plugins: z.array(PluginEntry).default([]),
     auth: AuthConfig.optional(),
+    uploads: UploadsConfig.optional(),
   })
   .strict();
 export type Config = z.infer<typeof ConfigSchema>;

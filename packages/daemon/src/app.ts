@@ -1,4 +1,4 @@
-import { Hono, type MiddlewareHandler } from 'hono';
+import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import {
   appConfig,
   assetFileProperty,
@@ -30,6 +30,8 @@ export interface AppDeps {
   web?: StaticFiles;
   store?: EventStore;
   plugins?: LoadedDaemonPlugins;
+  // ADR 20: true when the host strips a client's Sprintster-Actor header and sets its own after authenticating.
+  trustActor?: boolean;
 }
 
 // A client-side route has no file extension on its last segment; a missing asset does.
@@ -65,8 +67,18 @@ function claimedByApi(path: string, apiRoots: ReadonlySet<string>): boolean {
   return first !== 'assets' || !looksLikeFile(path);
 }
 
+export const ACTOR_HEADER = 'Sprintster-Actor';
+
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
+  const actorOf = (c: Context): string | undefined => (deps.trustActor === true ? c.req.header(ACTOR_HEADER) || undefined : undefined);
+  // A plugin reads the actor from the request, so a header the host did not set never reaches it.
+  const vouched = (request: Request): Request => {
+    if (deps.trustActor === true || !request.headers.has(ACTOR_HEADER)) return request;
+    const copy = new Request(request);
+    copy.headers.delete(ACTOR_HEADER);
+    return copy;
+  };
   const apis: MountedObject[] = [...deps.apis, ...(deps.plugins?.objects ?? []).map(({ config, api }) => ({ obj: config, api }))];
   app.route('/health', healthRoute);
   app.get('/config', (c) =>
@@ -81,7 +93,14 @@ export function createApp(deps: AppDeps): Hono {
     }),
   );
   for (const { api, obj } of apis) {
-    app.route(`/${objectRoute(obj)}`, createObjectRoute(api, obj));
+    const columns = (deps.plugins?.columns ?? []).filter((col) => col.objects === undefined || col.objects.includes(obj.name));
+    const decorate = async (rows: Array<{ id: string }>) => {
+      if (columns.length === 0 || rows.length === 0) return rows;
+      const ids = rows.map((r) => r.id);
+      const values = await Promise.all(columns.map((col) => col.values(obj.name, ids)));
+      return rows.map((r) => Object.assign({}, r, ...columns.map((col, i) => ({ [col.id]: values[i]![r.id] ?? null }))));
+    };
+    app.route(`/${objectRoute(obj)}`, createObjectRoute(api, obj, actorOf, decorate));
   }
   const apiRoots = new Set(['health', 'config', 'plugins', ...apis.map(({ obj }) => objectRoute(obj))]);
   if (deps.store !== undefined) {
@@ -114,10 +133,10 @@ export function createApp(deps: AppDeps): Hono {
     apiRoots.add('log');
   }
   for (const r of deps.plugins?.routes ?? []) {
-    app.on(r.method, `/plugins/${r.namespace}${r.path}`, (c) => r.handler(c.req.raw, c.req.param() as Record<string, string>));
+    app.on(r.method, `/plugins/${r.namespace}${r.path}`, (c) => r.handler(vouched(c.req.raw), c.req.param() as Record<string, string>));
   }
   if (deps.blobApi !== undefined) {
-    app.route('/assets', createAssetRoute(deps.blobApi, assetHashResolver({ ...deps, apis })));
+    app.route('/assets', createAssetRoute(deps.blobApi, assetHashResolver({ ...deps, apis }), actorOf));
     apiRoots.add('assets');
   }
   app.use('/*', async (c, next) => {

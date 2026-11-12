@@ -4,7 +4,8 @@ import styles from './Table.module.css';
 export interface Column {
   key: string;
   label: string;
-  width?: number;
+  // A number is pixels; a string is any CSS width.
+  width?: number | string;
   suffix?: string;
 }
 
@@ -16,6 +17,8 @@ export interface TableProps {
   onSelect?: (id: string) => void;
   onEdit?: ((id: string) => void) | undefined;
   onView?: ((id: string) => void) | undefined;
+  // Extra buttons per row, before view and edit.
+  rowActions?: ((id: string) => ReactNode) | undefined;
   emptyLabel?: string;
 }
 
@@ -46,9 +49,11 @@ export function Table({
   onSelect,
   onEdit,
   onView,
+  rowActions,
   emptyLabel = 'No rows',
 }: TableProps) {
-  const colCount = columns.length + (onEdit !== undefined || onView !== undefined ? 1 : 0);
+  const hasActions = onEdit !== undefined || onView !== undefined || rowActions !== undefined;
+  const colCount = columns.length + (hasActions ? 1 : 0);
   return (
     <table className={styles.table}>
       <thead>
@@ -58,7 +63,7 @@ export function Table({
               {col.label}
             </th>
           ))}
-          {(onEdit !== undefined || onView !== undefined) && <th className={styles.th} aria-hidden="true" />}
+          {hasActions && <th className={styles.th} aria-hidden="true" />}
         </tr>
       </thead>
       <tbody>
@@ -89,8 +94,9 @@ export function Table({
                     )}
                   </td>
                 ))}
-                {(onEdit !== undefined || onView !== undefined) && (
-                  <td className={[styles.td, styles.actionCell].join(' ')}>
+                {hasActions && (
+                  <td className={[styles.td, styles.actionCell].join(' ')} onClick={(e) => e.stopPropagation()}>
+                    {rowActions?.(id)}
                     {onView !== undefined && (
                       <button
                         type="button"

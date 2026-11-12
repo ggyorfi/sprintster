@@ -54,6 +54,16 @@ export const plugin = {
   `placement: 'maintenance'`, on the Maintenance page, for switches used rarely
   enough that they should not sit next to everyday buttons. The TUI lists them
   all.
+- **Record placement** (ADR 22): `placement: 'record'`, with an optional
+  `objects` list, shows them in a record's dialog (and a singleton's screen).
+  The action POSTs `{ object, id }`; the badge is called with
+  `?object=&id=`. In the TUI a record action runs on the selected row.
+- **The app config** is `ctx.app`. Read objects and settings there, not from
+  the engine's `appConfig`: a plugin package bundles its own copy of the engine,
+  whose module state the host never sets.
+- **Who acted** (ADR 20): a route handler reads the user from the
+  `Sprintster-Actor` request header when the host sets it, and passes it as
+  the `actor` of its writes.
 - **Channels** push to listening clients: `ctx.channels.open('jobs')` returns
   `{ send(message) }`, and clients open a WebSocket on
   `/plugins/<namespace>/channels/jobs`. Messages are JSON; clients only listen.

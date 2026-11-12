@@ -37,6 +37,55 @@ export function sniffAssetType(header: Uint8Array): string | null {
   return sniffImageType(header);
 }
 
+// ADR 23: with `anyFile`, a file that is neither image nor PDF takes its type from its name, never from the client's label.
+const TYPES_BY_EXTENSION: Readonly<Record<string, string>> = {
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint',
+  pps: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  ppsx: 'application/vnd.openxmlformats-officedocument.presentationml.slideshow',
+  odt: 'application/vnd.oasis.opendocument.text',
+  ods: 'application/vnd.oasis.opendocument.spreadsheet',
+  odp: 'application/vnd.oasis.opendocument.presentation',
+  rtf: 'application/rtf',
+  txt: 'text/plain',
+  csv: 'text/csv',
+  zip: 'application/zip',
+  rar: 'application/vnd.rar',
+  '7z': 'application/x-7z-compressed',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  mp4: 'video/mp4',
+  epub: 'application/epub+zip',
+  notebook: 'application/x-smarttech-notebook',
+  flipchart: 'application/x-promethean-flipchart',
+};
+
+export function typeByExtension(filename: string): string {
+  const dot = filename.lastIndexOf('.');
+  return (dot < 0 ? undefined : TYPES_BY_EXTENSION[filename.slice(dot + 1).toLowerCase()]) ?? 'application/octet-stream';
+}
+
+export interface UploadOptions {
+  imagesOnly?: boolean;
+  anyFile?: boolean;
+  maxBytes?: number;
+}
+
+export function uploadOptions(uploads: { anyFile?: boolean | undefined; maxMegabytes?: number | undefined } | undefined): UploadOptions {
+  return {
+    ...(uploads?.anyFile === true ? { anyFile: true } : {}),
+    ...(uploads?.maxMegabytes === undefined ? {} : { maxBytes: uploads.maxMegabytes * 1024 * 1024 }),
+  };
+}
+
+export function assetContentType(header: Uint8Array, filename: string, opts: UploadOptions = {}): string | null {
+  return sniffAssetType(header) ?? (opts.anyFile === true ? typeByExtension(filename) : null);
+}
+
 export function isImageType(contentType: string): boolean {
   return (ACCEPTED_IMAGE_TYPES as readonly string[]).includes(contentType);
 }
@@ -54,10 +103,12 @@ const ACCEPTED_IMAGES = 'PNG, JPEG, GIF, WebP or AVIF only';
 const ACCEPTED = 'PNG, JPEG, GIF, WebP, AVIF or PDF only';
 
 // One definition of an acceptable upload, shared by the daemon that enforces it and the widgets that check before sending.
-export function assetUploadProblem(size: number, header: Uint8Array, opts: { imagesOnly?: boolean } = {}): string | null {
+export function assetUploadProblem(size: number, header: Uint8Array, opts: UploadOptions = {}): string | null {
   const accepted = opts.imagesOnly === true ? ACCEPTED_IMAGES : ACCEPTED;
+  const max = opts.maxBytes ?? MAX_ASSET_BYTES;
   if (size === 0) return 'empty upload';
-  if (size > MAX_ASSET_BYTES) return `file is ${megabytes(size)}, over the ${megabytes(MAX_ASSET_BYTES)} limit`;
+  if (size > max) return `file is ${megabytes(size)}, over the ${megabytes(max)} limit`;
+  if (opts.imagesOnly !== true && opts.anyFile === true) return null;
   if ((opts.imagesOnly === true ? sniffImageType(header) : sniffAssetType(header)) !== null) return null;
   if (looksLikeSvg(header)) return `SVG is not accepted: ${accepted}`;
   return `unrecognised file data: ${accepted}`;

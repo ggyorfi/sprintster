@@ -42,3 +42,26 @@ describe('useExtensions', () => {
     await until(() => (lastFrame() ?? '').includes('0 changes'));
   });
 });
+
+describe('record extensions (ADR 22)', () => {
+  it('posts the record to a record action and leaves record badges out of the footer', async () => {
+    const withRecord = {
+      extensions: {
+        actions: [{ id: 'pub.one', label: 'Publish', route: '/plugins/pub/record', placement: 'record' }],
+        badges: [{ id: 'pub.state', route: '/plugins/pub/state', placement: 'record' }],
+      },
+    };
+    const fetchMock = vi.fn(async (url: string) => (url.endsWith('/config') ? Response.json(withRecord) : Response.json({ message: 'Published.', text: 'never' })));
+    let latest: Extensions | undefined;
+    function Probe() {
+      latest = useExtensions('http://d', fetchMock as unknown as typeof fetch);
+      return <Text>{latest.badges}</Text>;
+    }
+    render(<Probe />);
+    await until(() => latest!.actions.length === 1);
+    expect(await latest!.run(latest!.actions[0]!, { object: 'post', id: 'p1' })).toBe('Published.');
+    const post = fetchMock.mock.calls.find((c) => String(c[0]).endsWith('/plugins/pub/record')) as unknown as [string, RequestInit];
+    expect(JSON.parse(String(post[1].body))).toEqual({ object: 'post', id: 'p1' });
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/plugins/pub/state'))).toBe(false);
+  });
+});

@@ -4,7 +4,8 @@ import type { GuiAction, GuiExtensions } from '@sprintster/engine';
 export interface Extensions {
   actions: GuiAction[];
   badges: string;
-  run(action: GuiAction): Promise<string>;
+  // A record action (ADR 22) is posted the record it acts on.
+  run(action: GuiAction, record?: { object: string; id: string }): Promise<string>;
 }
 
 // Plugin actions and badges as the daemon lists them in /config; the TUI shows badge text in its footer and runs actions on Ctrl+hotkey.
@@ -22,7 +23,8 @@ export function useExtensions(daemonUrl: string, fetchImpl: typeof fetch = fetch
 
   useEffect(() => {
     let alive = true;
-    const timers = declared.badges.map((badge) => {
+    // A record badge needs a record, so the footer only shows the app-wide ones.
+    const timers = declared.badges.filter((badge) => badge.placement !== 'record').map((badge) => {
       const load = () =>
         fetchImpl(`${daemonUrl}${badge.route}`)
           .then((r) => r.json() as Promise<{ text?: string }>)
@@ -38,9 +40,12 @@ export function useExtensions(daemonUrl: string, fetchImpl: typeof fetch = fetch
   }, [daemonUrl, fetchImpl, declared, tick]);
 
   const run = useCallback(
-    async (action: GuiAction) => {
+    async (action: GuiAction, record?: { object: string; id: string }) => {
       try {
-        const res = await fetchImpl(`${daemonUrl}${action.route}`, { method: 'POST' });
+        const res = await fetchImpl(
+          `${daemonUrl}${action.route}`,
+          record === undefined ? { method: 'POST' } : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(record) },
+        );
         const body = (await res.json().catch(() => ({}))) as { message?: string };
         return body.message ?? (res.ok ? `${action.label}: done.` : `${action.label} failed (${res.status}).`);
       } catch {

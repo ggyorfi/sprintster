@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { assetUploadProblem, MAX_ASSET_BYTES, sniffAssetType, sniffImageType } from './limits.js';
+import { assetContentType, assetUploadProblem, MAX_ASSET_BYTES, sniffAssetType, sniffImageType, typeByExtension, uploadOptions } from './limits.js';
 
 const ascii = (s: string): number[] => Array.from(s, (c) => c.charCodeAt(0));
 
@@ -78,5 +78,20 @@ describe('assetUploadProblem', () => {
   it('judges the bytes, so a label cannot make an SVG acceptable nor a WebP unacceptable', () => {
     expect(assetUploadProblem(100, svg)).not.toBeNull();
     expect(assetUploadProblem(100, HEADERS['image/webp']!)).toBeNull();
+  });
+});
+
+describe('any file (ADR 23)', () => {
+  it('takes a type from the extension only when the app accepts any file', () => {
+    const bytes = new Uint8Array([1, 2, 3, 4]);
+    expect(assetContentType(bytes, 'Lesson.PPTX', { anyFile: true })).toBe('application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    expect(assetContentType(bytes, 'Lesson.pptx')).toBeNull();
+    expect(typeByExtension('noextension')).toBe('application/octet-stream');
+  });
+
+  it('turns the uploads config into limits', () => {
+    expect(uploadOptions({ anyFile: true, maxMegabytes: 50 })).toEqual({ anyFile: true, maxBytes: 50 * 1024 * 1024 });
+    expect(assetUploadProblem(5, new Uint8Array([1, 2, 3]), { anyFile: true })).toBeNull();
+    expect(assetUploadProblem(5, new Uint8Array([1, 2, 3]), { anyFile: true, imagesOnly: true })).toMatch(/unrecognised/);
   });
 });

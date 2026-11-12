@@ -5,7 +5,7 @@ import { Markdown } from '@tiptap/markdown';
 import Image from '@tiptap/extension-image';
 import { NodeSelection } from '@tiptap/pm/state';
 import { assetUrl, storedAssetUrl, displayedAssetUrl } from '../api/assets.js';
-import { useAssetUpload, type AssetUpload } from './useAssetUpload.js';
+import { anyFileAllowed, useAssetUpload, type AssetUpload } from './useAssetUpload.js';
 import styles from './MarkdownEditor.module.css';
 
 // Serialising is the one path every edit goes through, so it is where the root-relative rule is enforced rather than assumed.
@@ -132,12 +132,12 @@ function DocumentButton({ editor, uploader }: { editor: Editor; uploader: AssetU
         onMouseDown={(e) => e.preventDefault()}
         onClick={() => inputRef.current?.click()}
       >
-        {busy ? '…' : 'PDF'}
+        {busy ? '…' : anyFileAllowed() ? 'File' : 'PDF'}
       </button>
       <input
         ref={inputRef}
         type="file"
-        accept="application/pdf"
+        accept={anyFileAllowed() ? undefined : 'application/pdf'}
         className={styles.fileInput}
         disabled={busy}
         onChange={(e) => void onFile(e.target.files?.[0])}

@@ -1,6 +1,8 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import {
+  columnsFor,
   listColumns,
+  recordExtensions,
   filterByConfig,
   lifecycleInfo,
   type ApiClient,
@@ -9,7 +11,10 @@ import {
   type SearchSpec,
   type ViewMode,
 } from '@sprintster/engine';
-import { Table, SearchBar, Button, EmptyState, type Column } from '../ui/index.js';
+import { Table, SearchBar, Button, EmptyState, Pill, type Column, type PillTone } from '../ui/index.js';
+import { serverExtensions } from '../app/bootstrap.js';
+import { RecordAction } from '../app/RecordAction.js';
+import { resolveApiBaseUrl } from '../api/config.js';
 import { useObjectList } from './useObjectList.js';
 import { renderCell } from './cells.js';
 import { ObjectPanel } from './ObjectPanel.js';
@@ -32,6 +37,9 @@ function ListScreen({ api, obj, resolveObject }: ObjectScreenProps) {
   const { rows, loading, error, refetch } = useObjectList(api, obj, resolveObject);
   const [query, setQuery] = useState('');
   const [panel, setPanel] = useState<{ mode: ViewMode; row: Row | null } | null>(null);
+  const [reply, setReply] = useState<{ text: string; failed: boolean } | null>(null);
+  const pluginColumns = useMemo(() => columnsFor(serverExtensions, obj.name), [obj]);
+  const rowActions = useMemo(() => recordExtensions(serverExtensions, obj.name).actions.filter((a) => a.inList === true), [obj]);
 
   const cols = useMemo(() => listColumns(obj, 'default', resolveObject), [obj, resolveObject]);
   const lifecycle = useMemo(() => lifecycleInfo(obj), [obj]);
@@ -46,10 +54,18 @@ function ListScreen({ api, obj, resolveObject }: ObjectScreenProps) {
     [rows, query, search],
   );
 
-  const tableColumns: Column[] = cols.map((c) => ({ key: c.key, label: c.thumbnail ? '' : c.label, width: c.thumbnail ? 56 : c.width }));
+  const tableColumns: Column[] = [
+    // List widths count characters, as in the TUI.
+    ...cols.map((c) => ({ key: c.key, label: c.thumbnail ? '' : c.label, ...(c.thumbnail ? { width: 56 } : c.width === undefined ? {} : { width: `${c.width}ch` }) })),
+    ...pluginColumns.map((c) => ({ key: c.id, label: c.label, width: '1%' })),
+  ];
   const tableRows = visible.map((r) => {
     const cells: Record<string, ReactNode> = {};
     for (const c of cols) cells[c.key] = renderCell(c, r, lifecycle);
+    for (const c of pluginColumns) {
+      const v = r[c.id] as { text: string; tone: PillTone } | null | undefined;
+      cells[c.id] = v ? <Pill tone={v.tone}>{v.text}</Pill> : null;
+    }
     cells['__rowId'] = String(r['id'] ?? '');
     return cells;
   });
@@ -91,6 +107,7 @@ function ListScreen({ api, obj, resolveObject }: ObjectScreenProps) {
       </div>
 
       {error !== null && <div className={styles.error}>{error}</div>}
+      {reply !== null && <div className={reply.failed ? styles.error : styles.muted}>{reply.text}</div>}
 
       {loading ? (
         <div className={styles.muted}>Loading {obj.titlePlural.toLowerCase()}...</div>
@@ -108,6 +125,27 @@ function ListScreen({ api, obj, resolveObject }: ObjectScreenProps) {
             rowId={(row) => String(row['__rowId'] ?? '')}
             onEdit={canEditObj ? openEdit : undefined}
             onView={canViewObj ? openView : undefined}
+            rowActions={
+              rowActions.length === 0
+                ? undefined
+                : (id) =>
+                    rowActions.map((a) => {
+                      const shown = a.disabledWhen === undefined ? undefined : (byId.get(id)?.[a.disabledWhen.column] as { text?: string } | null | undefined)?.text;
+                      return (
+                        <RecordAction
+                          key={a.id}
+                          baseUrl={resolveApiBaseUrl()}
+                          action={a}
+                          record={{ object: obj.name, id }}
+                          disabled={a.disabledWhen !== undefined && shown === a.disabledWhen.equals}
+                          onDone={(r) => {
+                            setReply(r);
+                            void refetch();
+                          }}
+                        />
+                      );
+                    })
+            }
             emptyLabel="No matches"
           />
         </div>
@@ -122,6 +160,7 @@ function ListScreen({ api, obj, resolveObject }: ObjectScreenProps) {
           row={panel.row}
           onClose={() => setPanel(null)}
           onChanged={refetch}
+          onReply={setReply}
         />
       )}
     </div>

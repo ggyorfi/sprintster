@@ -1,6 +1,6 @@
 import { isImageType } from '@sprintster/engine';
 import { TextField } from './TextField.js';
-import { useAssetUpload } from './useAssetUpload.js';
+import { anyFileAllowed, useAssetUpload } from './useAssetUpload.js';
 import type { UploadedAsset } from '../api/assets.js';
 import styles from './ImageField.module.css';
 
@@ -106,7 +106,7 @@ export function ImageField({ label, value, onChange, upload, assetUrl, readOnly 
           {busy ? 'Uploading…' : image !== null ? 'Replace…' : files ? 'Upload file…' : 'Upload image…'}
           <input
             type="file"
-            accept={files ? 'image/*,application/pdf' : 'image/*'}
+            accept={!files ? 'image/*' : anyFileAllowed() ? undefined : 'image/*,application/pdf'}
             className={styles.fileInput}
             disabled={busy}
             onChange={(e) => void onFile(e.target.files?.[0])}

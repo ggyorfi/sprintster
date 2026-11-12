@@ -29,6 +29,19 @@ describe('Extensions', () => {
     expect(await screen.findByText('0 unpublished changes')).toBeInTheDocument();
   });
 
+  it('acts on one record: the badge asks about it and the action posts it', async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
+      init?.method === 'POST' ? Response.json({ message: 'Published.' }) : Response.json({ text: 'Changes pending', tone: 'warning' }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    render(<Extensions baseUrl="/api" extensions={extensions} record={{ object: 'post', id: 'p 1' }} inline />);
+    expect(await screen.findByText('Changes pending')).toBeInTheDocument();
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/plugins/pub/status?object=post&id=p%201');
+    await userEvent.click(screen.getByRole('button', { name: 'Publish' }));
+    const post = fetchMock.mock.calls.find((c) => c[1]?.method === 'POST');
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ object: 'post', id: 'p 1' });
+  });
+
   it('renders nothing without extensions', () => {
     const { container } = render(<Extensions baseUrl="" extensions={{ actions: [], badges: [] }} />);
     expect(container).toBeEmptyDOMElement();

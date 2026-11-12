@@ -272,7 +272,8 @@ function translatedSpec(spec: ViewFieldSpec, inputs: Record<string, string>, loc
   return { ...spec, placeholder: inputs[localeInputKey(spec.path, fallback)] || spec.placeholder };
 }
 
-const when = (iso: unknown) => (typeof iso === 'string' && iso !== '' ? isoToLocalInput(iso).slice(0, 16).replace('T', ' ') : null);
+const COMPACT = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const when = (iso: unknown) => (typeof iso === 'string' && iso !== '' && !Number.isNaN(Date.parse(iso)) ? COMPACT.format(new Date(iso)) : null);
 
 // The times every record carries from its events (ADR 17); nothing before its first save.
 export function RecordTimes({ row }: { row: Row | null }) {
@@ -281,7 +282,7 @@ export function RecordTimes({ row }: { row: Row | null }) {
   if (created === null && updated === null) return null;
   return (
     <p className={styles.times}>
-      {[created !== null ? `Created ${created}` : null, updated !== null ? `Updated ${updated}` : null].filter(Boolean).join(' – ')}
+      {[created !== null ? `Created ${created}` : null, updated !== null ? `Updated ${updated}` : null].filter(Boolean).join(' · ')}
     </p>
   );
 }

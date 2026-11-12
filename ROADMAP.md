@@ -589,3 +589,117 @@ content, and prose links to them the way it embeds images. Design:
       `[name](/assets/<id>)`; `loadConfig` refuses it without a `file` assets
       object.
       *Done when:* an inserted link is stored root-relative.
+
+## Epic: who changed what, and what was published
+
+**Goal.** The log records the real user behind each change, a consumer can
+read records as they were at a log position, and a plugin can put an action
+or a status on a single record. Together they let a site generator publish
+one approved record at a time. Design:
+[ADR 20](./docs/ADR/0020-the-actor-comes-from-the-host.md),
+[ADR 21](./docs/ADR/0021-reading-records-as-of-a-log-position.md),
+[ADR 22](./docs/ADR/0022-record-actions-and-badges.md).
+
+### Steps
+
+- [x] **1. The actor from the host.** The daemon writes with the
+      `Sprintster-Actor` header; `createWorker` strips it, sets it from Basic
+      Auth, and keeps a wrapping gate's with `trustActor`; `changesSince`
+      reports the actor.
+      *Done when:* a write through the Worker with Basic Auth records the user
+      name, and a client's own header is ignored.
+- [x] **2. `listAt`.** On the object API and to plugins, plus
+      `GET /<route>?at=`.
+      *Done when:* a record edited after a position reads as before the edit,
+      one created after it is absent, and a per-record position wins.
+- [x] **3. Record actions and badges.** `placement: 'record'` with `objects`,
+      in the web dialog and the TUI record screen.
+      *Done when:* an action posts `{ object, id }` and shows its message, and
+      a badge loads with the record.
+
+## Epic: any file as a download
+
+**Goal.** An app that opts in keeps files of any type, up to its own size
+limit, and a public site serves them from the blob store. Design:
+[ADR 23](./docs/ADR/0023-any-file-as-a-download.md).
+
+### Steps
+
+- [x] **1. `uploads` config.** `anyFile` and `maxMegabytes`, enforced on
+      upload, the type from the bytes or the extension table.
+      *Done when:* a `.doc` uploads with `anyFile` and is refused without it,
+      and the limit follows `maxMegabytes`.
+- [x] **2. `blobResponse`.** Exported from the daemon and `sprintster/cloudflare`,
+      used by its asset routes.
+      *Done when:* the asset route tests pass through it, with a file name
+      in `Content-Disposition`.
+
+## Epic: paged lists from the server
+
+**Goal.** A list stays fast and bounded at any size: the daemon (and then the
+store) searches, sorts and pages, every request gets at most one page, and
+every caller fetches only what it shows or pages through the rest. Design:
+[ADR 24](./docs/ADR/0024-paged-lists-from-the-server.md) (proposed).
+
+### Steps
+
+- [ ] **1. Engine query.** Search, ref column values, sort and paging as one
+      engine function over rows, moved out of the web package
+      (`filterByConfig`, `enrichRefColumns`); list config `sort`, checked by
+      `loadConfig` against the list's columns.
+      *Done when:* the web package's search and ref-label tests pass against
+      the engine function.
+- [ ] **2. `GET /<route>` pages.** `q`, `sort`, `offset`, `limit` (at most
+      200), `fields`, `list`, answered as `{ total, rows }`; the API client
+      gains a paged call and a `listAll` that pages through.
+      *Done when:* a 5,000-record object answers a page of 100 small rows with
+      the right `total`.
+- [ ] **3. Web list.** Pages of 100 on scroll, only visible rows rendered,
+      search and sort on the server, the record loaded by id before editing.
+      *Done when:* the tanarblog article list opens without fetching any
+      article body, and search finds an article on a page not loaded yet.
+- [ ] **4. Pickers and ref labels.** Ref pickers and the card dialog search on
+      the server; ref column labels come from `fields`, not from listing the
+      target.
+      *Done when:* picking a tag among hundreds fetches one page, and no
+      frontend lists a whole target object.
+- [ ] **5. TUI.** Pages ahead of the window, server search, the record loaded
+      by id before editing.
+      *Done when:* the TUI lists the tanarblog articles without a full fetch.
+- [ ] **6. Every other caller pages.** scms (`rows`, the publish plugin's
+      records route, which pages too), `s8r migrate-assets`, and the tenant
+      scripts through `listAll`. Then the bare-array answer goes: every
+      request gets one page.
+      *Done when:* a tanarblog build renders all 5148 articles, and
+      `GET /articles` with no parameters answers 200 rows and a `total`.
+- [ ] **7. Durable Object store query.** `StateStore.query` in SQL over the
+      state table (`json_extract`, `LIKE`, `ORDER BY`, `LIMIT`, ref columns by
+      a join), used by the daemon when the store has it; the in-memory path
+      stays for the other stores. Shared contract tests compare both.
+      *Done when:* a page request on the Durable Object reads only the page's
+      rows into JavaScript, with the same answers as the in-memory path.
+
+### Still open
+
+- **SQLite and Postgres store queries**, when an app on them needs one.
+- **Other whole-object reads inside a request:** `listAt` (the publish
+  plugin's build reads) folds every event of the object, and the publish badge
+  lists every `publication` row. Both need the same treatment when an app gets
+  large enough.
+
+## Epic: plugin list columns and action inputs
+
+**Goal.** A plugin shows per-record state in lists and offers row actions that
+take one value. Design:
+[ADR 25](./docs/ADR/0025-plugin-list-columns-and-action-inputs.md). Before
+the paged-lists epic; the columns move to each page when lists are paged.
+
+### Steps
+
+- [x] **1. Columns.** `ctx.gui.column`, called per list response, pills in the
+      web list (the TUI later).
+      *Done when:* a column's values arrive with the list and show coloured.
+- [x] **2. Row actions.** `inList` and `disabledWhen` on record actions.
+      *Done when:* a disabled row button follows its column's value.
+- [x] **3. Inputs.** `input: { type: 'datetime' }` dialog, posting `value`.
+      *Done when:* an action posts a picked date, or null when left empty.
