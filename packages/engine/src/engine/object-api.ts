@@ -12,6 +12,9 @@ import { singletonId, synthesizeSingleton } from './singleton.js';
 import { hasTimestamps, makeReducer } from './reducer.js';
 import { nowAsIso } from '../time/index.js';
 import { ERASED_STREAM_TYPE } from '../events/log.js';
+import { appConfig } from '../config/app-config.js';
+import { encodeCursor, projectRows, searchFieldsOf, toStateQuery, type ListPage, type ListParams } from './list-query.js';
+import type { StatePage } from '../events/query.js';
 
 // Internal stream type backing daemon-allocated `sequence` fields; one stream per object.field (+ scope later).
 const SEQUENCE_STREAM_TYPE = '__seq';
@@ -32,6 +35,12 @@ export interface ObjectApi<State extends { id: string }> {
   get(id: string): Promise<State | null>;
   list(): Promise<State[]>;
   listAt(at: ListAt): Promise<State[]>;
+  // ADR 24: one page.
+  query(params: ListParams): Promise<ListPage>;
+  // ADR 26: the record as of `position` in a named set, or out of it.
+  pin(set: string, id: string, position: number): Promise<void>;
+  unpin(set: string, id: string): Promise<void>;
+  queryPinned(set: string, params: ListParams): Promise<ListPage>;
   requireGet(id: string): Promise<State>;
   createSchema: z.ZodTypeAny;
   updateSchema: z.ZodTypeAny;
@@ -88,7 +97,57 @@ export function createObjectApi<State extends { id: string }>(
     streamType: obj.name,
     reducer,
     isCurrent: hasTimestamps,
+    searchFields: searchFieldsOf(obj),
   });
+
+  async function targetStates(streamType: string, ids: readonly string[]): Promise<Map<string, unknown>> {
+    if (ids.length === 0) return new Map();
+    const states = store.states;
+    if (states !== undefined) {
+      const page = await states.query({ partitionId, streamType, ids, limit: ids.length });
+      return new Map(page.states.map((s) => [s.streamId, s.state]));
+    }
+    const target = appConfig.objects.find((o) => o.name === streamType);
+    if (target === undefined) return new Map();
+    const fold = makeReducer(target);
+    const out = new Map<string, unknown>();
+    for (const id of ids) {
+      let state: unknown = null;
+      for (const e of await store.findByStream(partitionId, streamType, id)) state = fold(state as never, e);
+      if (state !== null) out.set(id, state);
+    }
+    return out;
+  }
+
+  async function toPage(page: StatePage, params: ListParams): Promise<ListPage> {
+    const rows = await projectRows(obj, page.states.map((s) => s.state), params.fields, appConfig.objects, targetStates);
+    return { rows, ...(page.total === undefined ? {} : { total: page.total }), next: encodeCursor(page.next) };
+  }
+
+  async function query(params: ListParams): Promise<ListPage> {
+    if (isSingleton) return { rows: [(await readSingleton()) as unknown as Record<string, unknown>], total: 1, next: null };
+    return toPage(await base.query(toStateQuery(obj, params, appConfig.objects, appConfig.locales ?? [])), params);
+  }
+
+  async function pin(set: string, id: string, position: number): Promise<void> {
+    const states = store.states;
+    if (states === undefined) throw new InvalidStateError('this store keeps no pinned versions');
+    const { state } = await base.foldAt(id, position);
+    const removed = kind === 'softDelete' && lifecycleField !== null && (state as Record<string, unknown> | null)?.[lifecycleField] === true;
+    if (state === null || removed) await states.pins.unpin(set, partitionId, obj.name, id);
+    else await states.pins.pin(set, partitionId, obj.name, id, position, state, base.searchText(state));
+  }
+
+  async function unpin(set: string, id: string): Promise<void> {
+    await store.states?.pins.unpin(set, partitionId, obj.name, id);
+  }
+
+  async function queryPinned(set: string, params: ListParams): Promise<ListPage> {
+    const states = store.states;
+    if (states === undefined) throw new InvalidStateError('this store keeps no pinned versions');
+    const q = toStateQuery(obj, params, appConfig.objects, appConfig.locales ?? []);
+    return toPage(await states.pins.query(set, { ...q, partitionId, streamType: obj.name }), params);
+  }
 
   // Allocate the next number via the event store's OCC: read the counter stream head, append at head+1, retry on a lost race.
   async function allocate(field: string, actor: string): Promise<number> {
@@ -432,7 +491,20 @@ export function createObjectApi<State extends { id: string }>(
           if (payload !== e.payload) payloads.set(e.id, payload);
           state = reducer(state, { ...e, payload });
         }
-        rewrites.push({ partitionId, streamType: obj.name, streamId: id, expectedVersion: last.streamVersion, payloads, ...(store.states !== undefined ? { state } : {}) });
+        const pinned = store.states === undefined ? [] : await store.states.pins.pinsOf(partitionId, obj.name, id);
+        const pins = pinned.map(({ set, position }) => {
+          let at: State | null = null;
+          for (const e of events) if (Number(e.id) <= position) at = reducer(at, { ...e, payload: payloads.get(e.id) ?? e.payload });
+          return { set, state: at, search: base.searchText(at) };
+        });
+        rewrites.push({
+          partitionId,
+          streamType: obj.name,
+          streamId: id,
+          expectedVersion: last.streamVersion,
+          payloads,
+          ...(store.states !== undefined ? { state, search: base.searchText(state), pins } : {}),
+        });
       }
       const markerStream = JSON.stringify([obj.name, id]);
       const marker: EventInput = {
@@ -488,6 +560,10 @@ export function createObjectApi<State extends { id: string }>(
     get,
     list,
     listAt,
+    query,
+    pin,
+    unpin,
+    queryPinned,
     requireGet,
     createSchema,
     updateSchema,

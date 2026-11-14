@@ -1,4 +1,5 @@
 import { ConfigSchema, type Config, type ObjectConfig, type PropertyConfig, type ViewFieldConfig, type ViewFieldsetConfig, type VisibleWhen } from './schema.js';
+import { filterOptionProblem, resolveSort } from '../engine/list-query.js';
 import { objectRoute, slugify, RESERVED_ROUTES } from './route.js';
 import { isAssetFileProperty } from './assets.js';
 import { TIMESTAMP_FIELDS } from '../engine/reducer.js';
@@ -34,6 +35,23 @@ function validateSemantics(config: Config): void {
       checkListActions(obj);
       checkThumbnails(obj, objectsByName);
       checkColumnSums(obj);
+    }
+    for (const list of obj.lists) {
+      const groups = (list.filters ?? []).map((f) => f.label);
+      assertUnique(groups, `filter of list '${obj.name}.${list.name}'`);
+      for (const f of list.filters ?? []) {
+        assertUnique(f.options.map((o) => o.label), `option of filter '${obj.name}.${list.name}.${f.label}'`);
+        for (const o of f.options) {
+          const problem = filterOptionProblem(obj, o);
+          if (problem !== null) throw new Error(`filter '${obj.name}.${list.name}.${f.label}:${o.label}': ${problem}`);
+        }
+      }
+      if (list.sort === undefined) continue;
+      try {
+        resolveSort(obj, list.sort, config.objects, config.locales ?? []);
+      } catch (err) {
+        throw new Error(`list '${obj.name}.${list.name}' sort: ${err instanceof Error ? err.message : String(err)}`);
+      }
     }
   }
 }
@@ -274,9 +292,10 @@ function checkThumbnails(obj: ObjectConfig, objectsByName: Map<string, ObjectCon
       if (col.thumbnail !== true) continue;
       const where = `list column '${obj.name}.${list.name}.${col.property}'`;
       const prop = obj.properties.find((p) => p.name === col.property);
-      if (prop?.type === 'image') continue;
+      // A file shows its picture when it is an image, its type otherwise.
+      if (prop?.type === 'image' || prop?.type === 'file') continue;
       if (prop?.type !== 'ref' && prop?.type !== 'refs') {
-        throw new Error(`${where} is a thumbnail; it must be an image property, or a ref or refs to an object with one`);
+        throw new Error(`${where} is a thumbnail; it must be an image or file property, or a ref or refs to an object with an image`);
       }
       const target = objectsByName.get(prop.target);
       if (target !== undefined && !target.properties.some((p) => p.type === 'image')) {

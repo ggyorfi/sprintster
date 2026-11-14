@@ -67,16 +67,36 @@ function mockFetch(handlers: Array<{
 describe('createApiClient.clients.list', () => {
   it('returns parsed clients array', async () => {
     const { fetch } = mockFetch([
-      { match: { method: 'GET', path: '/clients' }, response: { status: 200, body: [sampleClient] } },
+      { match: { method: 'GET', path: '/clients?limit=100' }, response: { status: 200, body: { rows: [sampleClient], total: 1, next: null } } },
     ]);
     const api = createApiClient(BASE, { fetch });
     const result = await api.object('client').list();
     expect(result).toEqual([sampleClient]);
   });
 
+  it('follows the cursor until the last page (ADR 24)', async () => {
+    const { fetch, calls } = mockFetch([
+      { match: { method: 'GET', path: '/clients?limit=100' }, response: { status: 200, body: { rows: [{ id: 'a' }], total: 3, next: 'c1' } } },
+      { match: { method: 'GET', path: '/clients?limit=100&after=c1' }, response: { status: 200, body: { rows: [{ id: 'b' }], next: 'c2' } } },
+      { match: { method: 'GET', path: '/clients?limit=100&after=c2' }, response: { status: 200, body: { rows: [{ id: 'c' }], next: null } } },
+    ]);
+    const api = createApiClient(BASE, { fetch });
+    expect(await api.object('client').list()).toEqual([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
+    expect(calls).toHaveLength(3);
+  });
+
+  it('asks for one page with its parameters', async () => {
+    const { fetch, calls } = mockFetch([
+      { match: { method: 'GET', path: '/clients?q=ann+b&sort=-name&fields=name%2Cservice&offset=50' }, response: { status: 200, body: { rows: [], total: 0, next: null } } },
+    ]);
+    const api = createApiClient(BASE, { fetch });
+    expect(await api.object('client').page({ q: 'ann b', sort: '-name', fields: ['name', 'service'], offset: 50 })).toEqual({ rows: [], total: 0, next: null });
+    expect(calls).toHaveLength(1);
+  });
+
   it('handles an empty list', async () => {
     const { fetch } = mockFetch([
-      { match: { method: 'GET', path: '/clients' }, response: { status: 200, body: [] } },
+      { match: { method: 'GET', path: '/clients?limit=100' }, response: { status: 200, body: { rows: [], total: 0, next: null } } },
     ]);
     const api = createApiClient(BASE, { fetch });
     expect(await api.object('client').list()).toEqual([]);
@@ -220,7 +240,7 @@ describe('createApiClient error handling', () => {
   it('throws ApiError with http_error code when body has no code', async () => {
     const { fetch } = mockFetch([
       {
-        match: { method: 'GET', path: '/clients' },
+        match: { method: 'GET', path: '/clients?limit=100' },
         response: { status: 500, body: 'oops not json shape' },
       },
     ]);
@@ -238,11 +258,11 @@ describe('createApiClient error handling', () => {
 
   it('trims trailing slashes from baseUrl', async () => {
     const { fetch, calls } = mockFetch([
-      { match: { method: 'GET', path: '/clients' }, response: { status: 200, body: [] } },
+      { match: { method: 'GET', path: '/clients?limit=100' }, response: { status: 200, body: { rows: [], next: null } } },
     ]);
     const api = createApiClient(`${BASE}//`, { fetch });
     await api.object('client').list();
-    expect(calls[0]?.url).toBe(`${BASE}/clients`);
+    expect(calls[0]?.url).toBe(`${BASE}/clients?limit=100`);
   });
 });
 

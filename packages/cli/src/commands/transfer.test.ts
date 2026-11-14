@@ -63,7 +63,7 @@ describe('s8r export and import', () => {
     const target = await startDaemon({ config: loaded, store: new InMemoryEventStore(), blobStore: new InMemoryBlobStore(), host: '127.0.0.1', port: 3978 });
     try {
       await (importCommand as { run: (c: { args: unknown }) => Promise<void> }).run({ args: { dir: out, url: 'http://127.0.0.1:3978' } });
-      const media = (await (await fetch('http://127.0.0.1:3978/media')).json()) as Array<{ file: { hash: string } }>;
+      const media = ((await (await fetch('http://127.0.0.1:3978/media')).json()) as { rows: Array<{ file: { hash: string } }> }).rows;
       expect(media).toHaveLength(1);
       expect(new Uint8Array(await (await fetch(`http://127.0.0.1:3978/assets/${media[0]!.file.hash}`)).arrayBuffer())).toEqual(png);
     } finally {

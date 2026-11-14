@@ -14,6 +14,18 @@ const HASH = /^[0-9a-f]{64}$/;
 const BLOB_STREAM = '__blob';
 
 // Blobs are only reachable through the events that reference them, by hash, anywhere in a payload.
+// At most one progress line a minute: long transfers show they are alive without flooding the terminal.
+function everyMinute(): (line: () => string) => void {
+  let last = Date.now();
+  return (line) => {
+    if (Date.now() - last < 60_000) return;
+    last = Date.now();
+    console.log(line());
+  };
+}
+
+const mb = (bytes: number) => `${(bytes / 1048576).toFixed(0)} MB`;
+
 export function hashesIn(value: unknown, out = new Set<string>()): Set<string> {
   if (typeof value === 'string') {
     if (HASH.test(value)) out.add(value);
@@ -43,10 +55,15 @@ export const exportCommand = defineCommand({
         mkdirSync(join(args.dir, BLOBS), { recursive: true });
         writeFileSync(join(args.dir, EVENTS), events.map((e) => JSON.stringify(toInput(e))).join('\n') + '\n');
         const types: Record<string, string | null> = {};
-        for (const hash of hashesIn(events.map((e) => e.payload))) {
+        const hashes = [...hashesIn(events.map((e) => e.payload))];
+        const report = everyMinute();
+        let bytes = 0;
+        for (const [i, hash] of hashes.entries()) {
           const blob = await backend.blobStore.getBlob(hash);
+          report(() => `blobs ${i}/${hashes.length} (${mb(bytes)})`);
           if (blob === null) continue;
           writeFileSync(join(args.dir, BLOBS, hash), blob.bytes);
+          bytes += blob.bytes.length;
           types[hash] = blob.contentType;
         }
         writeFileSync(join(args.dir, TYPES), JSON.stringify(types, null, 2));
@@ -79,10 +96,17 @@ export const importCommand = defineCommand({
           : { authorization: `Basic ${Buffer.from(`${args.user}:${process.env['SPRINTSTER_PASSWORD'] ?? ''}`).toString('base64')}` };
       const types = JSON.parse(readFileSync(join(args.dir, TYPES), 'utf8')) as Record<string, string | null>;
       let uploaded = 0;
-      for (const hash of readdirSync(join(args.dir, BLOBS))) {
+      let bytes = 0;
+      const hashes = readdirSync(join(args.dir, BLOBS));
+      const report = everyMinute();
+      console.log(`uploading ${hashes.length} blobs`);
+      for (const [i, hash] of hashes.entries()) {
+        report(() => `blobs ${i}/${hashes.length} (${uploaded} uploaded, ${mb(bytes)})`);
         if ((await fetch(`${base}/assets/${hash}`, { method: 'HEAD', headers })).ok) continue;
+        const data = readFileSync(join(args.dir, BLOBS, hash));
+        bytes += data.length;
         const form = new FormData();
-        form.append('file', new Blob([readFileSync(join(args.dir, BLOBS, hash))], { type: types[hash] ?? '' }), hash);
+        form.append('file', new Blob([data], { type: types[hash] ?? '' }), hash);
         const res = await fetch(`${base}/assets`, { method: 'POST', headers, body: form });
         if (!res.ok) throw new Error(`uploading blob ${hash} failed: ${res.status} ${await res.text()}`);
         uploaded++;

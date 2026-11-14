@@ -11,6 +11,8 @@ export interface RefPickerProps {
   options: SelectOption[];
   multiple?: boolean;
   placeholder?: string | undefined;
+  // ADR 24: the server searches; `options` are then its answer plus the chosen records.
+  onSearch?: ((query: string) => void) | undefined;
 }
 
 export function parseRefIds(value: string, multiple: boolean): string[] {
@@ -38,7 +40,7 @@ function Highlighted({ label, matches }: { label: string; matches: number[] }) {
   );
 }
 
-export function RefPicker({ label, value, onChange, options, multiple = false, placeholder }: RefPickerProps) {
+export function RefPicker({ label, value, onChange, options, multiple = false, placeholder, onSearch }: RefPickerProps) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -47,7 +49,7 @@ export function RefPicker({ label, value, onChange, options, multiple = false, p
   const selectedIds = parseRefIds(value, multiple);
   const byId = new Map(options.map((o) => [o.value, o]));
   const available = options.filter((o) => !selectedIds.includes(o.value));
-  const hits = fuzzyFilter(available, query);
+  const hits = onSearch === undefined ? fuzzyFilter(available, query) : available.map((option) => ({ option, matches: [] as number[] }));
   const placement = useDropdownPlacement(control, open && hits.length > 0, 220);
 
   function commit(ids: string[]) {
@@ -129,6 +131,7 @@ export function RefPicker({ label, value, onChange, options, multiple = false, p
             placeholder={selectedIds.length === 0 ? placeholder : undefined}
             onChange={(e) => {
               setQuery(e.target.value);
+              onSearch?.(e.target.value);
               setOpen(true);
               setActive(0);
             }}

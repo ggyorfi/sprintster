@@ -35,7 +35,19 @@ const data: Record<string, Row[]> = {
     { id: 'w2', title: 'Untitled', images: [] },
   ],
 };
-const api = { object: (name: string) => ({ list: async () => data[name] ?? [] }) } as unknown as ApiClient;
+const asked: Array<readonly string[] | undefined> = [];
+// As the server answers a list page (ADR 24): a ref thumbnail column's `#thumb` field carries the first referenced image.
+const api = {
+  object: (name: string) => ({
+    page: async ({ fields }: { fields?: readonly string[] }) => {
+      asked.push(fields);
+      const rows = (data[name] ?? []).map((r) =>
+        name === 'work' ? { ...r, 'images#thumb': data['asset']!.find((a) => a.id === (r['images'] as string[])[0])?.['file'] ?? null } : r,
+      );
+      return { rows, total: rows.length, next: null };
+    },
+  }),
+} as unknown as ApiClient;
 
 let previous: Config;
 beforeAll(() => {
@@ -51,6 +63,7 @@ describe('thumbnail columns', () => {
     const imgs = [...container.querySelectorAll('img')].map((i) => i.getAttribute('src'));
     expect(imgs).toHaveLength(1);
     expect(imgs[0]).toMatch(/\/assets\/small1$/);
+    expect(asked.at(-1)).toEqual(expect.arrayContaining(['images', 'images#thumb', 'title']));
   });
 
   it('falls back to the image itself when it has no thumbnail', async () => {

@@ -1,84 +1,75 @@
-# 24. Paged lists from the server
+# 24. Paged lists from the store
 
-Date: 2026-11-12
+Date: 2026-11-13
 
 ## Status
 
-Proposed.
+Accepted.
 
 ## Context
 
-A list screen fetches every record of the object, in full, and works on that
-array in the browser: search (`filterByConfig`, a substring match over the
-list's `search.fields`), the labels of ref columns (`enrichRefColumns` fetches
-every record of each target too), and rendering every row. Ref pickers and the
-card dialog do the same with their target. The TUI does the same.
-
-That was fine for a few hundred records. An app with 5,000 articles sends about
-15 MB of JSON, lead and body text included, before the list shows anything,
-and renders 5,000 rows. More apps will hit this, and the request shape is what
-every frontend and site depends on, so it is settled now.
+A list fetched every record of the object, in full, and the browser searched,
+resolved ref labels (by fetching every record of each target too) and rendered
+every row. An app with 5,000 articles sent about 15 MB before showing anything,
+and the daemon built that response inside a Durable Object's 128 MB. An
+unbounded response grows with the object until it fails, and doing the work in
+the daemon's memory would still read every record on every request.
 
 ## Decision
 
-**`GET /<route>` always answers one page:** `{ total, rows }`, at most 200
-rows, whatever the request asks for. An unbounded response grows with the
-object until it fails: on a Durable Object the whole response is built inside
-the isolate's 128 MB, so memory, not time, is the first limit it hits. A caller
-that needs every record pages through them (`offset` until `total`); the API
-client offers that as one call for scripts and builds. Until every caller does,
-a request with no list parameter still gets the bare array, and that ends with
-the last step of the epic. The parameters:
+**Every list request answers one page, at most 100 rows.** `GET /<route>`
+takes:
 
 | parameter | meaning |
 | --- | --- |
-| `q` | search: every word must appear in one of the list's `search.fields` (a translated value matches in any language), or the id starts with it when `idPrefix` |
-| `sort` | a column key, `-` in front for descending; a ref column's key (`section.title`) sorts by the referenced record's value; missing values last |
-| `offset`, `limit` | the page; `limit` defaults to and is at most 200 |
-| `fields` | the column keys a row carries, plus `id`; a ref column's key carries the referenced value, a ref thumbnail column its image |
+| `q` | search: every word must appear in one of the list's `search.fields`, ignoring case and accents ("ora" finds "Óra"); or the id starts with it when `idPrefix` |
+| `sort` | a column key, `-` in front for descending; a ref column's key (`section.title`) sorts by the referenced record's value; ties broken by id |
+| `fields` | the column keys each row carries, plus `id`; a ref column's key carries the referenced value |
 | `list` | the list config whose `search` applies, `default` when absent |
+| `limit` | rows per page: 50 when absent, at most 100 |
+| `offset` | for screens: answers `{ total, rows }` |
+| `after` | for reading everything: an opaque cursor from the previous page; answers `{ rows, next }`, `next` null on the last page |
 
-`total` counts the records matching `q`, before `offset` and `limit`.
+A request without `offset` or `after` is the first page with offset 0. List
+configs gain `sort`, used when the request has none; without either, a list
+is newest first (`-createdAt`). `createdAt` and `updatedAt` sort like any
+property. A caller that needs every
+record follows `next`: one request per page, never one large response. The API
+client offers that as `listAll`.
 
-**List configs gain `sort`** (a column key, `-` for descending), used when the
-request has no `sort`. Without it the order stays the store's.
+**The store answers the query.** `StateStore` gains `query(...)`, and every
+store implements it natively, so only the page's rows are read:
 
-**First the daemon does the work in memory.** It reads the stored states as it
-does for a full list, resolves the ref columns asked for from the target
-objects' states, then searches, sorts and slices, and sends only the page.
-Search, ref labels and sorting move from the web package into the engine, so
-the daemon, the web GUI and the TUI share one implementation. That bounds what
-is sent, not what is read: every request still parses every state of the
-object.
+- **SQLite (local), Durable Object (SQLite) and Postgres:** fields read from the
+  state JSON (`json_extract`, `->>`), search over a search column, `ORDER BY`
+  with the id as tie-breaker, `LIMIT`/`OFFSET` or a keyset condition for
+  `after`, `COUNT(*)` for `total`, and ref columns through a join to the target
+  object's state rows.
+- **In memory:** the same answers in JavaScript, for tests.
 
-**Then the store answers the query.** `StateStore` gains an optional `query`
-the daemon uses when present. The Durable Object store, the one deployed,
-implements it first in SQL over its state table: fields read with
-`json_extract`, the search as `LIKE` over the search fields, `ORDER BY`,
-`LIMIT` and `OFFSET`, and ref columns through a join to the target's state
-rows. Only the page's rows reach JavaScript. SQLite and Postgres follow when an
-app on them needs it; until then the in-memory path serves them with the same
-answers, which the shared store contract tests check.
+The shared store contract tests run every query against every store and
+require the same answers.
 
-**Frontends page.**
+**The search column.** Each state row carries the text of the object's search
+fields (every language of a translated field), lowercased and with accents
+removed (Unicode NFKD, combining marks dropped), written in the same
+transaction as the state. A query's words are normalized the same way. SQLite's
+own `LOWER` only folds ASCII, so the folding happens in the engine, never in
+SQL. A config change to `search.fields` rebuilds the column with the states.
 
-- The web list fetches pages of 100 as the user scrolls and renders only the
-  rows in view (virtual scrolling). Typing a search or choosing a sort starts
-  again from the first page; the count shows `total`.
-- Ref pickers and the card dialog search on the server as the user types and
-  show the first page.
-- The TUI fetches a page ahead of its window as the selection moves, and
-  searches on the server.
+**Frontends page.** The web list fetches pages of 100 as the user scrolls and
+renders only the rows in view; search and sort start again from the first page.
+Ref pickers and the card dialog search on the server. The TUI fetches a page
+ahead of its window. Neither lists a whole target object for ref labels any
+more: they ask for the ref column's key in `fields`. Plugin columns (ADR 25)
+are added to each page.
 
 ## Consequences
 
-- A list costs one page of small rows instead of every record in full, however
-  large the object grows.
-- Until a store answers the query itself, the daemon still reads every state
-  of the object per request; the store query removes that, store by store.
-- Builds and scripts that read everything make one request per 200 records
-  instead of one large one.
-- A row the list shows is no longer the full record, so both frontends must
-  load the record by id before opening it for editing.
-- Search results change only in where they are computed: the matching rule is
-  the same.
+- No request reads or sends more than one page of rows, inside the store, the
+  daemon or the network.
+- Every caller that read whole objects changes (frontends, scms, `s8r
+  migrate-assets`, tenant scripts); there is no unbounded answer left.
+- A store gains a query method and a search column; a new store must implement
+  both and pass the contract tests.
+- `total` costs a count per offset page; cursor reads skip it.

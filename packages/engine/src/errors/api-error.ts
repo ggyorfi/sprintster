@@ -24,6 +24,13 @@ export class AlreadyExistsError extends ApiError {
   }
 }
 
+// A request the API cannot answer as asked: a malformed parameter, not a state of the data.
+export class BadRequestError extends ApiError {
+  constructor(message: string) {
+    super('bad_request', message, 400);
+  }
+}
+
 export class InvalidStateError extends ApiError {
   constructor(message: string) {
     super('invalid_state', message, 409);

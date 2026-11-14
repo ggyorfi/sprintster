@@ -42,6 +42,7 @@ const { App, worker, isPublic } = createWorker({
           { name: 'title', title: 'Title', type: 'text' },
           { name: 'removed', type: 'boolean', system: true },
         ],
+        lists: [{ name: 'default', title: 'Notes', columns: [{ property: 'title' }], search: { fields: ['title'] } }],
       },
     ],
     plugins: [{ name: 'plugin-ping' }],

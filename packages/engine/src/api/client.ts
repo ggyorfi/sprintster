@@ -3,6 +3,7 @@ import { appConfig } from '../config/app-config.js';
 import type { ObjectConfig } from '../config/schema.js';
 import { objectRoute } from '../config/route.js';
 import type { ObjectStatus } from '../plugin/types.js';
+import { MAX_PAGE, type ListPage, type ListParams } from '../engine/list-query.js';
 
 export class NetworkError extends Error {
   public override readonly cause: unknown;
@@ -19,7 +20,10 @@ export function isNetworkError(value: unknown): value is NetworkError {
 }
 
 export interface ObjectClient<T> {
+  // Every record, a page of the largest size at a time (ADR 24).
   list(): Promise<T[]>;
+  listAll(params?: Omit<ListParams, 'limit' | 'offset' | 'after'>): Promise<T[]>;
+  page(params?: ListParams): Promise<ListPage<T>>;
   get(id: string): Promise<T | null>;
   add(input: unknown): Promise<T>;
   update(id: string, input: unknown): Promise<T>;
@@ -49,6 +53,8 @@ function singletonClient<T>(base: string, call: Call): ObjectClient<T> {
   };
   return {
     list: async () => [await read()],
+    listAll: async () => [await read()],
+    page: async () => ({ rows: [await read()], total: 1, next: null }),
     get: async () => read(),
     add: () => unsupported('add'),
     update: (_id, input) => call<T>({ method: 'PATCH', path: base, body: input }),
@@ -58,6 +64,17 @@ function singletonClient<T>(base: string, call: Call): ObjectClient<T> {
     sync: () => unsupported('sync'),
     refresh: async () => read(),
   };
+}
+
+export function listQuery(params: ListParams): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined) continue;
+    if (key === 'filter') for (const f of value as string[]) search.append('filter', f);
+    else search.set(key, Array.isArray(value) ? value.join(',') : String(value));
+  }
+  const text = search.toString();
+  return text === '' ? '' : `?${text}`;
 }
 
 export function createApiClient(
@@ -119,8 +136,21 @@ export function createApiClient(
     if (base === undefined) throw new Error(`unknown object '${name}'`);
     const idPath = (id: string): string => `${base}/${encodeURIComponent(id)}`;
     if (singletonNames.has(name)) return singletonClient<T>(base, call);
+    const page = (params: ListParams = {}) => call<ListPage<T>>({ method: 'GET', path: `${base}${listQuery(params)}` });
+    const listAll = async (params: Omit<ListParams, 'limit' | 'offset' | 'after'> = {}) => {
+      const rows: T[] = [];
+      let after: string | undefined;
+      for (;;) {
+        const got = await page({ ...params, limit: MAX_PAGE, ...(after === undefined ? {} : { after }) });
+        rows.push(...got.rows);
+        if (got.next === null) return rows;
+        after = got.next;
+      }
+    };
     return {
-      list: () => call<T[]>({ method: 'GET', path: base }),
+      list: () => listAll(),
+      listAll,
+      page,
       get: async (id) => {
         try {
           return await call<T>({ method: 'GET', path: idPath(id) });

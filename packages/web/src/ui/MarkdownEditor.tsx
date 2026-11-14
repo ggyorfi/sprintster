@@ -10,6 +10,10 @@ import styles from './MarkdownEditor.module.css';
 
 // Serialising is the one path every edit goes through, so it is where the root-relative rule is enforced rather than assumed.
 const AssetImage = Image.extend({
+  addAttributes() {
+    const attributes: Record<string, object> = this.parent?.() ?? {};
+    return { ...attributes, src: { ...attributes['src'], parseHTML: (el: HTMLElement) => displayedAssetUrl(el.getAttribute('src') ?? '') } };
+  },
   parseMarkdown: (token, helpers) =>
     helpers.createNode('image', {
       src: displayedAssetUrl(String(token['href'] ?? '')),

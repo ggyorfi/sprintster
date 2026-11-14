@@ -28,7 +28,7 @@ describe('thumbnail columns', () => {
   });
 
   it('refuses a plain property or a target without an image', () => {
-    expect(() => loadConfig({ version: '1', objects: [asset([{ property: 'title', thumbnail: true }])] })).toThrow(/must be an image property/);
+    expect(() => loadConfig({ version: '1', objects: [asset([{ property: 'title', thumbnail: true }])] })).toThrow(/must be an image or file property/);
     const noImage = obj('tag', 'tags', [{ name: 'name', type: 'text' }], [{ property: 'name' }]);
     const post = obj('post', 'posts', [{ name: 'tags', type: 'refs', target: 'tag' }], [{ property: 'tags', thumbnail: true }]);
     expect(() => loadConfig({ version: '1', objects: [noImage, post] })).toThrow(/has no image property/);

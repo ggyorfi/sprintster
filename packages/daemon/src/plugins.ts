@@ -9,6 +9,7 @@ import {
   type DaemonPlugin,
   type DaemonPluginContext,
   type EventStore,
+  MAX_PAGE,
   type GuiColumnSource,
   type GuiExtensions,
   type Logger,
@@ -100,7 +101,7 @@ export async function loadDaemonPlugins(opts: {
         column: (c) => {
           const id = `${namespace}.${c.id}`;
           out.columns.push({ ...c, id });
-          out.extensions.columns!.push({ id, label: c.label, ...(c.objects === undefined ? {} : { objects: c.objects }) });
+          out.extensions.columns!.push({ id, label: c.label, ...(c.objects === undefined ? {} : { objects: c.objects }), ...(c.width === undefined ? {} : { width: c.width }) });
         },
       },
       data: {
@@ -111,6 +112,10 @@ export async function loadDaemonPlugins(opts: {
         },
         position: () => opts.store.position(),
         changesSince: (position) => changesSince(opts.store, position),
+        pinnedSince: async (set, after, limit) => {
+          if (opts.store.states === undefined) return { pins: [], next: null };
+          return opts.store.states.pins.since(set, 0, after, Math.min(limit, MAX_PAGE));
+        },
       },
     }),
   });

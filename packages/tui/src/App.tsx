@@ -22,14 +22,17 @@ import {
   type ViewFieldSpec,
   type ViewMode,
   singletonId,
+  listFields,
 } from '@sprintster/engine';
+
+const TUI_PAGE = 100;
+const TUI_PREFETCH = 20;
 import { MenuBar, type MenuTitle } from './components/MenuBar.js';
 import { ObjectList } from './components/ObjectList.js';
 import { PopupForm, type PopupFormValues, type RefOptionMap } from './components/PopupForm.js';
 import type { PickerOption } from './components/Picker.js';
 import { adjustScrollTop, listNavTarget } from './list-nav.js';
 import { filterHelp, listActions, objectHelp } from './help.js';
-import { makeFilter } from './search.js';
 import { loadScrollOff } from './config.js';
 import { THEME } from './theme.js';
 import { useExtensions } from './extensions.js';
@@ -166,16 +169,27 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
     () => (activeObj ? listColumns(activeObj, 'default', resolveObject).filter((c) => !c.thumbnail) : []),
     [activeObj],
   );
-  const filter = useMemo(() => (activeObj ? makeFilter<Row>(activeObj) : null), [activeObj]);
+  const fields = useMemo(() => (activeObj ? listFields(activeObj, 'default', resolveObject) : []), [activeObj]);
+  const [next, setNext] = useState<string | null>(null);
+  const [total, setTotal] = useState<number | null>(null);
+  // ADR 27: the first filter group of the list, cycled with f; -1 is All.
+  const filterGroup = activeObj?.lists[0]?.filters?.[0];
+  const [filterChoice, setFilterChoice] = useState(-1);
+  const filterOption = filterGroup?.options[filterChoice];
+  const filter = useMemo(() => (filterGroup === undefined || filterOption === undefined ? [] : [`${filterGroup.label}:${filterOption.label}`]), [filterGroup, filterOption]);
+  const [searched, setSearched] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setSearched(query), 200);
+    return () => clearTimeout(timer);
+  }, [query]);
+  // A newer search or reload makes an older page's answer stale.
+  const generation = useRef(0);
   const labelField = useMemo(
     () => (activeObj ? firstLabelField(activeObj) : 'id'),
     [activeObj],
   );
 
-  const visibleRows = useMemo(
-    () => (query.trim() === '' || filter === null ? data : filter(data, query)),
-    [data, query, filter],
-  );
+  const visibleRows = data;
 
   useEffect(() => {
     setSelected((i) => Math.min(i, Math.max(0, visibleRows.length - 1)));
@@ -186,6 +200,7 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
     setSearching(false);
     setSelected(0);
     setScrollTop(0);
+    setFilterChoice(-1);
   }, [contextIndex]);
 
   function applyQuery(next: string): void {
@@ -199,56 +214,50 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
     applyQuery('');
   }
 
-  const enrichRefColumns = useCallback(
-    async (obj: ObjectConfig, rows: Row[]): Promise<Row[]> => {
-      const specs = (obj.lists[0]?.columns ?? [])
-        .filter((c) => c.property.includes('.'))
-        .map((c) => {
-          const dot = c.property.indexOf('.');
-          const refName = c.property.slice(0, dot);
-          const leaf = c.property.slice(dot + 1);
-          const refProp = obj.properties.find((p) => p.name === refName);
-          if (refProp === undefined || refProp.type !== 'ref') return null;
-          return { key: c.property, refName, leaf, target: refProp.target };
-        })
-        .filter((s): s is { key: string; refName: string; leaf: string; target: string } => s !== null);
-      if (specs.length === 0) return rows;
-      const maps = new Map<string, Map<string, Row>>();
-      for (const target of new Set(specs.map((s) => s.target))) {
-        const list = await apiClient.object<Row>(target).list();
-        maps.set(target, new Map(list.map((r) => [String(r['id']), r])));
-      }
-      return rows.map((row) => {
-        const out: Row = { ...row };
-        for (const s of specs) {
-          const targetRow = maps.get(s.target)?.get(String(row[s.refName]));
-          out[s.key] = targetRow ? targetRow[s.leaf] ?? null : null;
-        }
-        return out;
-      });
-    },
-    [apiClient],
-  );
-
   const refresh = useCallback(async (): Promise<void> => {
     if (activeObj === null) {
       setData([]);
       setLoading(false);
       return;
     }
+    const mine = ++generation.current;
     setLoading(true);
     try {
-      const fetched = await apiClient.object<Row>(activeObj.name).list();
-      const enriched = await enrichRefColumns(activeObj, fetched);
-      setData(enriched);
-      setSelected((i) => Math.min(i, Math.max(0, enriched.length - 1)));
+      const q = searched.trim();
+      const page = await apiClient.object<Row>(activeObj.name).page({ fields, limit: TUI_PAGE, ...(q === '' ? {} : { q }), ...(filter.length === 0 ? {} : { filter }) });
+      if (mine !== generation.current) return;
+      setData(page.rows);
+      setNext(page.next);
+      setTotal(page.total ?? page.rows.length);
+      setSelected((i) => Math.min(i, Math.max(0, page.rows.length - 1)));
       setStatusMessage(null);
     } catch (err) {
-      setStatusMessage(formatError(err, daemonUrl));
+      if (mine === generation.current) setStatusMessage(formatError(err, daemonUrl));
     } finally {
-      setLoading(false);
+      if (mine === generation.current) setLoading(false);
     }
-  }, [apiClient, daemonUrl, activeObj, enrichRefColumns]);
+  }, [apiClient, daemonUrl, activeObj, fields, searched, filter]);
+
+  // ADR 24: the next page arrives before the selection reaches the last loaded row.
+  const loadingMore = useRef(false);
+  useEffect(() => {
+    if (activeObj === null || next === null || loadingMore.current || selected < data.length - TUI_PREFETCH) return;
+    const mine = generation.current;
+    loadingMore.current = true;
+    const q = searched.trim();
+    apiClient
+      .object<Row>(activeObj.name)
+      .page({ fields, limit: TUI_PAGE, after: next, ...(q === '' ? {} : { q }), ...(filter.length === 0 ? {} : { filter }) })
+      .then((page) => {
+        if (mine !== generation.current) return;
+        setData((d) => [...d, ...page.rows]);
+        setNext(page.next);
+      })
+      .catch((err: unknown) => setStatusMessage(formatError(err, daemonUrl)))
+      .finally(() => {
+        loadingMore.current = false;
+      });
+  }, [apiClient, daemonUrl, activeObj, fields, searched, filter, next, selected, data.length]);
 
   useEffect(() => {
     void refresh();
@@ -392,7 +401,16 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
       void openEditPanel(action, row);
       return;
     }
-    buildPanel(action, row);
+    if (row === null || activeObj.singleton === true) {
+      buildPanel(action, row);
+      return;
+    }
+    // A list row carries only its columns; the form needs the whole record.
+    void apiClient
+      .object<Row>(activeObj.name)
+      .get(String(row['id']))
+      .then((full) => buildPanel(action, full ?? row))
+      .catch((err: unknown) => setStatusMessage(formatError(err, daemonUrl)));
   }
 
   function closePanel(reason?: 'cancel' | 'view'): void {
@@ -535,6 +553,13 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
         void refresh();
         return;
       }
+      if (!key.ctrl && input === 'f' && filterGroup !== undefined) {
+        setFilterChoice((i) => (i + 1 >= filterGroup.options.length ? -1 : i + 1));
+        setSelected(0);
+        setScrollTop(0);
+        return;
+      }
+
       if (!key.ctrl && input === 's' && objectStatus !== null) {
         void syncNow();
         return;
@@ -619,7 +644,11 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
     helpText = filterHelp(activeObj);
     helpColor = THEME.mutedColor;
   } else if (activeObj !== null) {
-    helpText = objectHelp(activeObj) + (objectStatus !== null ? ' · s sync' : '') + actionHelp;
+    helpText =
+      (filterGroup === undefined ? '' : `f ${filterGroup.label.toLowerCase()}: ${filterOption?.label ?? 'All'} · `) +
+      objectHelp(activeObj) +
+      (objectStatus !== null ? ' · s sync' : '') +
+      actionHelp;
     helpColor = THEME.mutedColor;
   } else {
     helpText = MAINTENANCE_HELP + actionHelp;
@@ -632,7 +661,7 @@ export function App({ apiClient, daemonUrl }: AppProps): React.JSX.Element {
     ? ''
     : visibleRows.length === 0
       ? (searching || filterActive ? '0 matches' : '')
-      : `${selected + 1}/${visibleRows.length}`;
+      : `${selected + 1}/${total ?? visibleRows.length}`;
 
   const overlayWidth = Math.max(0, cols - 4);
 

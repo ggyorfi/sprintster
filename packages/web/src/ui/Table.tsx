@@ -20,6 +20,14 @@ export interface TableProps {
   // Extra buttons per row, before view and edit.
   rowActions?: ((id: string) => ReactNode) | undefined;
   emptyLabel?: string;
+  // Virtual scrolling: every row this tall and on one line, with the space of the rows not rendered above and below.
+  rowHeight?: number | undefined;
+  padTop?: number;
+  padBottom?: number;
+  // With rowHeight: the width of the buttons column, so fixed layout gives every other column its own width.
+  actionsWidth?: number;
+  // Rows standing in for ones not loaded yet: no buttons, no selection.
+  isPlaceholder?: (id: string) => boolean;
 }
 
 const defaultRowId = (row: Record<string, ReactNode>): string => String(row.id ?? '');
@@ -51,11 +59,16 @@ export function Table({
   onView,
   rowActions,
   emptyLabel = 'No rows',
+  rowHeight,
+  padTop = 0,
+  padBottom = 0,
+  actionsWidth,
+  isPlaceholder,
 }: TableProps) {
   const hasActions = onEdit !== undefined || onView !== undefined || rowActions !== undefined;
   const colCount = columns.length + (hasActions ? 1 : 0);
   return (
-    <table className={styles.table}>
+    <table className={styles.table} style={rowHeight === undefined ? undefined : { tableLayout: 'fixed' }}>
       <thead>
         <tr>
           {columns.map((col) => (
@@ -63,7 +76,7 @@ export function Table({
               {col.label}
             </th>
           ))}
-          {hasActions && <th className={styles.th} aria-hidden="true" />}
+          {hasActions && <th className={styles.th} aria-hidden="true" style={actionsWidth === undefined ? undefined : { width: actionsWidth }} />}
         </tr>
       </thead>
       <tbody>
@@ -74,7 +87,13 @@ export function Table({
             </td>
           </tr>
         ) : (
-          rows.map((row) => {
+          <>
+          {padTop > 0 && (
+            <tr aria-hidden="true" style={{ height: padTop }}>
+              <td colSpan={colCount} />
+            </tr>
+          )}
+          {rows.map((row) => {
             const id = rowId(row);
             const selected = selectedId !== undefined && id === selectedId;
             return (
@@ -85,17 +104,20 @@ export function Table({
                   .filter(Boolean)
                   .join(' ')}
                 onClick={onSelect ? () => onSelect(id) : undefined}
+                style={rowHeight === undefined ? undefined : { height: rowHeight }}
               >
                 {columns.map((col) => (
-                  <td key={col.key} className={styles.td}>
+                  <td key={col.key} className={rowHeight === undefined ? styles.td : `${styles.td} ${styles.oneLine}`}>
                     {row[col.key]}
                     {col.suffix !== undefined && row[col.key] != null && (
                       <span className={styles.suffix}>{col.suffix}</span>
                     )}
                   </td>
                 ))}
-                {hasActions && (
+                {hasActions && isPlaceholder?.(id) === true && <td className={styles.td} />}
+                {hasActions && isPlaceholder?.(id) !== true && (
                   <td className={[styles.td, styles.actionCell].join(' ')} onClick={(e) => e.stopPropagation()}>
+                    <span className={styles.actions}>
                     {rowActions?.(id)}
                     {onView !== undefined && (
                       <button
@@ -123,11 +145,18 @@ export function Table({
                         <EditIcon />
                       </button>
                     )}
+                    </span>
                   </td>
                 )}
               </tr>
             );
-          })
+          })}
+          {padBottom > 0 && (
+            <tr aria-hidden="true" style={{ height: padBottom }}>
+              <td colSpan={colCount} />
+            </tr>
+          )}
+          </>
         )}
       </tbody>
     </table>

@@ -13,11 +13,12 @@ function makeApi(seed: Record<string, Row[]>, add: ReturnType<typeof vi.fn>): Ap
   return {
     object: () => ({
       list: async () => seed['client'] ?? [],
+      page: async () => ({ rows: seed['client'] ?? [], total: (seed['client'] ?? []).length, next: null }),
       add,
       update: vi.fn(),
       remove: vi.fn(),
       transition: vi.fn(),
-      get: async () => null,
+      get: async (id: string) => (seed['client'] ?? []).find((r) => r['id'] === id) ?? null,
       status: async () => null,
       sync: async () => ({}),
       refresh: async () => null,

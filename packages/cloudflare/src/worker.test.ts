@@ -26,7 +26,7 @@ describe('createWorker', () => {
       body: JSON.stringify({ title: 'Edited' }),
     });
     expect(await (await req(`/notes/${ID}`)).json()).toMatchObject({ id: ID, title: 'Edited' });
-    expect(await (await req('/notes')).json()).toEqual([expect.objectContaining({ id: ID, title: 'Edited' })]);
+    expect(((await (await req('/notes')).json()) as { rows: unknown[] }).rows).toEqual([expect.objectContaining({ id: ID, title: 'Edited' })]);
   });
 
   it('drops a client\'s claim to be someone when nothing authenticates', async () => {
@@ -34,6 +34,19 @@ describe('createWorker', () => {
     await req('/notes', { method: 'POST', headers: { 'content-type': 'application/json', 'Sprintster-Actor': 'mallory' }, body: JSON.stringify({ id, title: 'Anon' }) });
     const log = (await (await req('/log')).json()) as { changes: Array<{ id: string; actor: string }> };
     expect(log.changes.find((c) => c.id === id)?.actor).toBe('system');
+  });
+
+  it('pages, sorts and searches inside the Durable Object (ADR 24)', async () => {
+    const titles = ['Óra', 'alma', 'Zebra'];
+    for (const [i, title] of titles.entries()) {
+      await req('/notes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: `5555555${i}-5555-4555-8555-555555555555`, title }) });
+    }
+    const page = (await (await req('/notes?limit=2&sort=title&q=a')).json()) as { rows: Array<{ title: string }>; total: number; next: string | null };
+    expect(page.total).toBeGreaterThanOrEqual(3);
+    expect(page.rows).toHaveLength(2);
+    expect(page.next).not.toBeNull();
+    expect(((await (await req('/notes?q=ora')).json()) as { rows: Array<{ title: string }> }).rows.map((r) => r.title)).toContain('Óra');
+    expect((await req('/notes?limit=101')).status).toBe(400);
   });
 
   it('stores uploads in R2 and serves them back by hash', async () => {

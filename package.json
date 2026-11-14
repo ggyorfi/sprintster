@@ -16,6 +16,7 @@
     "clean": "pnpm -r exec rm -rf dist .tsbuildinfo node_modules/.cache",
     "install-s8r": "pnpm -r run build && node scripts/install-s8r.mjs",
     "remove-s8r": "node scripts/remove-s8r.mjs",
+    "test:pg": "(docker ps --format {{.Names}} | grep -qx s8r-pg || (docker run -d --rm --name s8r-pg -e POSTGRES_PASSWORD=test -e POSTGRES_DB=s8r -p 127.0.0.1:54329:5432 postgres:17 && sleep 4)) && SPRINTSTER_TEST_PG_URL=postgres://postgres:test@127.0.0.1:54329/s8r pnpm --filter @sprintster/storage-postgres test",
     "test:e2e": "pnpm -r run build && bash tests/e2e/smoke.sh",
     "postinstall": "git config core.hooksPath .githooks 2>/dev/null || true"
   },

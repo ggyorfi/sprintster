@@ -49,8 +49,15 @@ function namedClients(names: string[]): Client[] {
   }));
 }
 
+// Answers pages as the daemon does (ADR 24): the search matches name and service, ignoring case.
 function mockApi(clients: Client[], over: Record<string, unknown> = {}): ApiClient {
-  const obj = { list: async () => clients, ...over };
+  const page = async ({ q, after, limit = 100 }: { q?: string; after?: string; limit?: number }) => {
+    const matching = q === undefined ? clients : clients.filter((c) => `${c.name} ${c.service}`.toLowerCase().includes(q.toLowerCase()));
+    const from = after === undefined ? 0 : Number(after);
+    const rows = matching.slice(from, from + limit);
+    return { rows, ...(after === undefined ? { total: matching.length } : {}), next: from + limit < matching.length ? String(from + limit) : null };
+  };
+  const obj = { list: async () => clients, page, get: async (id: string) => clients.find((c) => c.id === id) ?? null, ...over };
   return { object: () => obj } as unknown as ApiClient;
 }
 
@@ -61,6 +68,28 @@ async function waitFor(check: () => boolean, timeout = 1500): Promise<void> {
     await new Promise((r) => setTimeout(r, 10));
   }
 }
+
+describe('App: paged list (ADR 24)', () => {
+  it('counts every record, and loads further pages as the selection nears the end', async () => {
+    const calls: Array<{ after?: string }> = [];
+    const clients = makeClients(250);
+    const api = mockApi(clients);
+    const object = api.object('client') as unknown as { page: (p: { after?: string }) => Promise<unknown> };
+    const page = object.page;
+    object.page = (p) => {
+      calls.push(p);
+      return page(p);
+    };
+    const { lastFrame, stdin } = render(<App apiClient={api} daemonUrl="http://x" />);
+    await waitFor(() => strip(lastFrame() ?? '').includes('1/250'));
+    for (let i = 0; i < 3; i++) {
+      stdin.write('G');
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    await waitFor(() => strip(lastFrame() ?? '').includes('250/250'));
+    expect(calls.map((c) => c.after ?? null)).toEqual([null, '100', '200']);
+  });
+});
 
 describe('App: long client list', () => {
   it('windows the list instead of rendering all rows (no terminal overflow)', async () => {
@@ -130,6 +159,8 @@ describe('App: client search', () => {
     await waitFor(() => strip(lastFrame() ?? '').includes('Search:'));
     stdin.write('lam');
     await waitFor(() => strip(lastFrame() ?? '').includes('Search: lam'));
+    // The daemon searches (ADR 24), a moment after the last key.
+    await waitFor(() => !strip(lastFrame() ?? '').includes('Alfie Granger'));
 
     let frame = strip(lastFrame() ?? '');
     expect(frame).toContain('Thomas Lam');

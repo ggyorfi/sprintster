@@ -1,3 +1,5 @@
+import { evaluateQuery, type EvaluatedRow, type PinRow, type PinStore, type StatePage, type StateQuery } from './query.js';
+
 // Default actor for events with no authenticated user (there is no auth yet, so every daemon write falls back to this).
 export const SYSTEM_ACTOR = 'system';
 
@@ -31,18 +33,26 @@ export interface StoredState {
   streamId: string;
   version: number;
   state: unknown;
+  // ADR 24: written beside the state for searching; never read back.
+  search?: string | null;
 }
 
 // Current state per stream, derived from the log and rebuildable from it. A store that offers it lets reads skip folding events.
 export interface StateStore {
   // Appends the event and records `project(row)` as the stream's state in one transaction; a throw from `project` appends nothing.
-  appendWithState(input: EventInput, project: (row: EventRow) => unknown): Promise<EventRow>;
+  // `searchOf` gives the state's search text (ADR 24).
+  appendWithState(input: EventInput, project: (row: EventRow) => unknown, searchOf?: (state: unknown) => string | null): Promise<EventRow>;
   getState(partitionId: number, streamType: string, streamId: string): Promise<StoredState | null>;
   // In order of each stream's first event.
   listStates(partitionId: number, streamType: string): Promise<StoredState[]>;
-  // True when some stream's stored version differs from its latest event, as after an upgrade or a write that bypassed the states.
-  statesStale(partitionId: number, streamType: string): Promise<boolean>;
-  replaceStates(partitionId: number, streamType: string, states: readonly StoredState[]): Promise<void>;
+  // True when some stream's stored version differs from its latest event, as after an upgrade or a write that bypassed the
+  // states, or when the search text was written for other search fields than `searchKey` names.
+  statesStale(partitionId: number, streamType: string, searchKey?: string): Promise<boolean>;
+  replaceStates(partitionId: number, streamType: string, states: readonly StoredState[], searchKey?: string): Promise<void>;
+  // ADR 24: one page, chosen and ordered by the store.
+  query(q: StateQuery): Promise<StatePage>;
+  // ADR 26.
+  pins: PinStore;
 }
 
 // One stream's part of an erasure (ADR 18).
@@ -56,6 +66,9 @@ export interface StreamRewrite {
   payloads: ReadonlyMap<string, unknown> | null;
   // The stream's state after new payloads, for a store that keeps states.
   state?: unknown;
+  search?: string | null;
+  // The stream's pinned snapshots after new payloads (ADR 26); deleting the stream unpins them.
+  pins?: ReadonlyArray<{ set: string; state: unknown; search: string | null }>;
 }
 
 export interface EventStore {
@@ -84,30 +97,102 @@ export interface EventStore {
   states?: StateStore;
 }
 
+interface MemoryState {
+  streamId: string;
+  version: number;
+  state: unknown;
+  search: string | null;
+  seq: number;
+}
+
+interface MemoryPin {
+  set: string;
+  partitionId: number;
+  streamType: string;
+  streamId: string;
+  position: number;
+  state: unknown;
+  search: string | null;
+  removed: boolean;
+  seq: number;
+  firstSeq: number;
+}
+
 export class InMemoryEventStore implements EventStore {
   private rows: EventRow[] = [];
   private nextId = 1;
-  private stateMap = new Map<string, Map<string, StoredState>>();
+  private stateMap = new Map<string, Map<string, MemoryState>>();
+  private searchKeys = new Map<string, string>();
+  private stateSeq = 0;
+  private pinMap = new Map<string, MemoryPin>();
+  private pinSeq = 0;
+
+  private putState(partitionId: number, streamType: string, streamId: string, version: number, state: unknown, search: string | null): void {
+    const states = this.statesOf(partitionId, streamType);
+    const seq = states.get(streamId)?.seq ?? ++this.stateSeq;
+    states.set(streamId, { streamId, version, state, search, seq });
+  }
+
+  private evaluate(rows: EvaluatedRow[], q: StateQuery): StatePage {
+    return evaluateQuery(rows, q, (type, id) => this.statesOf(q.partitionId, type).get(id)?.state);
+  }
+
+  private pinKey = (set: string, partitionId: number, streamType: string, streamId: string) => `${set}\0${partitionId}\0${streamType}\0${streamId}`;
 
   readonly states: StateStore = {
-    appendWithState: async (input, project) => {
+    appendWithState: async (input, project, searchOf) => {
       const row = await this.append(input);
       try {
-        this.statesOf(input.partitionId, input.streamType).set(input.streamId, {
-          streamId: input.streamId,
-          version: input.streamVersion,
-          state: project(row),
-        });
+        const state = project(row);
+        this.putState(input.partitionId, input.streamType, input.streamId, input.streamVersion, state, searchOf?.(state) ?? null);
       } catch (err) {
         this.rows.splice(this.rows.indexOf(row), 1);
         throw err;
       }
       return row;
     },
-    getState: async (partitionId, streamType, streamId) =>
-      this.statesOf(partitionId, streamType).get(streamId) ?? null,
-    listStates: async (partitionId, streamType) => [...this.statesOf(partitionId, streamType).values()],
-    statesStale: async (partitionId, streamType) => {
+    getState: async (partitionId, streamType, streamId) => {
+      const s = this.statesOf(partitionId, streamType).get(streamId);
+      return s === undefined ? null : { streamId: s.streamId, version: s.version, state: s.state };
+    },
+    listStates: async (partitionId, streamType) =>
+      [...this.statesOf(partitionId, streamType).values()].sort((a, b) => a.seq - b.seq).map((s) => ({ streamId: s.streamId, version: s.version, state: s.state })),
+    query: async (q) => this.evaluate([...this.statesOf(q.partitionId, q.streamType).values()], q),
+    pins: {
+      pin: async (set, partitionId, streamType, streamId, position, state, search) => {
+        const seq = ++this.pinSeq;
+        const key = this.pinKey(set, partitionId, streamType, streamId);
+        const firstSeq = this.pinMap.get(key)?.firstSeq ?? seq;
+        this.pinMap.set(key, { set, partitionId, streamType, streamId, position, state, search, removed: false, seq, firstSeq });
+        return seq;
+      },
+      unpin: async (set, partitionId, streamType, streamId) => {
+        const key = this.pinKey(set, partitionId, streamType, streamId);
+        const pin = this.pinMap.get(key);
+        if (pin === undefined || pin.removed) return null;
+        const seq = ++this.pinSeq;
+        this.pinMap.set(key, { ...pin, state: null, search: null, removed: true, seq });
+        return seq;
+      },
+      query: async (set, q) =>
+        this.evaluate(
+          [...this.pinMap.values()]
+            .filter((p) => p.set === set && p.partitionId === q.partitionId && p.streamType === q.streamType && !p.removed)
+            .map((p) => ({ streamId: p.streamId, version: p.position, state: p.state, search: p.search, seq: p.firstSeq })),
+          q,
+        ),
+      since: async (set, partitionId, afterSeq, limit) => {
+        const all = [...this.pinMap.values()].filter((p) => p.set === set && p.partitionId === partitionId && p.seq > afterSeq).sort((a, b) => a.seq - b.seq);
+        const pins: PinRow[] = all.slice(0, limit).map((p) => ({ set: p.set, streamType: p.streamType, streamId: p.streamId, position: p.position, state: p.state, removed: p.removed, seq: p.seq }));
+        return { pins, next: pins.length === limit ? pins.at(-1)!.seq : null };
+      },
+      pinsOf: async (partitionId, streamType, streamId) =>
+        [...this.pinMap.values()]
+          .filter((p) => p.partitionId === partitionId && p.streamType === streamType && p.streamId === streamId && !p.removed)
+          .map((p) => ({ set: p.set, position: p.position })),
+    },
+    statesStale: async (partitionId, streamType, searchKey) => {
+      if (searchKey !== undefined && this.statesOf(partitionId, streamType).size > 0 && this.searchKeys.get(`${partitionId}\0${streamType}`) !== searchKey) return true;
       const states = this.statesOf(partitionId, streamType);
       const heads = new Map<string, number>();
       for (const r of this.rows) {
@@ -117,12 +202,14 @@ export class InMemoryEventStore implements EventStore {
       }
       return [...heads].some(([streamId, head]) => states.get(streamId)?.version !== head);
     },
-    replaceStates: async (partitionId, streamType, states) => {
-      this.stateMap.set(`${partitionId}\0${streamType}`, new Map(states.map((s) => [s.streamId, s] as const)));
+    replaceStates: async (partitionId, streamType, states, searchKey) => {
+      this.stateMap.set(`${partitionId}\0${streamType}`, new Map());
+      for (const s of states) this.putState(partitionId, streamType, s.streamId, s.version, s.state, s.search ?? null);
+      if (searchKey !== undefined) this.searchKeys.set(`${partitionId}\0${streamType}`, searchKey);
     },
   };
 
-  private statesOf(partitionId: number, streamType: string): Map<string, StoredState> {
+  private statesOf(partitionId: number, streamType: string): Map<string, MemoryState> {
     const key = `${partitionId}\0${streamType}`;
     let states = this.stateMap.get(key);
     if (states === undefined) {
@@ -203,14 +290,20 @@ export class InMemoryEventStore implements EventStore {
     for (const r of rewrites) {
       const inStream = (e: EventRow) => e.partitionId === r.partitionId && e.streamType === r.streamType && e.streamId === r.streamId;
       const states = this.statesOf(r.partitionId, r.streamType);
+      const pinned = [...this.pinMap.values()].filter((p) => p.partitionId === r.partitionId && p.streamType === r.streamType && p.streamId === r.streamId && !p.removed);
       if (r.payloads === null) {
         this.rows = this.rows.filter((e) => !inStream(e));
         states.delete(r.streamId);
+        for (const p of pinned) await this.states.pins.unpin(p.set, p.partitionId, p.streamType, p.streamId);
         continue;
       }
       const payloads = r.payloads;
       this.rows = this.rows.map((e) => (inStream(e) && payloads.has(e.id) ? { ...e, payload: payloads.get(e.id) } : e));
-      if ('state' in r) states.set(r.streamId, { streamId: r.streamId, version: r.expectedVersion, state: r.state });
+      if ('state' in r) this.putState(r.partitionId, r.streamType, r.streamId, r.expectedVersion, r.state, r.search ?? null);
+      for (const p of r.pins ?? []) {
+        const old = pinned.find((x) => x.set === p.set);
+        if (old !== undefined) await this.states.pins.pin(p.set, old.partitionId, old.streamType, old.streamId, old.position, p.state, p.search);
+      }
     }
     return row;
   }

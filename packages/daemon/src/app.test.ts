@@ -185,7 +185,7 @@ describe('GET /clients/:id', () => {
 describe('GET /clients', () => {
   it('returns an empty array when no clients exist', async () => {
     const { app } = buildApp();
-    expect(await (await app.request('/clients')).json()).toEqual([]);
+    expect(await (await app.request('/clients')).json()).toEqual({ rows: [], total: 0, next: null });
   });
 
   it('excludes removed clients', async () => {
@@ -193,7 +193,7 @@ describe('GET /clients', () => {
     await clientApi.add(validInput);
     await clientApi.add({ ...validInput, id: ID_B, name: 'Thomas' });
     await clientApi.remove!(ID_A);
-    const body = (await (await app.request('/clients')).json()) as Array<{ id: string }>;
+    const body = ((await (await app.request('/clients')).json()) as { rows: Array<{ id: string }> }).rows;
     expect(body.map((c) => c.id)).toEqual([ID_B]);
   });
 });
@@ -374,7 +374,7 @@ describe('plugin-style read-only api (only list/get/requireGet)', () => {
   it('GET /notes returns rows', async () => {
     const res = await app.request('/notes');
     expect(res.status).toBe(200);
-    expect((await res.json() as Array<{ id: string }>).length).toBe(1);
+    expect(((await res.json()) as { rows: Array<{ id: string }> }).rows.length).toBe(1);
   });
 
   it('GET /notes/:id returns 200 when found, 404 when not', async () => {
@@ -600,6 +600,73 @@ describe('object route paths', () => {
   });
 });
 
+describe('GET /<route> pages (ADR 24)', () => {
+  const names = ['Ann', 'Béla', 'Cecil', 'Dóra'];
+  async function filled() {
+    const built = buildApp();
+    for (const [i, name] of names.entries()) await built.app.request('/clients', json({ ...validInput, id: `0000000${i}-0000-4000-8000-000000000000`, name, rate: String(1000 * (i + 1)) }));
+    return built.app;
+  }
+  const get = async (app: Awaited<ReturnType<typeof filled>>, query: string) => (await (await app.request(`/clients${query}`)).json()) as { rows: Array<Record<string, unknown>>; total?: number; next: string | null };
+
+  it('answers one page with the total, searches without case or accents, sorts and selects fields', async () => {
+    const app = await filled();
+    const page = await get(app, '?limit=2&offset=1&sort=-rate');
+    expect(page.rows.map((r) => r['name'])).toEqual(['Cecil', 'Béla']);
+    expect(page.total).toBe(4);
+    expect((await get(app, '?q=dora')).rows.map((r) => r['name'])).toEqual(['Dóra']);
+    expect((await get(app, '?fields=name&limit=1&sort=name')).rows).toEqual([{ id: '00000000-0000-4000-8000-000000000000', name: 'Ann' }]);
+  });
+
+  it('pages through every record by cursor', async () => {
+    const app = await filled();
+    const seen: unknown[] = [];
+    let after = '';
+    for (let i = 0; i < 5; i++) {
+      const page = await get(app, `?limit=3&sort=name${after}`);
+      seen.push(...page.rows.map((r) => r['name']));
+      if (page.next === null) break;
+      after = `&after=${page.next}`;
+    }
+    expect(seen).toEqual(names);
+  });
+
+  it('narrows the page by a named filter, and refuses an unknown one', async () => {
+    const before = appConfig;
+    const filtered = loadConfig({
+      ...fixtureAppRaw,
+      objects: fixtureAppRaw.objects.map((o: { name: string; lists?: unknown[] }) =>
+        o.name === 'client' ? { ...o, lists: [{ ...(o.lists as Array<Record<string, unknown>>)[0], filters: [{ label: 'Rate', options: [{ label: 'High', property: 'rate', startsWith: '3' }] }] }] } : o,
+      ),
+    });
+    setAppConfig(filtered);
+    try {
+      const store = new InMemoryEventStore();
+      const obj = filtered.objects.find((o) => o.name === 'client')!;
+      const app = createApp({ apis: [{ obj, api: createObjectApi<{ id: string }>(store, obj) }] });
+      for (const [i, name] of names.entries()) await app.request('/clients', json({ ...validInput, id: `0000000${i}-0000-4000-8000-000000000000`, name, rate: String(1000 * (i + 1)) }));
+      expect((await get(app, '?filter=Rate%3AHigh')).rows.map((r) => r['name'])).toEqual(['Cecil']);
+      expect((await app.request('/clients?filter=Rate%3AMaybe')).status).toBe(400);
+    } finally {
+      setAppConfig(before);
+    }
+  });
+
+  it('leaves out the total when asked not to count', async () => {
+    const app = await filled();
+    const page = await get(app, '?limit=2&offset=2&count=false&sort=name');
+    expect(page.rows.map((r) => r['name'])).toEqual(['Cecil', 'Dóra']);
+    expect(page.total).toBeUndefined();
+  });
+
+  it('refuses more than 100 rows and other bad parameters with 400', async () => {
+    const app = await filled();
+    for (const query of ['?limit=101', '?limit=0', '?offset=-1', '?sort=nope', '?fields=nope', '?after=zzz']) {
+      expect((await app.request(`/clients${query}`)).status).toBe(400);
+    }
+  });
+});
+
 describe('plugin list columns (ADR 25)', () => {
   it('adds each column\'s value to the rows a list returns, in one call per list', async () => {
     const store = new InMemoryEventStore();
@@ -624,7 +691,7 @@ describe('plugin list columns (ADR 25)', () => {
     };
     const app = createApp({ apis: [{ obj: fixtureClientConfig, api }], plugins });
     await app.request('/clients', json(validInput));
-    const rows = (await (await app.request('/clients')).json()) as Array<Record<string, unknown>>;
+    const rows = ((await (await app.request('/clients')).json()) as { rows: Array<Record<string, unknown>> }).rows;
     expect(rows[0]!['pub.state']).toEqual({ text: 'Pending', tone: 'danger' });
     expect(calls).toEqual([[ID_A]]);
   });

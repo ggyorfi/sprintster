@@ -1,4 +1,5 @@
 import type * as Vitest from 'vitest';
+import { searchTerms, searchTextOf, type StateCondition, type StateCursor, type StatePage, type StateQuery } from './events/query.js';
 import { UniqueViolationError, type EventInput, type EventStore, type StateStore } from './events/store.js';
 import type { BlobStore } from './blobs/store.js';
 
@@ -263,6 +264,239 @@ export function describeStateStore(
       ]);
       expect(await store.states.getState(0, 'client', 'old')).toBeNull();
       expect(await store.states.listStates(0, 'invoice')).toHaveLength(1);
+    });
+  });
+}
+
+// ADR 24 and 26: every store answers every query the same way; the in-memory store's answer is the reference.
+export function describeStateQuery(
+  { describe, it, expect }: TestApi,
+  name: string,
+  freshStore: () => WithStates | Promise<WithStates>,
+): void {
+  const fields = ['title', 'body'];
+  const searchOf = (state: unknown) => searchTextOf(state, fields);
+  const articles: Array<[string, Record<string, unknown>]> = [
+    ['a1', { title: 'Óra terv', body: 'Angol', rank: 3, top: true, section: 's2', removed: false, file: { contentType: 'image/png' } }],
+    ['a2', { title: 'ora', body: null, rank: 1, top: false, section: 's1', removed: false, file: { contentType: 'application/pdf' } }],
+    ['a3', { title: 'Zebra', body: 'kör', rank: 2, top: true, section: null, removed: false }],
+    ['a4', { title: null, body: 'Óra', rank: null, top: null, section: 's1', removed: false }],
+    ['a5', { title: 'Alma', body: 'kor', rank: 3, top: false, section: 's2', removed: false }],
+    ['a6', { title: 'Törölt', body: 'óra', rank: 9, top: true, section: 's1', removed: true }],
+    ['b7', { title: 'alma', body: 'ÓRA', rank: 2, top: false, section: 's9', removed: false }],
+  ];
+  const sections: Array<[string, Record<string, unknown>]> = [
+    ['s1', { title: 'Hírek' }],
+    ['s2', { title: 'Angol' }],
+  ];
+  async function seeded(): Promise<WithStates> {
+    const store = await freshStore();
+    for (const [id, state] of articles) await store.states.appendWithState(input({ streamType: 'article', streamId: id }), () => state, searchOf);
+    for (const [id, state] of sections) await store.states.appendWithState(input({ streamType: 'section', streamId: id }), () => state);
+    await store.states.appendWithState(input({ partitionId: 1, streamType: 'article', streamId: 'x1' }), () => ({ title: 'ora' }), searchOf);
+    await store.states.appendWithState(input({ streamType: 'other', streamId: 'o1' }), () => ({ title: 'ora' }), searchOf);
+    return store;
+  }
+  const base = { partitionId: 0, streamType: 'article', limit: 50 };
+  const ids = (page: { states: Array<{ streamId: string }> }) => page.states.map((s) => s.streamId);
+  async function walk(store: WithStates, q: Omit<StateQuery, 'limit' | 'after' | 'offset'>, limit: number): Promise<string[]> {
+    const seen: string[] = [];
+    let after: StateCursor | null = null;
+    for (let i = 0; i < 20; i++) {
+      const page: StatePage = await store.states.query({ ...q, limit, after });
+      seen.push(...ids(page));
+      if (page.next === null) return seen;
+      after = page.next;
+    }
+    throw new Error('cursor did not end');
+  }
+
+  describe(`StateStore query contract: ${name}`, () => {
+    it('searches every word, ignoring case and accents, and within one partition and type', async () => {
+      const store = await seeded();
+      expect(ids(await store.states.query({ ...base, terms: searchTerms('ORA') })).sort()).toEqual(['a1', 'a2', 'a4', 'a6', 'b7']);
+      expect(ids(await store.states.query({ ...base, terms: searchTerms('óra terv') }))).toEqual(['a1']);
+      expect(ids(await store.states.query({ ...base, terms: searchTerms('kor') })).sort()).toEqual(['a3', 'a5']);
+      expect(ids(await store.states.query({ ...base, terms: searchTerms('nothing') }))).toEqual([]);
+    });
+
+    it('matches an id prefix only when asked', async () => {
+      const store = await seeded();
+      expect(ids(await store.states.query({ ...base, terms: ['b7'] }))).toEqual([]);
+      expect(ids(await store.states.query({ ...base, terms: ['b7'], idPrefix: true }))).toEqual(['b7']);
+    });
+
+    it('leaves out hidden rows, and keeps first-write order without a sort', async () => {
+      const store = await seeded();
+      await store.states.appendWithState(input({ streamType: 'article', streamId: 'a1', streamVersion: 2 }), () => articles[0]![1], searchOf);
+      expect(ids(await store.states.query({ ...base, hide: 'removed' }))).toEqual(['a1', 'a2', 'a3', 'a4', 'a5', 'b7']);
+    });
+
+    it('sorts text by code point, numbers numerically and booleans, empty values last both ways, ties by id', async () => {
+      const store = await seeded();
+      const q = (path: string, kind: 'text' | 'number' | 'boolean', descending = false) =>
+        store.states.query({ ...base, hide: 'removed', sort: { path, kind, descending } });
+      expect(ids(await q('title', 'text'))).toEqual(['a5', 'a3', 'b7', 'a2', 'a1', 'a4']);
+      expect(ids(await q('title', 'text', true))).toEqual(['a1', 'a2', 'b7', 'a3', 'a5', 'a4']);
+      expect(ids(await q('rank', 'number'))).toEqual(['a2', 'a3', 'b7', 'a1', 'a5', 'a4']);
+      expect(ids(await q('rank', 'number', true))).toEqual(['a1', 'a5', 'a3', 'b7', 'a2', 'a4']);
+      expect(ids(await q('top', 'boolean'))).toEqual(['a2', 'a5', 'b7', 'a1', 'a3', 'a4']);
+    });
+
+    it('sorts by a field of the referenced record, a missing or empty ref last', async () => {
+      const store = await seeded();
+      const page = await store.states.query({ ...base, hide: 'removed', sort: { path: 'section', kind: 'text', descending: false, ref: { streamType: 'section', path: 'title' } } });
+      expect(ids(page)).toEqual(['a1', 'a5', 'a2', 'a4', 'a3', 'b7']);
+    });
+
+    it('pages by offset with the total of every match', async () => {
+      const store = await seeded();
+      const sort = { path: 'rank', kind: 'number' as const, descending: false };
+      const page = await store.states.query({ ...base, hide: 'removed', sort, limit: 2, offset: 2 });
+      expect(ids(page)).toEqual(['b7', 'a1']);
+      expect(page.total).toBe(6);
+      const searched = await store.states.query({ ...base, terms: searchTerms('ora'), limit: 1 });
+      expect(searched.total).toBe(5);
+    });
+
+    it('walks every row exactly once by cursor, in the same order as one big page, for every sort', async () => {
+      const store = await seeded();
+      const sorts: Array<StateQuery['sort']> = [
+        undefined,
+        { path: 'title', kind: 'text', descending: false },
+        { path: 'title', kind: 'text', descending: true },
+        { path: 'rank', kind: 'number', descending: false },
+        { path: 'rank', kind: 'number', descending: true },
+        { path: 'top', kind: 'boolean', descending: false },
+        { path: 'section', kind: 'text', descending: true, ref: { streamType: 'section', path: 'title' } },
+      ];
+      for (const sort of sorts) {
+        const q = { ...base, ...(sort === undefined ? {} : { sort }) };
+        const whole = ids(await store.states.query({ ...q, limit: 100 }));
+        for (const size of [1, 2, 3]) expect(await walk(store, q, size)).toEqual(whole);
+      }
+    });
+
+    it('skips the count when asked, giving the same rows', async () => {
+      const store = await seeded();
+      const sort = { path: 'rank', kind: 'number' as const, descending: false };
+      const counted = await store.states.query({ ...base, sort, limit: 2, offset: 2 });
+      const uncounted = await store.states.query({ ...base, sort, limit: 2, offset: 2, count: false });
+      expect(uncounted.total).toBeUndefined();
+      expect(uncounted.states).toEqual(counted.states);
+    });
+
+    it('gives no total on cursor pages, and an empty page after the last full one', async () => {
+      const store = await seeded();
+      const first = await store.states.query({ ...base, limit: 7 });
+      expect(first.total).toBe(7);
+      const second = await store.states.query({ ...base, limit: 7, after: first.next });
+      expect(second).toEqual({ states: [], next: null });
+    });
+
+    it('filters by equals and notEquals on text, numbers and booleans, a missing value never equal (ADR 27)', async () => {
+      const store = await seeded();
+      const where = async (...conds: StateCondition[]) => ids(await store.states.query({ ...base, hide: 'removed', where: conds })).sort();
+      expect(await where({ path: 'title', op: 'equals', value: 'ora' })).toEqual(['a2']);
+      expect(await where({ path: 'rank', op: 'equals', value: 3 })).toEqual(['a1', 'a5']);
+      expect(await where({ path: 'top', op: 'equals', value: true })).toEqual(['a1', 'a3']);
+      expect(await where({ path: 'top', op: 'notEquals', value: true })).toEqual(['a2', 'a4', 'a5', 'b7']);
+      expect(await where({ path: 'top', op: 'equals', value: false }, { path: 'rank', op: 'equals', value: 2 })).toEqual(['b7']);
+    });
+
+    it('filters by a prefix of a nested field, a missing value never starting with anything (ADR 27)', async () => {
+      const store = await seeded();
+      const where = async (op: StateCondition['op']) => ids(await store.states.query({ ...base, hide: 'removed', where: [{ path: 'file.contentType', op, value: 'image/' }] })).sort();
+      expect(await where('startsWith')).toEqual(['a1']);
+      expect(await where('notStartsWith')).toEqual(['a2', 'a3', 'a4', 'a5', 'b7']);
+    });
+
+    it('filters together with search, sort and paging, and counts only the matches', async () => {
+      const store = await seeded();
+      const page = await store.states.query({ ...base, terms: ['ora'], where: [{ path: 'top', op: 'notEquals', value: true }], sort: { path: 'title', kind: 'text', descending: false }, limit: 1 });
+      expect(ids(page)).toEqual(['b7']);
+      expect(page.total).toBe(3);
+    });
+
+    it('reads only the ids asked for', async () => {
+      const store = await seeded();
+      expect(ids(await store.states.query({ ...base, ids: ['a3', 'a1', 'zz'] })).sort()).toEqual(['a1', 'a3']);
+      expect(ids(await store.states.query({ ...base, ids: [] }))).toEqual([]);
+    });
+
+    it('rebuilds search text with the states, and reports the states stale for other search fields', async () => {
+      const store = await freshStore();
+      await store.states.appendWithState(input({ streamType: 'article', streamId: 'a1' }), () => ({ title: 'Óra', body: 'zebra' }), (s) => searchTextOf(s, ['title']));
+      await store.states.replaceStates(0, 'article', [{ streamId: 'a1', version: 1, state: { title: 'Óra', body: 'zebra' }, search: 'ora zebra' }], 'title,body');
+      expect(await store.states.statesStale(0, 'article', 'title,body')).toBe(false);
+      expect(await store.states.statesStale(0, 'article', 'title')).toBe(true);
+      expect(ids(await store.states.query({ ...base, terms: ['zebra'] }))).toEqual(['a1']);
+    });
+
+    it('rewrites the search text with a rewritten state', async () => {
+      const store = await freshStore();
+      await store.states.appendWithState(input({ streamType: 'article', streamId: 'a1' }), () => ({ title: 'secret name' }), searchOf);
+      await store.rewriteStreams(input({ streamType: '__erased', eventType: 'RecordRedacted' }), [
+        { partitionId: 0, streamType: 'article', streamId: 'a1', expectedVersion: 1, payloads: new Map(), state: { title: null }, search: '' },
+      ]);
+      expect(ids(await store.states.query({ ...base, terms: ['secret'] }))).toEqual([]);
+    });
+  });
+
+  describe(`PinStore contract: ${name}`, () => {
+    const pins = (store: WithStates) => store.states.pins;
+    it('queries the pinned versions like states, never the removed ones, sets kept apart', async () => {
+      const store = await seeded();
+      await pins(store).pin('published', 0, 'article', 'a1', 3, { title: 'Óra v1', rank: 1 }, searchTextOf({ title: 'Óra v1' }, fields));
+      await pins(store).pin('published', 0, 'article', 'a2', 4, { title: 'Alma', rank: 2 }, searchTextOf({ title: 'Alma' }, fields));
+      await pins(store).pin('draft', 0, 'article', 'a3', 5, { title: 'Draft' }, null);
+      await pins(store).unpin('published', 0, 'article', 'a2');
+      const page = await pins(store).query('published', { ...base });
+      expect(page.states).toEqual([{ streamId: 'a1', version: 3, state: { title: 'Óra v1', rank: 1 } }]);
+      expect(ids(await pins(store).query('published', { ...base, terms: ['ora'] }))).toEqual(['a1']);
+      expect(ids(await pins(store).query('draft', { ...base }))).toEqual(['a3']);
+    });
+
+    it('sorts and pages pinned versions, and sorts them by a referenced record', async () => {
+      const store = await seeded();
+      for (const [i, [id, state]] of articles.entries()) await pins(store).pin('published', 0, 'article', id, i + 1, state, searchOf(state));
+      const sort = { path: 'section', kind: 'text' as const, descending: false, ref: { streamType: 'section', path: 'title' } };
+      expect(ids(await pins(store).query('published', { ...base, hide: 'removed', sort }))).toEqual(['a1', 'a5', 'a2', 'a4', 'a3', 'b7']);
+      expect(await walk({ ...store, states: { ...store.states, query: (q) => pins(store).query('published', q) } }, { ...base, sort }, 2)).toEqual(
+        ids(await pins(store).query('published', { ...base, sort })),
+      );
+    });
+
+    it('feeds every pin and unpin in order, removed ones included, page by page', async () => {
+      const store = await seeded();
+      const s1 = await pins(store).pin('published', 0, 'article', 'a1', 3, { title: 'one' }, null);
+      await pins(store).pin('published', 0, 'section', 's1', 4, { title: 'Hírek' }, null);
+      await pins(store).pin('published', 0, 'article', 'a2', 5, { title: 'two' }, null);
+      await pins(store).pin('published', 0, 'article', 'a1', 6, { title: 'one again' }, null);
+      await pins(store).unpin('published', 0, 'article', 'a2');
+      await pins(store).pin('draft', 0, 'article', 'a9', 7, { title: 'not in the feed' }, null);
+      expect(await pins(store).unpin('published', 0, 'article', 'never')).toBeNull();
+      const first = await pins(store).since('published', 0, s1, 2);
+      expect(first.pins.map((p) => [p.streamType, p.streamId, p.removed])).toEqual([['section', 's1', false], ['article', 'a1', false]]);
+      expect(first.pins[1]!.state).toEqual({ title: 'one again' });
+      const second = await pins(store).since('published', 0, first.next!, 2);
+      expect(second.pins.map((p) => [p.streamId, p.removed, p.state])).toEqual([['a2', true, null]]);
+      expect(second.next).toBeNull();
+      expect(await pins(store).pinsOf(0, 'article', 'a1')).toEqual([{ set: 'published', position: 6 }]);
+    });
+
+    it('unpins a deleted stream and rewrites a redacted stream\'s pinned version, in the erasure itself', async () => {
+      const store = await seeded();
+      const s0 = await pins(store).pin('published', 0, 'article', 'a1', 1, { title: 'Óra terv', secret: 'x' }, 'ora terv');
+      await pins(store).pin('published', 0, 'article', 'a2', 1, { title: 'ora' }, 'ora');
+      const rewrite = { partitionId: 0, streamType: 'article', expectedVersion: 1 };
+      await store.rewriteStreams(input({ streamType: '__erased', eventType: 'RecordRedacted' }), [
+        { ...rewrite, streamId: 'a1', payloads: new Map(), state: { title: 'Óra terv', secret: null }, search: 'ora terv', pins: [{ set: 'published', state: { title: 'Óra terv', secret: null }, search: 'ora terv' }] },
+      ]);
+      await store.rewriteStreams(input({ streamType: '__erased', streamVersion: 2, eventType: 'RecordErased' }), [{ ...rewrite, streamId: 'a2', payloads: null }]);
+      expect((await pins(store).query('published', { ...base })).states).toEqual([{ streamId: 'a1', version: 1, state: { title: 'Óra terv', secret: null } }]);
+      const feed = await pins(store).since('published', 0, s0, 10);
+      expect(feed.pins.map((p) => [p.streamId, p.removed])).toEqual([['a1', false], ['a2', true]]);
     });
   });
 }

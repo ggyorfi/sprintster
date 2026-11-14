@@ -8,8 +8,16 @@ import styles from './cells.module.css';
 const MISSING = String.fromCharCode(0x2014);
 
 export function renderCell(col: ListColumnSpec, row: Row, lifecycle: LifecycleInfo): ReactNode {
+  if (col.thumbnail && col.property.type === 'file') {
+    const file = row[col.key] as { contentType?: string; filename?: string } | null | undefined;
+    if (file != null && file.contentType?.startsWith('image/') !== true) {
+      const ext = /\.(\w{1,4})$/.exec(file.filename ?? '')?.[1]?.toUpperCase() ?? 'FILE';
+      return <span className={`${styles.thumb} ${styles.fileType}`}>{ext}</span>;
+    }
+  }
   if (col.thumbnail) {
-    const hash = thumbnailHash(col.property.type === 'image' ? row[col.key] : row[thumbKey(col.key)]);
+    const own = col.property.type === 'image' || col.property.type === 'file';
+    const hash = thumbnailHash(own ? row[col.key] : row[thumbKey(col.key)]);
     return hash === null ? <span className={styles.thumb} /> : <img className={styles.thumb} src={assetUrl(hash)} alt="" loading="lazy" />;
   }
   const value = columnValue(col, row);

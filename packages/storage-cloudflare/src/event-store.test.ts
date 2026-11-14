@@ -1,6 +1,6 @@
 import * as vitest from 'vitest';
 import { env, runInDurableObject } from 'cloudflare:test';
-import { describeEventStore, describeStateStore } from '@sprintster/engine/testing';
+import { describeEventStore, describeStateQuery, describeStateStore } from '@sprintster/engine/testing';
 import type { EventStore, StateStore } from '@sprintster/engine';
 import { createDurableObjectEventStore, type DurableObjectSqlStorage } from './event-store.js';
 
@@ -22,14 +22,23 @@ function fresh(): Store {
     findSince: (...args) => inObject((s) => s.findSince(...args)),
     rewriteStreams: (...args) => inObject((s) => s.rewriteStreams(...args)),
     states: {
-      appendWithState: (input, project) => inObject((s) => s.states.appendWithState(input, project)),
+      appendWithState: (input, project, searchOf) => inObject((s) => s.states.appendWithState(input, project, searchOf)),
       getState: (...args) => inObject((s) => s.states.getState(...args)),
       listStates: (...args) => inObject((s) => s.states.listStates(...args)),
       statesStale: (...args) => inObject((s) => s.states.statesStale(...args)),
       replaceStates: (...args) => inObject((s) => s.states.replaceStates(...args)),
+      query: (q) => inObject((s) => s.states.query(q)),
+      pins: {
+        pin: (...args) => inObject((s) => s.states.pins.pin(...args)),
+        unpin: (...args) => inObject((s) => s.states.pins.unpin(...args)),
+        query: (...args) => inObject((s) => s.states.pins.query(...args)),
+        since: (...args) => inObject((s) => s.states.pins.since(...args)),
+        pinsOf: (...args) => inObject((s) => s.states.pins.pinsOf(...args)),
+      },
     },
   };
 }
 
 describeEventStore(vitest, 'durable object', fresh);
 describeStateStore(vitest, 'durable object', fresh);
+describeStateQuery(vitest, 'durable object', fresh);

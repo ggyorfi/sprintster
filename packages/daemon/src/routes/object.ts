@@ -2,10 +2,28 @@ import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
-import { isApiError, singletonId, type ObjectConfig, type PluginObjectApi } from '@sprintster/engine';
+import { isApiError, singletonId, type ListParams, type ObjectConfig, type PluginObjectApi } from '@sprintster/engine';
 
 // The host decides whether a request's Sprintster-Actor header is its own (ADR 20); undefined leaves the api's default.
 export type ActorOf = (c: Context) => string | undefined;
+
+// ADR 24: the list parameters of a request; the API checks their values.
+function listParams(c: Context): ListParams {
+  const q = (name: string) => c.req.query(name);
+  const int = (name: string) => (q(name) === undefined ? undefined : Number(q(name)));
+  const fields = q('fields');
+  const out: ListParams = {};
+  for (const [k, v] of Object.entries({ q: q('q'), sort: q('sort'), list: q('list'), after: q('after'), limit: int('limit'), offset: int('offset') })) {
+    if (v !== undefined) (out as Record<string, unknown>)[k] = v;
+  }
+  if (fields !== undefined) out.fields = fields.split(',').filter(Boolean);
+  if (q('count') === 'false') out.count = false;
+  const filter = c.req.queries('filter');
+  if (filter !== undefined && filter.length > 0) out.filter = filter;
+  const ids = q('ids');
+  if (ids !== undefined) out.ids = ids.split(',').filter(Boolean);
+  return out;
+}
 
 // ADR 25: adds plugin column values to the rows a list returns.
 export type DecorateRows = (rows: Array<{ id: string }>) => Promise<Array<{ id: string }>>;
@@ -21,9 +39,18 @@ export function createObjectRoute(
   if (obj.singleton === true) return createSingletonRoute(api, obj, actorOf);
 
   const listAt = api.listAt;
+  const query = api.query;
   route.get('/', async (c) => {
     const at = c.req.query('at');
-    if (at === undefined) return c.json(await decorate(await api.list()));
+    if (at === undefined) {
+      if (query === undefined) return c.json({ rows: await decorate(await api.list()), next: null });
+      try {
+        const page = await query(listParams(c));
+        return c.json({ ...page, rows: await decorate(page.rows as Array<{ id: string }>) });
+      } catch (err) {
+        return apiErrorResponse(c, err);
+      }
+    }
     const position = Number(at);
     if (listAt === undefined) return c.json({ code: 'bad_request', message: `'${obj.name}' cannot be read at a position` }, 400);
     if (!Number.isInteger(position) || position < 0) return c.json({ code: 'bad_request', message: 'at must be a non-negative integer position' }, 400);

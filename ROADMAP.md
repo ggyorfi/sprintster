@@ -634,58 +634,59 @@ limit, and a public site serves them from the blob store. Design:
       *Done when:* the asset route tests pass through it, with a file name
       in `Content-Disposition`.
 
-## Epic: paged lists from the server
+## Epic: paged lists from the store
 
-**Goal.** A list stays fast and bounded at any size: the daemon (and then the
-store) searches, sorts and pages, every request gets at most one page, and
-every caller fetches only what it shows or pages through the rest. Design:
-[ADR 24](./docs/ADR/0024-paged-lists-from-the-server.md) (proposed).
+**Goal.** No list request reads or sends more than one page, inside the store,
+the daemon or the network. Design:
+[ADR 24](./docs/ADR/0024-paged-lists-from-the-server.md).
 
 ### Steps
 
-- [ ] **1. Engine query.** Search, ref column values, sort and paging as one
-      engine function over rows, moved out of the web package
-      (`filterByConfig`, `enrichRefColumns`); list config `sort`, checked by
-      `loadConfig` against the list's columns.
-      *Done when:* the web package's search and ref-label tests pass against
-      the engine function.
-- [ ] **2. `GET /<route>` pages.** `q`, `sort`, `offset`, `limit` (at most
-      200), `fields`, `list`, answered as `{ total, rows }`; the API client
-      gains a paged call and a `listAll` that pages through.
-      *Done when:* a 5,000-record object answers a page of 100 small rows with
-      the right `total`.
-- [ ] **3. Web list.** Pages of 100 on scroll, only visible rows rendered,
-      search and sort on the server, the record loaded by id before editing.
-      *Done when:* the tanarblog article list opens without fetching any
-      article body, and search finds an article on a page not loaded yet.
-- [ ] **4. Pickers and ref labels.** Ref pickers and the card dialog search on
-      the server; ref column labels come from `fields`, not from listing the
-      target.
-      *Done when:* picking a tag among hundreds fetches one page, and no
+- [x] **1. Query contract.** The query type (`q`, `sort`, `fields`, `list`,
+      `limit` 50/100, `offset` or `after`), the search text normalizer (case and
+      accents), list config `sort` checked by `loadConfig`, and the shared store
+      contract tests, passing on the in-memory store.
+      *Done when:* the contract covers search, sort, ref columns, offset and
+      cursor paging, and the in-memory store passes it.
+- [x] **2. SQLite.** The search column, written with the state; `query` in SQL
+      with ref joins and keyset cursors; states rebuilt with the column.
+      *Done when:* the contract passes, and a page of 100 from 5,000 records
+      reads only those rows.
+- [x] **3. Postgres.** The same.
+      *Done when:* the contract passes against Postgres.
+- [x] **4. Durable Object.** The same, in its SQLite.
+      *Done when:* the contract passes in the Workers test runner.
+- [x] **5. `GET /<route>` and the API client.** Paged answers only, plugin
+      columns per page, `listAll` following the cursor.
+      *Done when:* no request answers more than 100 rows.
+- [x] **6. Web.** The list pages on scroll and renders only rows in view; ref
+      labels from `fields`; pickers and cards search on the server.
+      *Done when:* the tanarblog articles list opens with one small page and no
       frontend lists a whole target object.
-- [ ] **5. TUI.** Pages ahead of the window, server search, the record loaded
-      by id before editing.
-      *Done when:* the TUI lists the tanarblog articles without a full fetch.
-- [ ] **6. Every other caller pages.** scms (`rows`, the publish plugin's
-      records route, which pages too), `s8r migrate-assets`, and the tenant
-      scripts through `listAll`. Then the bare-array answer goes: every
-      request gets one page.
-      *Done when:* a tanarblog build renders all 5148 articles, and
-      `GET /articles` with no parameters answers 200 rows and a `total`.
-- [ ] **7. Durable Object store query.** `StateStore.query` in SQL over the
-      state table (`json_extract`, `LIKE`, `ORDER BY`, `LIMIT`, ref columns by
-      a join), used by the daemon when the store has it; the in-memory path
-      stays for the other stores. Shared contract tests compare both.
-      *Done when:* a page request on the Durable Object reads only the page's
-      rows into JavaScript, with the same answers as the in-memory path.
+- [x] **7. TUI.** Pages ahead of its window, server search, ref labels from
+      `fields`.
+      *Done when:* the TUI lists the tanarblog articles one page at a time.
+- [x] **8. Other callers.** `s8r migrate-assets` and the tenant scripts through
+      `listAll`.
+      *Done when:* nothing in core, cms or tenants reads a whole object in one
+      request.
 
-### Still open
+## Epic: pinned snapshots
 
-- **SQLite and Postgres store queries**, when an app on them needs one.
-- **Other whole-object reads inside a request:** `listAt` (the publish
-  plugin's build reads) folds every event of the object, and the publish badge
-  lists every `publication` row. Both need the same treatment when an app gets
-  large enough.
+**Goal.** A chosen version of each record is stored once and read like any
+state, page by page, with a change feed. Design:
+[ADR 26](./docs/ADR/0026-pinned-snapshots.md). After the paged lists, whose
+query it reuses.
+
+### Steps
+
+- [x] **1. Contract.** `pin`, `unpin`, `queryPinned`, `pinnedSince`, the pin
+      sequence, erasure and rebuild, in the shared store contract tests.
+      *Done when:* the in-memory store passes them.
+- [x] **2. SQLite, Postgres, Durable Object.** Natively, like `query`.
+      *Done when:* every store passes the contract.
+- [x] **3. To plugins.** `ctx.data` offers them.
+      *Done when:* a plugin pins, queries and follows changes.
 
 ## Epic: plugin list columns and action inputs
 
@@ -703,3 +704,20 @@ the paged-lists epic; the columns move to each page when lists are paged.
       *Done when:* a disabled row button follows its column's value.
 - [x] **3. Inputs.** `input: { type: 'datetime' }` dialog, posting `value`.
       *Done when:* an action posts a picked date, or null when left empty.
+
+## Epic: list filters
+
+**Goal.** A list narrows to a kind of record by named options, applied in the
+store with the search and paging. Design:
+[ADR 27](./docs/ADR/0027-list-filters.md).
+
+### Steps
+
+- [x] **1. Config and query.** `filters` groups of named options
+      (`equals`, `notEquals`, `startsWith`, `notStartsWith` on a property path),
+      checked by `loadConfig`; `StateQuery.where` in all four stores, in the
+      shared contract; `?filter=<group>:<option>` resolved by name.
+      *Done when:* every store gives the same answers, and an unknown name is a 400.
+- [x] **2. Frontends.** A switch per group in the web list; `f` cycles the
+      first group in the TUI.
+      *Done when:* choosing an option restarts the list from its first page.

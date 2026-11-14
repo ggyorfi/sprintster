@@ -287,6 +287,12 @@ describe('MarkdownEditor', () => {
     expect(latest).toContain('![A blue cover](/assets/abc123)');
   });
 
+  it('previews an HTML image of a stored root-relative reference from the API base', () => {
+    vi.stubEnv('VITE_API_URL', 'https://app.example.com');
+    const { container } = render(<MarkdownEditor value={'<p>Intro <img src="/assets/abc123" alt="x"></p>'} onChange={() => {}} />);
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('https://app.example.com/assets/abc123');
+  });
+
   it('has no document button unless an attachDocument function is supplied', () => {
     render(<MarkdownEditor value={'hello'} onChange={() => {}} attach={async () => attached} />);
     expect(screen.queryByRole('button', { name: 'Link a document' })).toBeNull();

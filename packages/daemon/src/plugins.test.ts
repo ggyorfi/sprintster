@@ -232,7 +232,7 @@ describe('POST /log', () => {
     const { app } = await setup([]);
     const res = await app.request('/log', post({ after: 0, events: [event('11111111-1111-4111-8111-111111111111', 'moved')] }));
     expect(await res.json()).toEqual({ position: 1 });
-    expect(await (await app.request('/notes')).json()).toEqual([expect.objectContaining({ title: 'moved' })]);
+    expect(((await (await app.request('/notes')).json()) as { rows: unknown[] }).rows).toEqual([expect.objectContaining({ title: 'moved' })]);
   });
 
   it('refuses a batch that does not continue the log', async () => {

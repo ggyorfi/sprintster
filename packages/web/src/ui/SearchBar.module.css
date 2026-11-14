@@ -32,4 +32,7 @@
   color: var(--muted);
   font-size: 12px;
   white-space: nowrap;
+  min-width: 11ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }

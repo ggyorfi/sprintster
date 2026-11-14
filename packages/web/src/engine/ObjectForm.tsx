@@ -27,29 +27,30 @@ import styles from './ObjectPanel.module.css';
 export interface RefData {
   options: SelectOption[];
   rawById: Map<string, Row>;
+  // Set when the target searches on the server: asks for the matches of a query.
+  search?: (query: string) => void;
   // The target carries a picture (its own image, or its list's thumbnail through a ref), so the field picks visually.
   visual: boolean;
 }
 
-// How a target record shows as a picture: its own image property, else the first image behind its list's thumbnail ref column.
-async function thumbnailSource(api: ApiClient, target: ObjectConfig | undefined, resolveObject: ObjectResolver): Promise<((r: Row) => string | undefined) | null> {
-  const own = imagePropertyOf(target);
+// How a target record shows as a picture: its own image property, else the `#thumb` field of its list's thumbnail ref column.
+function thumbnailSource(target: ObjectConfig | undefined, resolveObject: ObjectResolver): { fields: string[]; of: (r: Row) => string | undefined } | null {
   const url = (value: unknown) => {
     const hash = thumbnailHash(value);
     return hash === null ? undefined : assetUrl(hash);
   };
-  if (own !== null) return (r) => url(r[own]);
+  const own = imagePropertyOf(target);
+  if (own !== null) return { fields: [own], of: (r) => url(r[own]) };
   const column = target?.lists[0]?.columns.find((c) => c.thumbnail === true);
   const prop = column === undefined ? undefined : target?.properties.find((p) => p.name === column.property);
   if (prop?.type !== 'ref' && prop?.type !== 'refs') return null;
-  const image = imagePropertyOf(resolveObject(prop.target));
-  if (image === null) return null;
-  const pictures = new Map((await api.object<Row>(prop.target).list()).map((r) => [String(r['id']), r[image]]));
-  return (r) => {
-    const value = r[prop.name];
-    return url(pictures.get(String(Array.isArray(value) ? value[0] : value)));
-  };
+  if (imagePropertyOf(resolveObject(prop.target)) === null) return null;
+  const key = `${prop.name}#thumb`;
+  return { fields: [prop.name, key], of: (r) => url(r[key]) };
 }
+
+// ADR 24: a picker shows the server's matches, a page at a time.
+const REF_PAGE = 50;
 
 export interface ObjectFormState {
   viewName: string;
@@ -98,19 +99,61 @@ export function useObjectForm(
 
   useEffect(() => {
     let alive = true;
+    // Every option a picker has shown, so a chosen record keeps its label when the matches change.
+    const known = new Map<string, Map<string, SelectOption>>();
+    const raw = new Map<string, Map<string, Row>>();
     async function load() {
       const next: Record<string, RefData> = {};
       for (const s of specs) {
         if ((s.property.type !== 'ref' && s.property.type !== 'refs') || s.derivedFromRef !== null) continue;
-        const list = await api.object<Row>(s.property.target).list();
-        const target = resolveObject(s.property.target);
+        const targetName = s.property.target;
+        const target = resolveObject(targetName);
         const labelField = s.property.display ?? (target ? firstLabelField(target) : 'id');
-        const thumbOf = await thumbnailSource(api, target, resolveObject);
-        next[s.path] = {
-          options: list.map((r) => ({ value: String(r['id']), label: displayText(r[labelField]) || String(r['id']), thumb: thumbOf?.(r) })),
-          rawById: new Map(list.map((r) => [String(r['id']), r])),
-          visual: thumbOf !== null,
+        const thumb = thumbnailSource(target, resolveObject);
+        const toOption = (r: Row): SelectOption => ({ value: String(r['id']), label: displayText(r[labelField]) || String(r['id']), thumb: thumb?.of(r) });
+        const client = api.object<Row>(targetName);
+        const seen = new Map<string, SelectOption>();
+        const rawById = new Map<string, Row>();
+        known.set(s.path, seen);
+        raw.set(s.path, rawById);
+        if (target?.lists[0]?.search === undefined) {
+          const list = await client.list();
+          for (const r of list) {
+            seen.set(String(r['id']), toOption(r));
+            rawById.set(String(r['id']), r);
+          }
+          next[s.path] = { options: [...seen.values()], rawById, visual: thumb !== null };
+          continue;
+        }
+        const fields = [...new Set([labelField, ...(thumb?.fields ?? [])])];
+        const value = row?.[s.path];
+        const chosen = (Array.isArray(value) ? value : [value]).filter((v): v is string => typeof v === 'string' && v !== '');
+        if (chosen.length > 0) {
+          for (const r of (await client.page({ ids: chosen.slice(0, 100), limit: 100 })).rows) {
+            seen.set(String(r['id']), toOption(r));
+            rawById.set(String(r['id']), r);
+          }
+        }
+        const first = await client.page({ fields, limit: REF_PAGE });
+        const path = s.path;
+        let asked = 0;
+        const search = (query: string) => {
+          const mine = ++asked;
+          const q = query.trim();
+          void client.page({ fields, limit: REF_PAGE, ...(q === '' ? {} : { q }) }).then((page) => {
+            if (!alive || mine !== asked) return;
+            const matches = page.rows.map(toOption);
+            for (const o of matches) seen.set(o.value, o);
+            setRefData((d) => {
+              const current = d[path];
+              if (current === undefined) return d;
+              const chosenNow = [...seen.values()].filter((o) => !matches.some((m) => m.value === o.value));
+              return { ...d, [path]: { ...current, options: [...matches, ...chosenNow] } };
+            });
+          });
         };
+        for (const r of first.rows) seen.set(String(r['id']), toOption(r));
+        next[s.path] = { options: [...seen.values()], rawById, visual: thumb !== null, search };
       }
       if (alive) setRefData(next);
     }
@@ -120,7 +163,26 @@ export function useObjectForm(
     return () => {
       alive = false;
     };
-  }, [api, specs, resolveObject]);
+  }, [api, specs, resolveObject, row]);
+
+  // A record picked from the server's matches carries only its label; fields shown from it need the whole record.
+  useEffect(() => {
+    for (const s of specs) {
+      if (s.derivedFromRef === null) continue;
+      const rd = refData[s.derivedFromRef];
+      const id = inputs[s.derivedFromRef] ?? '';
+      const ref = specs.find((x) => x.path === s.derivedFromRef);
+      if (rd === undefined || id === '' || rd.rawById.has(id) || ref === undefined || (ref.property.type !== 'ref' && ref.property.type !== 'refs')) continue;
+      void api
+        .object<Row>(ref.property.target)
+        .get(id)
+        .then((r) => {
+          if (r === null) return;
+          rd.rawById.set(id, r);
+          setRefData((d) => ({ ...d }));
+        });
+    }
+  }, [api, specs, refData, inputs]);
 
   useEffect(() => {
     let alive = true;
@@ -345,6 +407,7 @@ export function ObjectFields({ form, locales = true }: { form: ObjectFormState; 
                   value={inputs[spec.path] ?? ''}
                   onChange={(v) => setField(spec.path, v)}
                   refOptions={refData[spec.path]?.options}
+                  refSearch={refData[spec.path]?.search}
                   refVisual={refData[spec.path]?.visual === true}
                   refUpload={(spec.property.type === 'ref' || spec.property.type === 'refs') && spec.property.target === appConfig.assets}
                   display={displayFor(spec)}

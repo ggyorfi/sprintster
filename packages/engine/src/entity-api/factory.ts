@@ -6,6 +6,7 @@ import {
   type EventStore,
   type StateStore,
 } from '../events/store.js';
+import { evaluateQuery, searchTextOf, type EvaluatedRow, type StatePage, type StateQuery } from '../events/query.js';
 
 export type Reducer<State> = (state: State | null, event: EventRow) => State | null;
 
@@ -16,6 +17,8 @@ export interface EntityApiConfig<State> {
   maxRetries?: number;
   // False for a stored state the current reducer would not produce, so the states are refolded before the first read.
   isCurrent?: (state: unknown) => boolean;
+  // ADR 24: the properties a state's search text is made of.
+  searchFields?: readonly string[];
 }
 
 export interface ApplyEventInput {
@@ -35,6 +38,11 @@ export interface EntityApi<State> {
   createEvent(streamId: string, build: (state: State | null) => ApplyEventInput): Promise<State>;
   // Refolds every stream from the log into the store's states; a no-op for a store without them.
   rebuildStates(): Promise<void>;
+  // ADR 24: one page, from the store when it keeps states.
+  query(q: Omit<StateQuery, 'partitionId' | 'streamType'>): Promise<StatePage>;
+  // ADR 26: the state as of a position, null when the stream had no event by then.
+  foldAt(streamId: string, position: number): Promise<{ state: State | null; version: number }>;
+  searchText(state: unknown): string | null;
 }
 
 export function createEntityApi<State>(
@@ -46,6 +54,9 @@ export function createEntityApi<State>(
 
   const states = store.states;
   let checked: Promise<void> | undefined;
+  const searchFields = [...new Set(config.searchFields ?? [])].sort();
+  const searchKey = searchFields.join(',');
+  const searchText = (state: unknown) => searchTextOf(state, searchFields);
 
   async function foldStream(streamId: string): Promise<{ state: State | null; version: number }> {
     const events = await store.findByStream(partitionId, streamType, streamId);
@@ -97,7 +108,8 @@ export function createEntityApi<State>(
     await states.replaceStates(
       partitionId,
       streamType,
-      [...all].map(([streamId, { state, version }]) => ({ streamId, version, state })),
+      [...all].map(([streamId, { state, version }]) => ({ streamId, version, state, search: searchText(state) })),
+      searchKey,
     );
   }
 
@@ -106,7 +118,7 @@ export function createEntityApi<State>(
     const outdated = async () =>
       config.isCurrent !== undefined && (await s.listStates(partitionId, streamType)).some(({ state }) => !config.isCurrent!(state));
     checked ??= s
-      .statesStale(partitionId, streamType)
+      .statesStale(partitionId, streamType, searchKey)
       .then(async (stale) => (stale || (await outdated()) ? rebuildStates() : undefined))
       .catch((err: unknown) => {
         checked = undefined;
@@ -168,7 +180,7 @@ export function createEntityApi<State>(
       try {
         if (states === undefined) return apply(await store.append(input));
         let next: State | undefined;
-        await states.appendWithState(input, (row) => (next = apply(row)));
+        await states.appendWithState(input, (row) => (next = apply(row)), searchText);
         return next as State;
       } catch (err) {
         if (err instanceof UniqueViolationError) {
@@ -183,5 +195,28 @@ export function createEntityApi<State>(
     );
   }
 
-  return { findOneById, findMany, findManyAt, createEvent, rebuildStates };
+  async function query(q: Omit<StateQuery, 'partitionId' | 'streamType'>): Promise<StatePage> {
+    const full = { ...q, partitionId, streamType };
+    if (states !== undefined) {
+      await ensureStates(states);
+      return states.query(full);
+    }
+    const rows: EvaluatedRow[] = [...(await foldAll())].flatMap(([streamId, { state, version }], seq) =>
+      state === null ? [] : [{ streamId, version, state, search: searchText(state), seq }],
+    );
+    return evaluateQuery(rows, full, () => undefined);
+  }
+
+  async function foldAt(streamId: string, position: number): Promise<{ state: State | null; version: number }> {
+    let state: State | null = null;
+    let version = 0;
+    for (const e of await store.findByStream(partitionId, streamType, streamId)) {
+      if (Number(e.id) > position) break;
+      state = reducer(state, e);
+      version = e.streamVersion;
+    }
+    return { state, version };
+  }
+
+  return { findOneById, findMany, findManyAt, createEvent, rebuildStates, query, foldAt, searchText };
 }

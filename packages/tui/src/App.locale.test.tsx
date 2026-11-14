@@ -30,7 +30,9 @@ refreshTheme();
 const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
 const strip = (s: string): string => s.replace(ANSI, '');
 const record = { id: 'settings', tagline: { en: 'Paintings', hu: 'Festmények' } };
-const api = { object: () => ({ list: async () => [record], refresh: async () => record, status: async () => null }) } as unknown as ApiClient;
+const api = {
+  object: () => ({ list: async () => [record], page: async () => ({ rows: [record], total: 1, next: null }), get: async () => record, refresh: async () => record, status: async () => null }),
+} as unknown as ApiClient;
 
 describe('App: translated fields', () => {
   it('shows one row per locale with its own value', async () => {

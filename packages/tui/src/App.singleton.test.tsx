@@ -37,6 +37,7 @@ const record = { id: 'settings', siteTitle: 'My site', baseUrl: '' };
 function mockApi(over: Record<string, unknown> = {}): ApiClient {
   const obj = {
     list: async () => [record],
+    page: async () => ({ rows: [record], total: 1, next: null }),
     get: async () => record,
     refresh: async () => record,
     status: async () => null,

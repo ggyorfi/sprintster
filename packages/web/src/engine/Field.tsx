@@ -21,6 +21,7 @@ export interface FieldProps {
   value: string;
   onChange: (value: string) => void;
   refOptions?: SelectOption[] | undefined;
+  refSearch?: ((query: string) => void) | undefined;
   // The ref's targets carry pictures: pick from cards rather than a typeahead.
   refVisual?: boolean | undefined;
   // The ref's target is the app's assets object, so its dialog can upload new ones.
@@ -41,7 +42,7 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function Field({ spec, value, onChange, refOptions, refVisual, refUpload, display }: FieldProps) {
+export function Field({ spec, value, onChange, refOptions, refSearch, refVisual, refUpload, display }: FieldProps) {
   const { property, label, placeholder } = spec;
 
   if (!spec.editable) {
@@ -75,11 +76,11 @@ export function Field({ spec, value, onChange, refOptions, refVisual, refUpload,
     case 'file':
       return <ImageField label={label} value={value} onChange={onChange} upload={uploadAsset} assetUrl={assetUrl} files={property.type === 'file'} />;
     case 'ref':
-      if (refVisual === true) return <RefCards label={label} value={value} onChange={onChange} options={refOptions ?? []} upload={refUpload === true ? uploadRecord : undefined} />;
-      return <RefPicker label={label} value={value} onChange={onChange} options={refOptions ?? []} placeholder="Search..." />;
+      if (refVisual === true) return <RefCards label={label} value={value} onChange={onChange} options={refOptions ?? []} onSearch={refSearch} upload={refUpload === true ? uploadRecord : undefined} />;
+      return <RefPicker label={label} value={value} onChange={onChange} options={refOptions ?? []} onSearch={refSearch} placeholder="Search..." />;
     case 'refs':
-      if (refVisual === true) return <RefCards label={label} value={value} onChange={onChange} options={refOptions ?? []} multiple upload={refUpload === true ? uploadRecord : undefined} />;
-      return <RefPicker label={label} value={value} onChange={onChange} options={refOptions ?? []} multiple placeholder="Search..." />;
+      if (refVisual === true) return <RefCards label={label} value={value} onChange={onChange} options={refOptions ?? []} multiple onSearch={refSearch} upload={refUpload === true ? uploadRecord : undefined} />;
+      return <RefPicker label={label} value={value} onChange={onChange} options={refOptions ?? []} multiple onSearch={refSearch} placeholder="Search..." />;
     case 'money':
       return (
         <TextField label={label} value={value} onChange={onChange} prefix="£" inputMode="decimal" placeholder={placeholder} />

@@ -159,7 +159,22 @@ export const SearchConfig = z
   .object({ fields: z.array(z.string().min(1)).min(1), idPrefix: z.boolean().optional() })
   .strict();
 
-export const FilterConfig = z.object({ property: z.string().min(1) }).strict();
+// ADR 27: one named option of a list filter; exactly one test, on a property path.
+const FilterValue = z.union([z.string(), z.number(), z.boolean()]);
+export const FilterOptionConfig = z
+  .object({
+    label: z.string().min(1),
+    property: z.string().regex(/^\w+(\.\w+)?$/),
+    equals: FilterValue.optional(),
+    notEquals: FilterValue.optional(),
+    startsWith: z.string().min(1).optional(),
+    notStartsWith: z.string().min(1).optional(),
+  })
+  .strict();
+export type FilterOptionConfig = z.infer<typeof FilterOptionConfig>;
+
+export const FilterConfig = z.object({ label: z.string().min(1), options: z.array(FilterOptionConfig).min(1) }).strict();
+export type FilterConfig = z.infer<typeof FilterConfig>;
 
 export const ListActionConfig = z
   .object({
@@ -178,6 +193,8 @@ export const ListConfig = z
     title: z.string(),
     columns: z.array(ColumnConfig).min(1),
     search: SearchConfig.optional(),
+    // ADR 24: the order when a request names none; a column key, `-` in front for descending.
+    sort: z.string().regex(/^-?\w+(\.\w+)?$/).optional(),
     filters: z.array(FilterConfig).optional(),
     actions: z.array(ListActionConfig).optional(),
   })

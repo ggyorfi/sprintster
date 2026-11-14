@@ -1,5 +1,7 @@
 import type { z } from 'zod';
 import type { Config, ObjectConfig } from '../config/schema.js';
+import type { ListPage, ListParams } from '../engine/list-query.js';
+import type { PinRow } from '../events/query.js';
 
 export interface Logger {
   info(message: string, fields?: Record<string, unknown>): void;
@@ -16,6 +18,11 @@ export interface ObjectStatus {
 
 export interface PluginObjectApi<S extends { id: string }> {
   list(): Promise<S[]>;
+  // ADR 24 and 26; absent on objects backed by something other than the log.
+  query?(params: ListParams): Promise<ListPage>;
+  pin?(set: string, id: string, position: number): Promise<void>;
+  unpin?(set: string, id: string): Promise<void>;
+  queryPinned?(set: string, params: ListParams): Promise<ListPage>;
   // ADR 21; absent on objects backed by something other than the log.
   listAt?(at: { position: number; positions?: Readonly<Record<string, number>> }): Promise<S[]>;
   get(id: string): Promise<S | null>;
@@ -106,9 +113,12 @@ export interface GuiColumn {
   id: string;
   label: string;
   objects?: string[];
+  // In characters, as list column widths are.
+  width?: number;
 }
 
-export type ColumnValue = { text: string; tone: BadgeTone };
+// `hint` is shown on hover, so the text itself can stay short.
+export type ColumnValue = { text: string; tone: BadgeTone; hint?: string };
 
 export interface GuiColumnSource extends GuiColumn {
   values(object: string, ids: string[]): Promise<Record<string, ColumnValue>>;
@@ -150,6 +160,8 @@ export interface PluginData {
   object(name: string): PluginObjectApi<{ id: string }>;
   position(): Promise<number>;
   changesSince(position: number): Promise<LogChange[]>;
+  // ADR 26: what was pinned or unpinned in a set after a sequence number, every object, a page at a time.
+  pinnedSince(set: string, after: number, limit: number): Promise<{ pins: PinRow[]; next: number | null }>;
 }
 
 // Pushes to every client connected at /plugins/<namespace>/channels/<name>. A message is sent as JSON; clients never send.

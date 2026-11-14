@@ -25,6 +25,7 @@
   overflow-wrap: anywhere;
   padding: var(--row-y) 12px;
   border-bottom: 1px solid var(--border);
+  vertical-align: middle;
 }
 
 .clickable {
@@ -38,6 +39,13 @@
   width: 1%;
   white-space: nowrap;
   text-align: right;
+}
+
+.actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .actionBtn {
@@ -70,4 +78,10 @@
 .empty {
   padding: var(--row-y) 12px;
   color: var(--muted);
+}
+
+.oneLine {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

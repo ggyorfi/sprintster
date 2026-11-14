@@ -3,6 +3,7 @@ import { formatIsoMinute } from '../time/index.js';
 import type { ObjectConfig, PropertyConfig, VisibleWhen } from '../config/schema.js';
 import { displayText } from './locale.js';
 import { conditionHolds } from './view.js';
+import { lifecycleInfo } from './lifecycle.js';
 
 export function formatCell(property: PropertyConfig, value: unknown, suffix = ''): string {
   if (value === null || value === undefined) return '';
@@ -141,4 +142,22 @@ export function filterByConfig<T extends object>(
     const id = String(r[idField] ?? '').toLowerCase();
     return terms.every((t) => hay.includes(t) || (spec.idPrefix === true && id.startsWith(t)));
   });
+}
+
+// ADR 24: what a list's rows must carry: its columns (a ref column with the referenced value), thumbnails, the arrays
+// a sum reads, and the lifecycle field.
+export function listFields(obj: ObjectConfig, listName = 'default', resolveObject?: ObjectResolver): string[] {
+  const out = new Set<string>();
+  for (const c of listColumns(obj, listName, resolveObject)) {
+    if (c.sumOf !== null) {
+      out.add(c.sumOf.array);
+      if (c.sumWhen !== null) out.add(c.sumWhen.property);
+    } else if (c.thumbnail && (c.property.type === 'ref' || c.property.type === 'refs')) {
+      out.add(c.key);
+      out.add(`${c.key}#thumb`);
+    } else out.add(c.key);
+  }
+  const { field } = lifecycleInfo(obj);
+  if (field !== null) out.add(field);
+  return [...out];
 }

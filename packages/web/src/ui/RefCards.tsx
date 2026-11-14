@@ -14,6 +14,8 @@ export interface RefCardsProps {
   multiple?: boolean;
   // Creates a target record from a file; offered in the dialog when given.
   upload?: ((file: File) => Promise<SelectOption>) | undefined;
+  // ADR 24: the server searches; `options` are then its answer plus the chosen records.
+  onSearch?: ((query: string) => void) | undefined;
 }
 
 function Picture({ option }: { option: SelectOption | undefined }) {
@@ -25,7 +27,7 @@ function Picture({ option }: { option: SelectOption | undefined }) {
 }
 
 // A ref or refs field whose targets carry pictures: the chosen records as reorderable cards, and a dialog grid to choose more.
-export function RefCards({ label, value, onChange, options: given, multiple = false, upload }: RefCardsProps) {
+export function RefCards({ label, value, onChange, options: given, multiple = false, upload, onSearch }: RefCardsProps) {
   const [choosing, setChoosing] = useState(false);
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
@@ -41,10 +43,8 @@ export function RefCards({ label, value, onChange, options: given, multiple = fa
   const byId = new Map(options.map((o) => [o.value, o]));
   const name = (id: string) => byId.get(id)?.label ?? id;
   const commit = (next: string[]) => onChange(multiple ? JSON.stringify(next) : (next[0] ?? ''));
-  const hits = fuzzyFilter(
-    options.filter((o) => !multiple || !ids.includes(o.value)),
-    query,
-  );
+  const choosable = options.filter((o) => !multiple || !ids.includes(o.value));
+  const hits = onSearch === undefined ? fuzzyFilter(choosable, query) : choosable.map((option) => ({ option, matches: [] as number[] }));
 
   function move(from: number, to: number) {
     if (to < 0 || to >= ids.length || from === to) return;
@@ -183,7 +183,10 @@ export function RefCards({ label, value, onChange, options: given, multiple = fa
             placeholder="Search..."
             value={query}
             autoFocus
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              onSearch?.(e.target.value);
+            }}
           />
           {upload !== undefined && (
             <>

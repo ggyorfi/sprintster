@@ -13,16 +13,16 @@ function jsonResponse(body: unknown): Response {
 
 describe('createWebApiClient', () => {
   it('routes object calls through the configured base url and config-derived path', async () => {
-    const fetchMock = vi.fn(async () => jsonResponse([]));
+    const fetchMock = vi.fn(async () => jsonResponse({ rows: [], next: null }));
     const api = createWebApiClient({ baseUrl: '/api', fetch: fetchMock as unknown as typeof fetch });
 
     await api.object('client').list();
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/clients', expect.objectContaining({ method: 'GET' }));
+    expect(fetchMock).toHaveBeenCalledWith('/api/clients?limit=100', expect.objectContaining({ method: 'GET' }));
   });
 
   it('targets a remote base url unchanged for a cloud deploy', async () => {
-    const fetchMock = vi.fn(async () => jsonResponse([]));
+    const fetchMock = vi.fn(async () => jsonResponse({ rows: [], next: null }));
     const api = createWebApiClient({
       baseUrl: 'https://app.example.com',
       fetch: fetchMock as unknown as typeof fetch,
@@ -31,7 +31,7 @@ describe('createWebApiClient', () => {
     await api.object('memo').list();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://app.example.com/memos',
+      'https://app.example.com/memos?limit=100',
       expect.objectContaining({ method: 'GET' }),
     );
   });
