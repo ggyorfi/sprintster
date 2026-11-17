@@ -6,6 +6,10 @@ import {
   sqlitePinsOf,
   sqliteQuery,
   sqliteRepin,
+  sqliteCountChange,
+  sqliteRecount,
+  sqliteSearchKeyIs,
+  ensureSqliteCountColumns,
   sqliteSearchKeyStale,
   sqliteSetSearchKey,
   sqliteSince,
@@ -112,6 +116,7 @@ export function createSqliteEventStore(db: Database.Database): EventStore & { st
   };
   for (const statement of SQLITE_QUERY_DDL) db.exec(statement);
   ensureSqliteSearchColumn(exec);
+  ensureSqliteCountColumns(exec);
 
   const insert = db.prepare(
     `INSERT INTO events
@@ -184,10 +189,15 @@ export function createSqliteEventStore(db: Database.Database): EventStore & { st
     }
   }
 
+  function putState(partitionId: number, streamType: string, streamId: string, version: number, state: unknown, search: string | null): void {
+    sqliteCountChange(exec, partitionId, streamType, streamId, { state });
+    upsertState.run(partitionId, streamType, streamId, version, JSON.stringify(state), search);
+  }
+
   const appendWithState = db.transaction((input: EventInput, project: (row: EventRow) => unknown, searchOf?: (state: unknown) => string | null): EventRow => {
     const row = insertEvent(input);
     const state = project(row);
-    upsertState.run(input.partitionId, input.streamType, input.streamId, input.streamVersion, JSON.stringify(state), searchOf?.(state) ?? null);
+    putState(input.partitionId, input.streamType, input.streamId, input.streamVersion, state, searchOf?.(state) ?? null);
     return row;
   });
 
@@ -195,6 +205,7 @@ export function createSqliteEventStore(db: Database.Database): EventStore & { st
     clearStates.run(partitionId, streamType);
     for (const s of states) upsertState.run(partitionId, streamType, s.streamId, s.version, JSON.stringify(s.state), s.search ?? null);
     if (searchKey !== undefined) sqliteSetSearchKey(exec, partitionId, streamType, searchKey);
+    sqliteRecount(exec, partitionId, streamType, states);
   });
 
   const transact = <T>(run: () => T): T => db.transaction(run)();
@@ -207,12 +218,13 @@ export function createSqliteEventStore(db: Database.Database): EventStore & { st
     for (const r of rewrites) {
       if (r.payloads === null) {
         deleteStream.run(r.partitionId, r.streamType, r.streamId);
+        sqliteCountChange(exec, r.partitionId, r.streamType, r.streamId, null);
         deleteState.run(r.partitionId, r.streamType, r.streamId);
         sqliteUnpinStream(exec, r.partitionId, r.streamType, r.streamId);
         continue;
       }
       for (const [id, payload] of r.payloads) setPayload.run(JSON.stringify(payload), Number(id), r.partitionId, r.streamType, r.streamId);
-      if ('state' in r) upsertState.run(r.partitionId, r.streamType, r.streamId, r.expectedVersion, JSON.stringify(r.state), r.search ?? null);
+      if ('state' in r) putState(r.partitionId, r.streamType, r.streamId, r.expectedVersion, r.state, r.search ?? null);
       for (const p of r.pins ?? []) sqliteRepin(exec, p.set, r.partitionId, r.streamType, r.streamId, p.state, p.search);
     }
     return row;
@@ -279,6 +291,10 @@ export function createSqliteEventStore(db: Database.Database): EventStore & { st
       async listStates(partitionId, streamType) {
         return (statesOf.all(partitionId, streamType) as StateRow[]).map(toStoredState);
       },
+      async statesVerified(partitionId, streamType, searchKey) {
+        return sqliteSearchKeyIs(exec, partitionId, streamType, searchKey);
+      },
+
       async statesStale(partitionId, streamType, searchKey) {
         if (searchKey !== undefined && sqliteSearchKeyStale(exec, partitionId, streamType, searchKey)) return true;
         const row = staleStmt.get(partitionId, streamType, partitionId, streamType) as { stale: number };

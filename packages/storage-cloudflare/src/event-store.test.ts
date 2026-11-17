@@ -26,6 +26,7 @@ function fresh(): Store {
       getState: (...args) => inObject((s) => s.states.getState(...args)),
       listStates: (...args) => inObject((s) => s.states.listStates(...args)),
       statesStale: (...args) => inObject((s) => s.states.statesStale(...args)),
+      statesVerified: (...args) => inObject((s) => s.states.statesVerified(...args)),
       replaceStates: (...args) => inObject((s) => s.states.replaceStates(...args)),
       query: (q) => inObject((s) => s.states.query(q)),
       pins: {

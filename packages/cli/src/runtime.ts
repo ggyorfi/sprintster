@@ -8,6 +8,7 @@ import { createBlobApi, setAppConfig, type BlobStore, type Config, type EventSto
 import {
   buildApis,
   createApp,
+  LIVE_PATH,
   loadDaemonPlugins,
   withContributedObjects,
   type PluginModule,
@@ -51,7 +52,7 @@ export async function startDaemon(opts: {
   };
   const plugins = await loadDaemonPlugins({ config, store: opts.store, apis, resolve, sockets, secret: (name) => process.env[name] });
   const wss = new WebSocketServer({ noServer: true });
-  const base = { apis, blobApi, store: opts.store, plugins };
+  const base = { apis, blobApi, store: opts.store, plugins, live: sockets };
   const app = createApp(opts.webRoot !== undefined ? { ...base, web: nodeStaticFiles(opts.webRoot) } : base);
   const server = await new Promise<ReturnType<typeof serve>>((resolve, reject) => {
     const s = serve({ fetch: app.fetch, hostname: opts.host, port: opts.port }, () => resolve(s));
@@ -69,7 +70,7 @@ export async function startDaemon(opts: {
   });
   server.on('upgrade', (request, socket, head) => {
     const path = new URL(request.url ?? '/', 'http://daemon').pathname;
-    if (!plugins.channels.includes(path)) {
+    if (path !== LIVE_PATH && !plugins.channels.includes(path)) {
       socket.destroy();
       return;
     }

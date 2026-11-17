@@ -4,6 +4,7 @@ import {
   ACTOR_HEADER,
   buildApis,
   createApp,
+  LIVE_PATH,
   loadDaemonPlugins,
   publicRouteMatcher,
   withContributedObjects,
@@ -14,6 +15,7 @@ import {
 import { createBlobApi, loadConfig, setAppConfig } from '@sprintster/engine';
 import {
   createDurableObjectEventStore,
+  createDurableObjectKeep,
   createR2BlobStore,
   type DurableObjectSqlStorage,
   type R2BucketLike,
@@ -102,9 +104,9 @@ export function createWorker(projectConfig: { app: unknown }, opts: WorkerOption
         const apis = buildApis(config, store);
         const vars = env as unknown as Record<string, unknown>;
         const secret = (name: string) => (typeof vars[name] === 'string' ? vars[name] : undefined);
-        const plugins = await loadDaemonPlugins({ config, store, apis, resolve, sockets, secret });
-        this.#channels = plugins.channels;
-        return createApp({ apis, blobApi: createBlobApi(store, createR2BlobStore(env.BLOBS)), web: assetFiles(env.ASSETS), store, plugins, trustActor: true });
+        const plugins = await loadDaemonPlugins({ config, store, apis, resolve, sockets, secret, keep: createDurableObjectKeep(state.storage) });
+        this.#channels = [LIVE_PATH, ...plugins.channels];
+        return createApp({ apis, blobApi: createBlobApi(store, createR2BlobStore(env.BLOBS)), web: assetFiles(env.ASSETS), store, plugins, trustActor: true, live: sockets });
       })();
     }
 

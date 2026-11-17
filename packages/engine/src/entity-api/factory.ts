@@ -117,13 +117,14 @@ export function createEntityApi<State>(
   function ensureStates(s: StateStore): Promise<void> {
     const outdated = async () =>
       config.isCurrent !== undefined && (await s.listStates(partitionId, streamType)).some(({ state }) => !config.isCurrent!(state));
-    checked ??= s
-      .statesStale(partitionId, streamType, searchKey)
-      .then(async (stale) => (stale || (await outdated()) ? rebuildStates() : undefined))
-      .catch((err: unknown) => {
-        checked = undefined;
-        throw err;
-      });
+    const verify = async () => {
+      if (await s.statesVerified(partitionId, streamType, searchKey)) return;
+      if ((await s.statesStale(partitionId, streamType, searchKey)) || (await outdated())) await rebuildStates();
+    };
+    checked ??= verify().catch((err: unknown) => {
+      checked = undefined;
+      throw err;
+    });
     return checked;
   }
 

@@ -3,6 +3,7 @@ import type { BadgeTone, GuiAction, GuiBadge, GuiExtensions } from '@sprintster/
 import { Button, Pill, type PillTone } from '../ui/index.js';
 import { authFetch } from '../api/auth.js';
 import { RecordAction } from './RecordAction.js';
+import { useLive } from './live.js';
 import styles from './Extensions.module.css';
 
 const TONES: Record<BadgeTone, PillTone> = { neutral: 'neutral', info: 'info', success: 'success', warning: 'warning', danger: 'danger' };
@@ -17,6 +18,7 @@ const recordQuery = (record: RecordRef | undefined) =>
 
 function Badge({ baseUrl, badge, tick, record }: { baseUrl: string; badge: GuiBadge; tick: number; record?: RecordRef | undefined }) {
   const [state, setState] = useState<{ text: string; tone: BadgeTone } | null>(null);
+  const live = useLive().tick;
   useEffect(() => {
     let alive = true;
     const load = () =>
@@ -25,12 +27,10 @@ function Badge({ baseUrl, badge, tick, record }: { baseUrl: string; badge: GuiBa
         .then((body) => alive && setState(body === null ? null : { text: body.text, tone: body.tone ?? 'neutral' }))
         .catch(() => alive && setState(null));
     void load();
-    const timer = badge.refresh === undefined ? undefined : setInterval(() => void load(), badge.refresh * 1000);
     return () => {
       alive = false;
-      clearInterval(timer);
     };
-  }, [baseUrl, badge, tick, record?.object, record?.id]);
+  }, [baseUrl, badge, tick, live, record?.object, record?.id]);
   return state === null ? null : <Pill tone={TONES[state.tone] ?? 'neutral'}>{state.text}</Pill>;
 }
 

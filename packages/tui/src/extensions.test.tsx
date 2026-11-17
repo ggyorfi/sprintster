@@ -32,7 +32,7 @@ describe('useExtensions', () => {
     }) as unknown as typeof fetch;
     let latest: Extensions | undefined;
     function Probe() {
-      latest = useExtensions('http://d', fetchMock);
+      latest = useExtensions('http://d', fetchMock, null);
       return <Text>{latest.badges}</Text>;
     }
     const { lastFrame } = render(<Probe />);
@@ -54,7 +54,7 @@ describe('record extensions (ADR 22)', () => {
     const fetchMock = vi.fn(async (url: string) => (url.endsWith('/config') ? Response.json(withRecord) : Response.json({ message: 'Published.', text: 'never' })));
     let latest: Extensions | undefined;
     function Probe() {
-      latest = useExtensions('http://d', fetchMock as unknown as typeof fetch);
+      latest = useExtensions('http://d', fetchMock as unknown as typeof fetch, null);
       return <Text>{latest.badges}</Text>;
     }
     render(<Probe />);

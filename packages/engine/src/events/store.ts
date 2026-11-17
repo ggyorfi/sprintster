@@ -48,6 +48,9 @@ export interface StateStore {
   // True when some stream's stored version differs from its latest event, as after an upgrade or a write that bypassed the
   // states, or when the search text was written for other search fields than `searchKey` names.
   statesStale(partitionId: number, streamType: string, searchKey?: string): Promise<boolean>;
+  // True when the states were last replaced under `searchKey`: a one-row read that lets a woken host skip statesStale's
+  // scan. Events appended outside the engine are then not noticed, which is why such a writer must rebuild states.
+  statesVerified(partitionId: number, streamType: string, searchKey: string): Promise<boolean>;
   replaceStates(partitionId: number, streamType: string, states: readonly StoredState[], searchKey?: string): Promise<void>;
   // ADR 24: one page, chosen and ordered by the store.
   query(q: StateQuery): Promise<StatePage>;
@@ -191,6 +194,7 @@ export class InMemoryEventStore implements EventStore {
           .filter((p) => p.partitionId === partitionId && p.streamType === streamType && p.streamId === streamId && !p.removed)
           .map((p) => ({ set: p.set, position: p.position })),
     },
+    statesVerified: async (partitionId, streamType, searchKey) => this.searchKeys.get(`${partitionId}\0${streamType}`) === searchKey,
     statesStale: async (partitionId, streamType, searchKey) => {
       if (searchKey !== undefined && this.statesOf(partitionId, streamType).size > 0 && this.searchKeys.get(`${partitionId}\0${streamType}`) !== searchKey) return true;
       const states = this.statesOf(partitionId, streamType);

@@ -11,7 +11,7 @@ import {
   type ObjectConfig,
   type PluginObjectApi,
 } from '@sprintster/engine';
-import type { LoadedDaemonPlugins } from './plugins.js';
+import type { LoadedDaemonPlugins, SocketHost } from './plugins.js';
 import { healthRoute } from './routes/health.js';
 import { createObjectRoute } from './routes/object.js';
 import { createAssetRoute, type AssetHashResolver } from './routes/asset.js';
@@ -32,7 +32,12 @@ export interface AppDeps {
   plugins?: LoadedDaemonPlugins;
   // ADR 20: true when the host strips a client's Sprintster-Actor header and sets its own after authenticating.
   trustActor?: boolean;
+  // Where the host's clients on LIVE_PATH are told the log moved.
+  live?: SocketHost;
 }
+
+// ADR 28: a WebSocket on which the host pushes `{ position }` whenever a request moved the log, so a client refreshes instead of polling.
+export const LIVE_PATH = '/log/live';
 
 // A client-side route has no file extension on its last segment; a missing asset does.
 function looksLikeFile(path: string): boolean {
@@ -71,6 +76,20 @@ export const ACTOR_HEADER = 'Sprintster-Actor';
 
 export function createApp(deps: AppDeps): Hono {
   const app = new Hono();
+  if (deps.store !== undefined && deps.live !== undefined) {
+    const { store, live } = deps;
+    let sent: number | undefined;
+    app.use('*', async (_c, next) => {
+      // A woken host has no position yet; reading it first keeps a request that wrote nothing from pushing.
+      if (sent === undefined) sent = await store.position().catch(() => undefined);
+      await next();
+      // The request's own answer stands even if the position cannot be read.
+      const position = await store.position().catch(() => sent);
+      if (position === sent) return;
+      sent = position;
+      live.send(LIVE_PATH, JSON.stringify({ position }));
+    });
+  }
   const actorOf = (c: Context): string | undefined => (deps.trustActor === true ? c.req.header(ACTOR_HEADER) || undefined : undefined);
   // A plugin reads the actor from the request, so a header the host did not set never reaches it.
   const vouched = (request: Request): Request => {

@@ -17,7 +17,7 @@ import {
   type PluginObjectApi,
 } from '@sprintster/engine';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { createApp, type StaticFiles } from './app.js';
+import { createApp, LIVE_PATH, type StaticFiles } from './app.js';
 
 function buildApp() {
   const store = new InMemoryEventStore();
@@ -694,5 +694,21 @@ describe('plugin list columns (ADR 25)', () => {
     const rows = ((await (await app.request('/clients')).json()) as { rows: Array<Record<string, unknown>> }).rows;
     expect(rows[0]!['pub.state']).toEqual({ text: 'Pending', tone: 'danger' });
     expect(calls).toEqual([[ID_A]]);
+  });
+});
+
+describe('the live log (ADR 28)', () => {
+  it('pushes the position once per request that moved the log, never for one that did not', async () => {
+    const store = new InMemoryEventStore();
+    const api = createObjectApi<{ id: string }>(store, fixtureClientConfig);
+    const sent: Array<[string, unknown]> = [];
+    const app = createApp({ apis: [{ obj: fixtureClientConfig, api }], store, live: { send: (path, m) => sent.push([path, JSON.parse(m)]) } });
+    await app.request('/clients');
+    expect(sent).toEqual([]);
+    await app.request('/clients', json(validInput));
+    expect(sent).toEqual([[LIVE_PATH, { position: await store.position() }]]);
+    await app.request(`/clients/${ID_A}`);
+    await app.request('/clients', json(validInput));
+    expect(sent).toHaveLength(1);
   });
 });

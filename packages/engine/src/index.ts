@@ -27,6 +27,7 @@ export * from './events/names.js';
 export * from './config/app-config.js';
 export * from './config/fixture.js';
 export * from './api/client.js';
+export * from './api/live.js';
 export * from './config/index.js';
 export * from './plugin/types.js';
 export * from './plugin/loader.js';

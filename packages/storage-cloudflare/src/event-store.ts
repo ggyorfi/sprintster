@@ -5,6 +5,10 @@ import {
   sqlitePinsOf,
   sqliteQuery,
   sqliteRepin,
+  sqliteCountChange,
+  sqliteRecount,
+  sqliteSearchKeyIs,
+  ensureSqliteCountColumns,
   sqliteSearchKeyStale,
   sqliteSetSearchKey,
   sqliteSince,
@@ -115,6 +119,7 @@ export function createDurableObjectEventStore(storage: DurableObjectSqlStorage):
   const exec: SqliteExec = (query, params) => sql.exec(query, ...(params as SqlValue[])).toArray() as Array<Record<string, unknown>>;
   for (const statement of [...DDL, ...SQLITE_QUERY_DDL]) sql.exec(statement);
   ensureSqliteSearchColumn(exec);
+  ensureSqliteCountColumns(exec);
 
   function insertEvent(input: EventInput): EventRow {
     return toEventRow(
@@ -152,6 +157,11 @@ export function createDurableObjectEventStore(storage: DurableObjectSqlStorage):
       JSON.stringify(state),
       search,
     );
+  }
+
+  function putState(partitionId: number, streamType: string, streamId: string, version: number, state: unknown, search: string | null): void {
+    sqliteCountChange(exec, partitionId, streamType, streamId, { state });
+    upsertState(partitionId, streamType, streamId, version, state, search);
   }
 
   return {
@@ -215,6 +225,7 @@ export function createDurableObjectEventStore(storage: DurableObjectSqlStorage):
           for (const r of rewrites) {
             if (r.payloads === null) {
               sql.exec(`DELETE FROM events WHERE partition_id = ? AND stream_type = ? AND stream_id = ?`, r.partitionId, r.streamType, r.streamId);
+              sqliteCountChange(exec, r.partitionId, r.streamType, r.streamId, null);
               sql.exec(`DELETE FROM states WHERE partition_id = ? AND stream_type = ? AND stream_id = ?`, r.partitionId, r.streamType, r.streamId);
               sqliteUnpinStream(exec, r.partitionId, r.streamType, r.streamId);
               continue;
@@ -229,7 +240,7 @@ export function createDurableObjectEventStore(storage: DurableObjectSqlStorage):
                 r.streamId,
               );
             }
-            if ('state' in r) upsertState(r.partitionId, r.streamType, r.streamId, r.expectedVersion, r.state, r.search ?? null);
+            if ('state' in r) putState(r.partitionId, r.streamType, r.streamId, r.expectedVersion, r.state, r.search ?? null);
             for (const p of r.pins ?? []) sqliteRepin(exec, p.set, r.partitionId, r.streamType, r.streamId, p.state, p.search);
           }
           return row;
@@ -243,7 +254,7 @@ export function createDurableObjectEventStore(storage: DurableObjectSqlStorage):
           storage.transactionSync(() => {
             const row = insertEvent(input);
             const state = project(row);
-            upsertState(input.partitionId, input.streamType, input.streamId, input.streamVersion, state, searchOf?.(state) ?? null);
+            putState(input.partitionId, input.streamType, input.streamId, input.streamVersion, state, searchOf?.(state) ?? null);
             return row;
           }),
         );
@@ -294,6 +305,10 @@ export function createDurableObjectEventStore(storage: DurableObjectSqlStorage):
           .map(toStoredState);
       },
 
+      async statesVerified(partitionId, streamType, searchKey) {
+        return sqliteSearchKeyIs(exec, partitionId, streamType, searchKey);
+      },
+
       async statesStale(partitionId, streamType, searchKey) {
         if (searchKey !== undefined && sqliteSearchKeyStale(exec, partitionId, streamType, searchKey)) return true;
         return (
@@ -321,6 +336,7 @@ export function createDurableObjectEventStore(storage: DurableObjectSqlStorage):
           sql.exec(`DELETE FROM states WHERE partition_id = ? AND stream_type = ?`, partitionId, streamType);
           for (const s of states) upsertState(partitionId, streamType, s.streamId, s.version, s.state, s.search ?? null);
           if (searchKey !== undefined) sqliteSetSearchKey(exec, partitionId, streamType, searchKey);
+          sqliteRecount(exec, partitionId, streamType, states);
         });
       },
     },

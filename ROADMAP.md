@@ -721,3 +721,31 @@ store with the search and paging. Design:
 - [x] **2. Frontends.** A switch per group in the web list; `f` cycles the
       first group in the TUI.
       *Done when:* choosing an option restarts the list from its first page.
+
+## Epic: reads that do not grow with idle clients
+
+**Goal.** An open admin page costs no Durable Object reads while nothing
+changes, and the reads that remain do not grow with the data. Design:
+[ADR 28](./docs/ADR/0028-reads-that-do-not-grow-with-idle-clients.md).
+
+### Steps
+
+- [x] **1. Live log.** `/log/live` pushes the position after a write; `watchLog`
+      reconnects with backoff; the web GUI and TUI reload badges on it, a hidden
+      tab holds; badge `refresh` and the `/health` ping are gone.
+      *Done when:* an idle tab sends no requests.
+- [x] **2. Verified states.** `statesVerified` before `statesStale`'s scan, in
+      all four stores.
+      *Done when:* a woken host's first read of a type reads two rows.
+- [x] **3. Kept counts and the default order.** `state_meta` counts kept with
+      each state write; `states_created` index; descending sort without the
+      `IS NULL` term.
+      *Done when:* a default list page reads its own rows, held to the same
+      totals by the shared contract.
+- [x] **4. Plugin keep.** `PluginData.keep`, in the Durable Object only.
+      *Done when:* a plugin's derived state survives hibernation.
+
+### Still open
+
+- Paging deep into a list with the `after` cursor still scans the rows before
+  it; only a user scrolling pays for that.

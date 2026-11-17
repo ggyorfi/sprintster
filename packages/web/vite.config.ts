@@ -14,6 +14,7 @@ export default defineConfig({
       '/api': {
         target: DAEMON_URL,
         changeOrigin: true,
+        ws: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
     },

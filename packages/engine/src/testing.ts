@@ -250,6 +250,17 @@ export function describeStateStore(
       expect(await store.states.statesStale(0, 'client')).toBe(false);
     });
 
+    it('reports states verified only after they were replaced under the same search key, per type', async () => {
+      const store = await freshStore();
+      expect(await store.states.statesVerified(0, 'client', 'name')).toBe(false);
+      await store.states.appendWithState(input(), () => 1);
+      expect(await store.states.statesVerified(0, 'client', 'name')).toBe(false);
+      await store.states.replaceStates(0, 'client', [{ streamId: 'A', version: 1, state: 1 }], 'name');
+      expect(await store.states.statesVerified(0, 'client', 'name')).toBe(true);
+      expect(await store.states.statesVerified(0, 'client', 'name,notes')).toBe(false);
+      expect(await store.states.statesVerified(0, 'invoice', 'name')).toBe(false);
+    });
+
     it('replaceStates swaps every state of one type, in the order given, and leaves other types alone', async () => {
       const store = await freshStore();
       await store.states.appendWithState(input({ streamId: 'old' }), () => 'gone');
@@ -312,6 +323,34 @@ export function describeStateQuery(
   }
 
   describe(`StateStore query contract: ${name}`, () => {
+    it('keeps a type\'s totals right through writes, hides, erasures and rebuilds (ADR 28)', async () => {
+      const store = await seeded();
+      const rebuild = async (keep: (id: string) => boolean) => {
+        const all = (await store.states.listStates(0, 'article')).filter((s) => keep(s.streamId));
+        await store.states.replaceStates(0, 'article', all.map((s) => ({ ...s, search: searchOf(s.state) })), fields.join(','));
+      };
+      const totals = async () => [
+        (await store.states.query({ ...base, limit: 1 })).total,
+        (await store.states.query({ ...base, limit: 1, hide: 'removed' })).total,
+        (await store.states.query({ ...base, limit: 1 })).total,
+      ];
+      await rebuild(() => true);
+      expect(await totals()).toEqual([7, 6, 7]);
+      await store.states.appendWithState(input({ streamType: 'article', streamId: 'a8' }), () => ({ title: 'Új', removed: false }), searchOf);
+      expect(await totals()).toEqual([8, 7, 8]);
+      await store.states.appendWithState(input({ streamType: 'article', streamId: 'a1', streamVersion: 2 }), () => ({ title: 'Óra terv', removed: true }), searchOf);
+      expect(await totals()).toEqual([8, 6, 8]);
+      await store.states.appendWithState(input({ streamType: 'article', streamId: 'a6', streamVersion: 2 }), () => ({ title: 'Vissza', removed: false }), searchOf);
+      expect(await totals()).toEqual([8, 7, 8]);
+      await store.rewriteStreams(input({ streamType: '__erased', streamId: 'a2', eventType: 'RecordErased' }), [
+        { partitionId: 0, streamType: 'article', streamId: 'a2', expectedVersion: 1, payloads: null },
+      ]);
+      expect(await totals()).toEqual([7, 6, 7]);
+      await rebuild((id) => id !== 'a3');
+      expect(await totals()).toEqual([6, 5, 6]);
+      expect((await store.states.query({ ...base, limit: 1, hide: 'removed', terms: searchTerms('ora') })).total).toBe(2);
+    });
+
     it('searches every word, ignoring case and accents, and within one partition and type', async () => {
       const store = await seeded();
       expect(ids(await store.states.query({ ...base, terms: searchTerms('ORA') })).sort()).toEqual(['a1', 'a2', 'a4', 'a6', 'b7']);

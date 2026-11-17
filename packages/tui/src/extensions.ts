@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { GuiAction, GuiExtensions } from '@sprintster/engine';
+import { liveUrl, watchLog, type GuiAction, type GuiExtensions, type LiveOptions } from '@sprintster/engine';
 
 export interface Extensions {
   actions: GuiAction[];
@@ -9,7 +9,8 @@ export interface Extensions {
 }
 
 // Plugin actions and badges as the daemon lists them in /config; the TUI shows badge text in its footer and runs actions on Ctrl+hotkey.
-export function useExtensions(daemonUrl: string, fetchImpl: typeof fetch = fetch): Extensions {
+// `connect` opens the live socket (ADR 28); null leaves it closed.
+export function useExtensions(daemonUrl: string, fetchImpl: typeof fetch = fetch, connect?: LiveOptions['connect'] | null): Extensions {
   const [declared, setDeclared] = useState<GuiExtensions>({ actions: [], badges: [] });
   const [texts, setTexts] = useState<Record<string, string>>({});
   const [tick, setTick] = useState(0);
@@ -24,20 +25,22 @@ export function useExtensions(daemonUrl: string, fetchImpl: typeof fetch = fetch
   useEffect(() => {
     let alive = true;
     // A record badge needs a record, so the footer only shows the app-wide ones.
-    const timers = declared.badges.filter((badge) => badge.placement !== 'record').map((badge) => {
-      const load = () =>
-        fetchImpl(`${daemonUrl}${badge.route}`)
-          .then((r) => r.json() as Promise<{ text?: string }>)
-          .then((body) => alive && setTexts((t) => ({ ...t, [badge.id]: body.text ?? '' })))
-          .catch(() => {});
-      void load();
-      return badge.refresh === undefined ? undefined : setInterval(() => void load(), badge.refresh * 1000);
-    });
+    for (const badge of declared.badges.filter((b) => b.placement !== 'record')) {
+      fetchImpl(`${daemonUrl}${badge.route}`)
+        .then((r) => r.json() as Promise<{ text?: string }>)
+        .then((body) => alive && setTexts((t) => ({ ...t, [badge.id]: body.text ?? '' })))
+        .catch(() => {});
+    }
     return () => {
       alive = false;
-      timers.forEach((t) => clearInterval(t));
     };
   }, [daemonUrl, fetchImpl, declared, tick]);
+
+  useEffect(() => {
+    if (connect === null) return;
+    const watch = watchLog(liveUrl(daemonUrl, daemonUrl), { onChange: () => setTick((t) => t + 1), ...(connect === undefined ? {} : { connect }) });
+    return () => watch.close();
+  }, [daemonUrl, connect]);
 
   const run = useCallback(
     async (action: GuiAction, record?: { object: string; id: string }) => {

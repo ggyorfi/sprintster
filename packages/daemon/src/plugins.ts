@@ -12,6 +12,7 @@ import {
   MAX_PAGE,
   type GuiColumnSource,
   type GuiExtensions,
+  type KeepStore,
   type Logger,
   type ObjectRegistration,
   type PluginEntry,
@@ -42,6 +43,11 @@ export interface LoadedDaemonPlugins {
   channels: string[];
 }
 
+const namespacedKeep = (keep: KeepStore, namespace: string): KeepStore => ({
+  get: (key) => keep.get(`${namespace}/${key}`),
+  put: (key, value) => keep.put(`${namespace}/${key}`, value),
+});
+
 // The host's WebSocket side: Node and the Durable Object keep their own connections and deliver to every client on a path.
 export interface SocketHost {
   send(path: string, message: string): void;
@@ -69,6 +75,7 @@ export async function loadDaemonPlugins(opts: {
   sockets?: SocketHost;
   // Where declared secrets come from: the environment on Node, the Worker's env on Cloudflare.
   secret?: (name: string) => string | undefined;
+  keep?: KeepStore;
 }): Promise<LoadedDaemonPlugins> {
   const out: LoadedDaemonPlugins = { objects: [], routes: [], extensions: { actions: [], badges: [], columns: [] }, columns: [], channels: [] };
   const logger = opts.logger ?? consoleLogger;
@@ -116,6 +123,7 @@ export async function loadDaemonPlugins(opts: {
           if (opts.store.states === undefined) return { pins: [], next: null };
           return opts.store.states.pins.since(set, 0, after, Math.min(limit, MAX_PAGE));
         },
+        ...(opts.keep === undefined ? {} : { keep: namespacedKeep(opts.keep, namespace) }),
       },
     }),
   });

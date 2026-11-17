@@ -4,6 +4,7 @@ import { resolveApiBaseUrl } from '../api/config.js';
 import { createWebApiClient } from '../api/client.js';
 import { makeResolveObject, ObjectScreen } from '../engine/index.js';
 import { StatusBar } from './StatusBar.js';
+import { LiveProvider } from './live.js';
 import { Extensions } from './Extensions.js';
 import { serverExtensions } from './bootstrap.js';
 import { Maintenance } from './Maintenance.js';
@@ -47,47 +48,49 @@ export function App() {
   const activeObj = objects.find((o) => o.name === ctx) ?? null;
 
   return (
-    <div className={styles.app}>
-      <aside className={styles.rail}>
-        <div className={styles.brand}>
-          <span className={styles.logo}>{appTitle().charAt(0).toUpperCase()}</span> {appTitle()}
-        </div>
-        <nav className={styles.nav}>
-          {objects.filter((o) => o.hidden !== true).map((o) => (
+    <LiveProvider baseUrl={baseUrl}>
+      <div className={styles.app}>
+        <aside className={styles.rail}>
+          <div className={styles.brand}>
+            <span className={styles.logo}>{appTitle().charAt(0).toUpperCase()}</span> {appTitle()}
+          </div>
+          <nav className={styles.nav}>
+            {objects.filter((o) => o.hidden !== true).map((o) => (
+              <button
+                key={o.name}
+                type="button"
+                className={[styles.navItem, ctx === o.name && styles.active].filter(Boolean).join(' ')}
+                onClick={() => navigate(o.name)}
+              >
+                {o.titlePlural}
+              </button>
+            ))}
             <button
-              key={o.name}
               type="button"
-              className={[styles.navItem, ctx === o.name && styles.active].filter(Boolean).join(' ')}
-              onClick={() => navigate(o.name)}
+              className={[styles.navItem, ctx === MAINTENANCE && styles.active].filter(Boolean).join(' ')}
+              onClick={() => navigate(MAINTENANCE)}
             >
-              {o.titlePlural}
+              Maintenance
             </button>
-          ))}
-          <button
-            type="button"
-            className={[styles.navItem, ctx === MAINTENANCE && styles.active].filter(Boolean).join(' ')}
-            onClick={() => navigate(MAINTENANCE)}
-          >
-            Maintenance
-          </button>
-        </nav>
-        <Extensions baseUrl={baseUrl} extensions={extensionsAt(serverExtensions, 'sidebar')} />
-        {authEnabled() && (
-          <Button variant="neutral" className={styles.signOut} onClick={() => void logOut(baseUrl)}>
-            Sign out
-          </Button>
-        )}
-      </aside>
-      <div className={styles.main}>
-        <div className={styles.content}>
-          {activeObj !== null ? (
-            <ObjectScreen key={activeObj.name} api={api} obj={activeObj} resolveObject={resolveObject} />
-          ) : (
-            <Maintenance baseUrl={baseUrl} extensions={extensionsAt(serverExtensions, 'maintenance')} />
+          </nav>
+          <Extensions baseUrl={baseUrl} extensions={extensionsAt(serverExtensions, 'sidebar')} />
+          {authEnabled() && (
+            <Button variant="neutral" className={styles.signOut} onClick={() => void logOut(baseUrl)}>
+              Sign out
+            </Button>
           )}
+        </aside>
+        <div className={styles.main}>
+          <div className={styles.content}>
+            {activeObj !== null ? (
+              <ObjectScreen key={activeObj.name} api={api} obj={activeObj} resolveObject={resolveObject} />
+            ) : (
+              <Maintenance baseUrl={baseUrl} extensions={extensionsAt(serverExtensions, 'maintenance')} />
+            )}
+          </div>
+          <StatusBar version={version} />
         </div>
-        <StatusBar baseUrl={baseUrl} version={version} />
       </div>
-    </div>
+    </LiveProvider>
   );
 }

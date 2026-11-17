@@ -119,6 +119,18 @@ export function searchTextOf(state: unknown, fields: readonly string[]): string 
   return normalizeSearch(parts.join(' '));
 }
 
+// ADR 28: a query whose total a store may keep rather than count: a type's states, filtered by nothing but `hide`.
+export function countKept(q: StateQuery, table: { name: 'states' | 'pins' }): boolean {
+  return table.name === 'states' && q.after == null && q.count !== false && q.ids === undefined && (q.where ?? []).length === 0 && (q.terms ?? []).length === 0;
+}
+
+// Whether a list that hides by `hide` shows the state, as the SQL stores' COALESCE(<hide>, 0) = 0 has it.
+export function shownBy(state: unknown, hide: string | undefined): boolean {
+  if (hide === undefined) return true;
+  const v = readPath(state, hide);
+  return v === undefined || v === null || v === false || v === 0;
+}
+
 export function readPath(state: unknown, path: string): unknown {
   let at: unknown = state;
   for (const seg of path.split('.')) {
@@ -283,7 +295,9 @@ export function buildStateSql(dialect: SqlDialect, q: StateQuery, table: { name:
       where.push(`(${key} ${sort.descending ? '<' : '>'} ${k1} OR (${key} = ${k2} AND s.stream_id > ${p(cur.id)}) OR ${key} IS NULL)`);
     }
   }
-  const order = sort === undefined ? 's.seq ASC' : `(${key} IS NULL) ASC, ${key} ${sort.descending ? 'DESC' : 'ASC'}, s.stream_id ASC`;
+  // Nulls last either way. Descending needs no IS NULL term (SQLite sorts nulls lowest), so an index on the key can give the order.
+  const keyOrder = sort?.descending === true ? `${key} DESC${dialect === 'pg' ? ' NULLS LAST' : ''}` : `(${key} IS NULL) ASC, ${key} ASC`;
+  const order = sort === undefined ? 's.seq ASC' : `${keyOrder}, s.stream_id ASC`;
   const sql =
     `SELECT s.stream_id AS stream_id, s.version AS version, s.state AS state, ${key} AS sort_key FROM ${table.name} s${join}` +
     ` WHERE ${where.join(' AND ')} ORDER BY ${order} LIMIT ${p(q.limit)} OFFSET ${p(q.offset ?? 0)}`;

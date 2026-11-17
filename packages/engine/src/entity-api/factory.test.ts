@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { createEntityApi, type Reducer } from './factory.js';
 import { InMemoryEventStore } from '../events/store.js';
 
@@ -198,6 +198,16 @@ describe('createEntityApi', () => {
     const api = createEntityApi(store, { partitionId: 0, streamType: 'counter', reducer: counterReducer });
     expect(await api.findOneById('a')).toMatchObject({ value: 5 });
     expect(await store.states.getState(0, 'counter', 'a')).toMatchObject({ version: 2 });
+  });
+
+  it('skips the staleness scan when a woken host finds the states verified', async () => {
+    const store = new InMemoryEventStore();
+    const created = { eventType: 'Created', eventVersion: 1, payload: { id: 'a' }, actor: 'tester' };
+    await createEntityApi(store, { partitionId: 0, streamType: 'counter', reducer: counterReducer }).createEvent('a', () => created);
+    await createEntityApi(store, { partitionId: 0, streamType: 'counter', reducer: counterReducer }).findOneById('a');
+    const scan = vi.spyOn(store.states, 'statesStale');
+    expect(await createEntityApi(store, { partitionId: 0, streamType: 'counter', reducer: counterReducer }).findOneById('a')).toMatchObject({ value: 0 });
+    expect(scan).not.toHaveBeenCalled();
   });
 
   it('appends nothing when the reducer refuses the event', async () => {

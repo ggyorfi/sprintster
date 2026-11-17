@@ -1,4 +1,4 @@
-import { buildStateSql, pageFromSql, type PinRow, type StatePage, type StateQuery } from './query.js';
+import { buildStateSql, countKept, pageFromSql, shownBy, type PinRow, type StatePage, type StateQuery } from './query.js';
 
 // What the SQLite stores (better-sqlite3 locally, a Durable Object's storage) share: plain SQL through the caller's driver.
 export type SqliteExec = (sql: string, params: readonly unknown[]) => Array<Record<string, unknown>>;
@@ -8,8 +8,13 @@ export const SQLITE_QUERY_DDL = [
     partition_id INTEGER NOT NULL,
     stream_type TEXT NOT NULL,
     search_key TEXT NOT NULL,
+    total INTEGER,
+    visible INTEGER,
+    hide_path TEXT,
     PRIMARY KEY (partition_id, stream_type)
   )`,
+  // ADR 28: the default list order (-createdAt) read in index order, so a page reads its own rows, not the whole type.
+  `CREATE INDEX IF NOT EXISTS states_created ON states (partition_id, stream_type, json_extract(state, '$.createdAt') DESC, stream_id)`,
   `CREATE TABLE IF NOT EXISTS pins (
     set_name TEXT NOT NULL,
     partition_id INTEGER NOT NULL,
@@ -31,13 +36,60 @@ export function ensureSqliteSearchColumn(exec: SqliteExec): void {
   if (!exec(`PRAGMA table_info(states)`, []).some((c) => c['name'] === 'search')) exec(`ALTER TABLE states ADD COLUMN search TEXT`, []);
 }
 
+// state_meta tables made before ADR 28 have no counts.
+export function ensureSqliteCountColumns(exec: SqliteExec): void {
+  const have = new Set(exec(`PRAGMA table_info(state_meta)`, []).map((c) => c['name']));
+  for (const [name, type] of [['total', 'INTEGER'], ['visible', 'INTEGER'], ['hide_path', 'TEXT']] as const) {
+    if (!have.has(name)) exec(`ALTER TABLE state_meta ADD COLUMN ${name} ${type}`, []);
+  }
+}
+
 const parse = (state: unknown) => (typeof state === 'string' ? JSON.parse(state) : state);
 
-export function sqliteQuery(exec: SqliteExec, q: StateQuery, table: { name: 'states' } | { name: 'pins'; set: string }): StatePage {
+type Table = { name: 'states' } | { name: 'pins'; set: string };
+
+export function sqliteQuery(exec: SqliteExec, q: StateQuery, table: Table): StatePage {
   const built = buildStateSql('sqlite', q, table);
   const rows = exec(built.sql, built.params) as Array<{ stream_id: string; version: number; state: unknown; sort_key: unknown }>;
-  const total = built.countSql === null ? null : Number(exec(built.countSql, built.countParams)[0]?.['n'] ?? 0);
+  const total = built.countSql === null ? null : countKept(q, table) ? keptTotal(exec, q) : Number(exec(built.countSql, built.countParams)[0]?.['n'] ?? 0);
   return pageFromSql(q, rows, total, parse);
+}
+
+// ADR 28: a type's counts are kept in state_meta as its states change; the first count after they were unknown fills them in.
+function keptTotal(exec: SqliteExec, q: StateQuery): number {
+  const key = [q.partitionId, q.streamType];
+  const meta = exec(`SELECT total, visible, hide_path FROM state_meta WHERE partition_id = ? AND stream_type = ?`, key)[0];
+  if (meta !== undefined && meta['total'] !== null && (q.hide === undefined || meta['hide_path'] === q.hide)) {
+    return Number(q.hide === undefined ? meta['total'] : meta['visible']);
+  }
+  const shown = q.hide === undefined ? '1' : `COALESCE(json_extract(state, '$.${q.hide}'), 0) = 0`;
+  const counted = exec(`SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN ${shown} THEN 1 ELSE 0 END), 0) AS v FROM states WHERE partition_id = ? AND stream_type = ?`, key)[0];
+  const [total, visible] = [Number(counted?.['n'] ?? 0), Number(counted?.['v'] ?? 0)];
+  exec(`UPDATE state_meta SET total = ?, visible = ?, hide_path = ? WHERE partition_id = ? AND stream_type = ?`, [total, visible, q.hide ?? null, ...key]);
+  return q.hide === undefined ? total : visible;
+}
+
+// Called before a state is written (`next`) or deleted (null), in the same transaction, so a kept count stays right.
+export function sqliteCountChange(exec: SqliteExec, partitionId: number, streamType: string, streamId: string, next: { state: unknown } | null): void {
+  const key = [partitionId, streamType];
+  const meta = exec(`SELECT total, hide_path FROM state_meta WHERE partition_id = ? AND stream_type = ?`, key)[0];
+  if (meta === undefined || meta['total'] === null) return;
+  const hide = meta['hide_path'] === null ? undefined : String(meta['hide_path']);
+  const old = exec(`SELECT state FROM states WHERE partition_id = ? AND stream_type = ? AND stream_id = ?`, [...key, streamId])[0];
+  const shown = (state: unknown) => (shownBy(state, hide) ? 1 : 0);
+  const total = (next === null ? 0 : 1) - (old === undefined ? 0 : 1);
+  const visible = (next === null ? 0 : shown(next.state)) - (old === undefined ? 0 : shown(parse(old['state'])));
+  if (total !== 0 || visible !== 0) exec(`UPDATE state_meta SET total = total + ?, visible = visible + ? WHERE partition_id = ? AND stream_type = ?`, [total, visible, ...key]);
+}
+
+// After replaceStates: the counts of exactly these states.
+export function sqliteRecount(exec: SqliteExec, partitionId: number, streamType: string, states: ReadonlyArray<{ state: unknown }>): void {
+  const key = [partitionId, streamType];
+  const meta = exec(`SELECT hide_path FROM state_meta WHERE partition_id = ? AND stream_type = ?`, key)[0];
+  if (meta === undefined) return;
+  const hide = meta['hide_path'] === null ? undefined : String(meta['hide_path']);
+  const visible = states.filter((s) => shownBy(s.state, hide)).length;
+  exec(`UPDATE state_meta SET total = ?, visible = ? WHERE partition_id = ? AND stream_type = ?`, [states.length, visible, ...key]);
 }
 
 export function sqliteSearchKeyStale(exec: SqliteExec, partitionId: number, streamType: string, searchKey: string): boolean {
@@ -45,6 +97,10 @@ export function sqliteSearchKeyStale(exec: SqliteExec, partitionId: number, stre
   if (!hasStates) return false;
   const row = exec(`SELECT search_key FROM state_meta WHERE partition_id = ? AND stream_type = ?`, [partitionId, streamType])[0];
   return row?.['search_key'] !== searchKey;
+}
+
+export function sqliteSearchKeyIs(exec: SqliteExec, partitionId: number, streamType: string, searchKey: string): boolean {
+  return exec(`SELECT search_key FROM state_meta WHERE partition_id = ? AND stream_type = ?`, [partitionId, streamType])[0]?.['search_key'] === searchKey;
 }
 
 export function sqliteSetSearchKey(exec: SqliteExec, partitionId: number, streamType: string, searchKey: string): void {

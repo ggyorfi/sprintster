@@ -98,11 +98,10 @@ export interface GuiAction {
 
 export type BadgeTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
 
-// Short status text; the GUI GETs `route` for `{ text, tone }`, every `refresh` seconds and after any action.
+// Short status text; the GUI GETs `route` for `{ text, tone }`, after any action and whenever the log moves (ADR 28).
 export interface GuiBadge {
   id: string;
   route: string;
-  refresh?: number;
   placement?: GuiPlacement;
   // With placement 'record': as for an action; the route is called with ?object=&id=.
   objects?: string[];
@@ -162,6 +161,14 @@ export interface PluginData {
   changesSince(position: number): Promise<LogChange[]>;
   // ADR 26: what was pinned or unpinned in a set after a sequence number, every object, a page at a time.
   pinnedSince(set: string, after: number, limit: number): Promise<{ pins: PinRow[]; next: number | null }>;
+  // ADR 28: text a plugin derives from the log and keeps across host restarts, under its own keys. Only where reads
+  // cost (a Durable Object); elsewhere absent, and a plugin keeps what it derives in memory.
+  keep?: KeepStore;
+}
+
+export interface KeepStore {
+  get(key: string): Promise<string | null>;
+  put(key: string, value: string): Promise<void>;
 }
 
 // Pushes to every client connected at /plugins/<namespace>/channels/<name>. A message is sent as JSON; clients never send.
