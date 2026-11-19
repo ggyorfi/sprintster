@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ComboEditor } from './ComboEditor.js';
 
@@ -44,5 +44,17 @@ describe('ComboEditor', () => {
     const { container } = render(<ComboEditor value={'x'} onChange={() => {}} defaultMode="source" />);
     await waitFor(() => expect(container.querySelector('.cm-editor')).not.toBeNull(), LAZY);
     expect(container.querySelector('.ProseMirror')).toBeNull();
+  });
+
+  it('puts the mode switch in the toolbar, and gives the source the same toolbar', async () => {
+    let latest = '';
+    const { container } = render(<ComboEditor value={'hello'} onChange={(v) => (latest = v)} />);
+    await waitFor(() => expect(container.querySelector('.ProseMirror')).not.toBeNull(), LAZY);
+    expect(within(screen.getByRole('toolbar')).getByRole('tablist')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('tab', { name: 'Source' }));
+    await waitFor(() => expect(container.querySelector('.cm-editor')).not.toBeNull(), LAZY);
+    expect(within(screen.getByRole('toolbar')).getByRole('tab', { name: 'Source', selected: true })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Heading 2' }));
+    await waitFor(() => expect(latest).toBe('## hello'));
   });
 });

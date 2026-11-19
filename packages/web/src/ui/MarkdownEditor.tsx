@@ -1,11 +1,14 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useEditor, useEditorState, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
 import Image from '@tiptap/extension-image';
 import { NodeSelection } from '@tiptap/pm/state';
 import { assetUrl, storedAssetUrl, displayedAssetUrl } from '../api/assets.js';
-import { anyFileAllowed, useAssetUpload, type AssetUpload } from './useAssetUpload.js';
+import { useAssetUpload } from './useAssetUpload.js';
+import { AssetDialog, type AssetKind, type AssetLibrary, type AttachedAsset } from './AssetDialog.js';
+import { AltRow, LinkRow, MarkdownToolbar, type MarkdownAction } from './MarkdownToolbar.js';
+import { ResizeGrip, heightStyle, useEditorHeight } from './ResizeGrip.js';
 import styles from './MarkdownEditor.module.css';
 
 // Serialising is the one path every edit goes through, so it is where the root-relative rule is enforced rather than assumed.
@@ -33,8 +36,12 @@ export interface MarkdownEditorProps {
   value: string;
   onChange: (value: string) => void;
   readOnly?: boolean;
-  attach?: ((file: File) => Promise<{ id: string }>) | undefined;
-  attachDocument?: ((file: File) => Promise<{ id: string; title: string }>) | undefined;
+  attach?: ((file: File) => Promise<AttachedAsset>) | undefined;
+  attachDocument?: ((file: File) => Promise<AttachedAsset>) | undefined;
+  library?: AssetLibrary | undefined;
+  toolbarEnd?: ReactNode;
+  height?: number | undefined;
+  onHeightChange?: ((height: number) => void) | undefined;
 }
 
 function imageFilesOf(data: DataTransfer | null): File[] {
@@ -65,134 +72,22 @@ function insertImage(editor: Editor, assetId: string, at: number | null) {
     .run();
 }
 
-function ImageButton({ editor, uploader }: { editor: Editor; uploader: AssetUpload<{ id: string }> }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const { busy, error, select } = uploader;
-
-  async function onFile(file: File | undefined) {
-    const asset = await select(file);
-    if (asset === null) return;
-    insertImage(editor, asset.id, null);
-  }
-
-  return (
-    <>
-      <button
-        type="button"
-        className={styles.tbtn}
-        aria-label="Insert image"
-        title="Insert image"
-        disabled={busy}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => inputRef.current?.click()}
-      >
-        {busy ? '…' : 'IMG'}
-      </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className={styles.fileInput}
-        disabled={busy}
-        onChange={(e) => void onFile(e.target.files?.[0])}
-      />
-      {error !== null && (
-        <span role="alert" className={styles.error}>
-          {error}
-        </span>
-      )}
-    </>
-  );
-}
-
 // The link stays root-relative, as stored content must (ADR 9), so the body does not depend on where the API is mounted.
-function insertDocumentLink(editor: Editor, asset: { id: string; title: string }) {
+function applyLink(editor: Editor, href: string, text: string) {
   if (editor.isDestroyed) return;
+  if (editor.isActive('link') || !editor.state.selection.empty) {
+    editor.chain().focus().extendMarkRange('link').setLink({ href }).run();
+    return;
+  }
   editor
     .chain()
     .focus()
-    .insertContent({ type: 'text', text: asset.title, marks: [{ type: 'link', attrs: { href: `/assets/${asset.id}` } }] })
+    .insertContent({ type: 'text', text, marks: [{ type: 'link', attrs: { href } }] })
     .unsetMark('link')
     .run();
 }
 
-function DocumentButton({ editor, uploader }: { editor: Editor; uploader: AssetUpload<{ id: string; title: string }> }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const { busy, error, select } = uploader;
-
-  async function onFile(file: File | undefined) {
-    const asset = await select(file);
-    if (asset !== null) insertDocumentLink(editor, asset);
-  }
-
-  return (
-    <>
-      <button
-        type="button"
-        className={styles.tbtn}
-        aria-label="Link a document"
-        title="Link a document"
-        disabled={busy}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => inputRef.current?.click()}
-      >
-        {busy ? '…' : anyFileAllowed() ? 'File' : 'PDF'}
-      </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={anyFileAllowed() ? undefined : 'application/pdf'}
-        className={styles.fileInput}
-        disabled={busy}
-        onChange={(e) => void onFile(e.target.files?.[0])}
-      />
-      {error !== null && (
-        <span role="alert" className={styles.error}>
-          {error}
-        </span>
-      )}
-    </>
-  );
-}
-
-// Alt text lives in the markdown, so it has to be authorable; a prompt on insert would be hostile when pasting screenshots.
-function AltTextRow({ editor }: { editor: Editor }) {
-  const s = useEditorState({
-    editor,
-    selector: ({ editor }) => {
-      const live = editor !== null && !editor.isDestroyed;
-      const selected = live && editor.isActive('image');
-      return { selected, alt: selected ? String(editor.getAttributes('image')['alt'] ?? '') : '' };
-    },
-  });
-
-  if (!s.selected) return null;
-
-  return (
-    <label className={styles.altRow}>
-      <span className={styles.altLabel}>Alt text</span>
-      <input
-        type="text"
-        className={styles.altInput}
-        value={s.alt}
-        placeholder="Describe the image"
-        onChange={(e) => {
-          if (!editor.isDestroyed) editor.commands.updateAttributes('image', { alt: e.target.value });
-        }}
-      />
-    </label>
-  );
-}
-
-function Toolbar({
-  editor,
-  uploader,
-  documents,
-}: {
-  editor: Editor;
-  uploader: AssetUpload<{ id: string }> | null;
-  documents: AssetUpload<{ id: string; title: string }> | null;
-}) {
+function Toolbar({ editor, images, end, onLink, onImage }: { editor: Editor; images: boolean; end: ReactNode; onLink: () => void; onImage: () => void }) {
   const s = useEditorState({
     editor,
     // The editor can be torn down mid-render (React strict/concurrent, combo toggles); guard against a destroyed instance.
@@ -211,64 +106,108 @@ function Toolbar({
         orderedList: on('orderedList'),
         blockquote: on('blockquote'),
         codeBlock: on('codeBlock'),
+        link: on('link'),
         canUndo: live ? editor.can().undo() : false,
         canRedo: live ? editor.can().redo() : false,
       };
     },
   });
 
-  const chain = () => editor.chain().focus();
+  function run(action: MarkdownAction) {
+    if (editor.isDestroyed) return;
+    const chain = () => editor.chain().focus();
+    const commands: Record<MarkdownAction, () => void> = {
+      bold: () => chain().toggleBold().run(),
+      italic: () => chain().toggleItalic().run(),
+      strike: () => chain().toggleStrike().run(),
+      code: () => chain().toggleCode().run(),
+      h1: () => chain().toggleHeading({ level: 1 }).run(),
+      h2: () => chain().toggleHeading({ level: 2 }).run(),
+      h3: () => chain().toggleHeading({ level: 3 }).run(),
+      bulletList: () => chain().toggleBulletList().run(),
+      orderedList: () => chain().toggleOrderedList().run(),
+      blockquote: () => chain().toggleBlockquote().run(),
+      codeBlock: () => chain().toggleCodeBlock().run(),
+      link: onLink,
+      image: onImage,
+      undo: () => chain().undo().run(),
+      redo: () => chain().redo().run(),
+    };
+    commands[action]();
+  }
 
-  const btn = (name: string, glyph: string, active: boolean, run: () => void, disabled = false) => (
-    <button
-      type="button"
-      className={[styles.tbtn, active ? styles.tactive : ''].filter(Boolean).join(' ')}
-      aria-label={name}
-      aria-pressed={active}
-      title={name}
-      disabled={disabled}
-      onMouseDown={(e) => e.preventDefault()}
-      onClick={() => {
-        if (!editor.isDestroyed) run();
-      }}
-    >
-      {glyph}
-    </button>
-  );
+  return <MarkdownToolbar active={s} disabled={{ undo: !s.canUndo, redo: !s.canRedo }} hidden={{ image: !images }} onAction={run} end={end} />;
+}
+
+function Rows({
+  editor,
+  linkOpen,
+  closeLink,
+  onChooseFile,
+}: {
+  editor: Editor;
+  linkOpen: boolean;
+  closeLink: () => void;
+  onChooseFile: (() => void) | undefined;
+}) {
+  const s = useEditorState({
+    editor,
+    selector: ({ editor }) => {
+      const live = editor !== null && !editor.isDestroyed;
+      const image = live && editor.isActive('image');
+      const link = live && editor.isActive('link');
+      return {
+        image,
+        alt: image ? String(editor.getAttributes('image')['alt'] ?? '') : '',
+        link,
+        href: link ? String(editor.getAttributes('link')['href'] ?? '') : '',
+      };
+    },
+  });
 
   return (
-    <div className={styles.toolbar} role="toolbar" aria-label="Formatting">
-      {btn('Bold', 'B', s.bold, () => chain().toggleBold().run())}
-      {btn('Italic', 'I', s.italic, () => chain().toggleItalic().run())}
-      {btn('Strikethrough', 'S', s.strike, () => chain().toggleStrike().run())}
-      {btn('Inline code', '</>', s.code, () => chain().toggleCode().run())}
-      <span className={styles.sep} />
-      {btn('Heading 1', 'H1', s.h1, () => chain().toggleHeading({ level: 1 }).run())}
-      {btn('Heading 2', 'H2', s.h2, () => chain().toggleHeading({ level: 2 }).run())}
-      {btn('Heading 3', 'H3', s.h3, () => chain().toggleHeading({ level: 3 }).run())}
-      <span className={styles.sep} />
-      {btn('Bullet list', '•', s.bulletList, () => chain().toggleBulletList().run())}
-      {btn('Ordered list', '1.', s.orderedList, () => chain().toggleOrderedList().run())}
-      {btn('Blockquote', '❝', s.blockquote, () => chain().toggleBlockquote().run())}
-      {btn('Code block', '{ }', s.codeBlock, () => chain().toggleCodeBlock().run())}
-      {uploader !== null && <span className={styles.sep} />}
-      {uploader !== null && <ImageButton editor={editor} uploader={uploader} />}
-      {documents !== null && uploader === null && <span className={styles.sep} />}
-      {documents !== null && <DocumentButton editor={editor} uploader={documents} />}
-      <span className={styles.sep} />
-      {btn('Undo', '↺', false, () => chain().undo().run(), !s.canUndo)}
-      {btn('Redo', '↻', false, () => chain().redo().run(), !s.canRedo)}
-    </div>
+    <>
+      {s.image && (
+        <AltRow
+          alt={s.alt}
+          onChange={(alt) => {
+            if (!editor.isDestroyed) editor.commands.updateAttributes('image', { alt });
+          }}
+        />
+      )}
+      {(linkOpen || s.link) && (
+        <LinkRow
+          href={s.href}
+          existing={s.link}
+          openUrl={displayedAssetUrl}
+          onChooseFile={onChooseFile}
+          onApply={(href) => {
+            applyLink(editor, href, href);
+            closeLink();
+          }}
+          onRemove={() => {
+            if (!editor.isDestroyed) editor.chain().focus().extendMarkRange('link').unsetLink().run();
+            closeLink();
+          }}
+          onCancel={() => {
+            closeLink();
+            if (!editor.isDestroyed) editor.commands.focus();
+          }}
+        />
+      )}
+    </>
   );
 }
 
 // WYSIWYG markdown editor: markdown shortcuts format in place, value stays a raw markdown string.
-export function MarkdownEditor({ label, value, onChange, readOnly = false, attach, attachDocument }: MarkdownEditorProps) {
+export function MarkdownEditor({ label, value, onChange, readOnly = false, attach, attachDocument, library, toolbarEnd, height: givenHeight, onHeightChange }: MarkdownEditorProps) {
+  const [height, setHeight] = useEditorHeight(givenHeight, onHeightChange);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const [picking, setPicking] = useState<AssetKind | null>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
 
   const uploader = useAssetUpload(attach, { imagesOnly: true });
-  const documents = useAssetUpload(attachDocument);
   const uploadRef = useRef(uploader);
   uploadRef.current = uploader;
   const editorRef = useRef<Editor | null>(null);
@@ -291,7 +230,7 @@ export function MarkdownEditor({ label, value, onChange, readOnly = false, attac
   }
 
   const editor = useEditor({
-    extensions: [StarterKit, Markdown, AssetImage],
+    extensions: [StarterKit.configure({ link: { openOnClick: false } }), Markdown, AssetImage],
     content: value,
     contentType: 'markdown',
     editable: !readOnly,
@@ -335,14 +274,53 @@ export function MarkdownEditor({ label, value, onChange, readOnly = false, attac
     }
   }, [editor, value]);
 
+  const editing = editor !== null && !readOnly;
+
   return (
     <div className={styles.field}>
       {label !== undefined && <span className={styles.label}>{label}</span>}
-      <div className={styles.editor}>
-        {editor !== null && !readOnly && <Toolbar editor={editor} uploader={attach === undefined ? null : uploader} documents={attachDocument === undefined ? null : documents} />}
-        {editor !== null && !readOnly && <AltTextRow editor={editor} />}
+      <div className={styles.editor} style={heightStyle(height)}>
+        {editing && (
+          <Toolbar
+            editor={editor}
+            images={attach !== undefined}
+            end={toolbarEnd}
+            onLink={() => setLinkOpen((open) => !open)}
+            onImage={() => setPicking('image')}
+          />
+        )}
+        {editing && (
+          <Rows
+            editor={editor}
+            linkOpen={linkOpen}
+            closeLink={() => setLinkOpen(false)}
+            onChooseFile={attachDocument === undefined ? undefined : () => setPicking('file')}
+          />
+        )}
+        {uploader.error !== null && (
+          <span role="alert" className={styles.error}>
+            {uploader.error}
+          </span>
+        )}
         <EditorContent editor={editor} />
+        {editing && <ResizeGrip target={() => (editor.isDestroyed ? null : editor.view.dom)} onResize={setHeight} />}
       </div>
+      {editing && picking !== null && (
+        <AssetDialog
+          kind={picking}
+          library={library}
+          upload={picking === 'image' ? attach : attachDocument}
+          onClose={() => setPicking(null)}
+          onChoose={(asset) => {
+            setPicking(null);
+            if (picking === 'image') insertImage(editor, asset.value, null);
+            else {
+              applyLink(editor, `/assets/${asset.value}`, asset.label);
+              setLinkOpen(false);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

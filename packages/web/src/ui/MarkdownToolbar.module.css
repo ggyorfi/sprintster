@@ -1,0 +1,93 @@
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--field-border);
+}
+
+.group {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.tbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.tbtn:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.tbtn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.tbtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tactive {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--border-2);
+}
+
+.end {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border-2);
+  background: var(--surface-2);
+}
+
+.rowLabel {
+  color: var(--text-2);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rowInput {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--field-border);
+  border-radius: var(--radius);
+  background: var(--field);
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 6px;
+}
+
+.rowInput:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring);
+}

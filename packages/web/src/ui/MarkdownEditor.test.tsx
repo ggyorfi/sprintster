@@ -21,6 +21,11 @@ function transferEvent(type: 'paste' | 'drop', files: File[]): Event {
   return event;
 }
 
+async function uploadImage(file: File, opts?: { applyAccept: boolean }) {
+  await userEvent.click(screen.getByRole('button', { name: 'Insert image' }));
+  await userEvent.upload(screen.getByLabelText('Upload files'), file, opts);
+}
+
 const paste = (target: Element, files: File[]) => fireEvent(target, transferEvent('paste', files));
 const drop = (target: Element, files: File[]) => fireEvent(target, transferEvent('drop', files));
 
@@ -105,7 +110,7 @@ describe('MarkdownEditor', () => {
     const attach = vi.fn(async (_file: File) => attached);
     const { container } = render(<MarkdownEditor value={'Intro'} onChange={(v) => (latest = v)} attach={attach} />);
     const file = pngFile();
-    await userEvent.upload(container.querySelector('input[type=file]')!, file);
+    await uploadImage(file);
     expect(attach).toHaveBeenCalledWith(file);
     await waitFor(() => expect(latest).toContain('!['));
     expect(latest).toContain('![](/assets/a1)');
@@ -118,7 +123,7 @@ describe('MarkdownEditor', () => {
       <MarkdownEditor value={'Intro'} onChange={(v) => (latest = v)} attach={async () => attached} />,
     );
     const file = pngFile();
-    await userEvent.upload(container.querySelector('input[type=file]')!, file);
+    await uploadImage(file);
     await waitFor(() => expect(latest).toContain('!['));
     expect(container.querySelector('img')?.getAttribute('src')).toBe('https://app.example.com/assets/a1');
     expect(latest).toContain('![](/assets/a1)');
@@ -137,7 +142,7 @@ describe('MarkdownEditor', () => {
       />,
     );
     const file = pngFile();
-    await userEvent.upload(container.querySelector('input[type=file]')!, file);
+    await uploadImage(file);
     expect(await screen.findByRole('alert')).toHaveTextContent('upload failed (500)');
     expect(onChange.mock.calls.flat().join('')).not.toContain('![');
   });
@@ -147,7 +152,7 @@ describe('MarkdownEditor', () => {
       <MarkdownEditor value={'Intro\n\nOutro'} onChange={() => {}} attach={async () => attached} />,
     );
     const file = pngFile();
-    await userEvent.upload(container.querySelector('input[type=file]')!, file);
+    await uploadImage(file);
     expect(await screen.findByLabelText('Alt text')).toHaveValue('');
   });
 
@@ -157,7 +162,7 @@ describe('MarkdownEditor', () => {
       <MarkdownEditor value={'Intro'} onChange={(v) => (latest = v)} attach={async () => attached} />,
     );
     const file = pngFile();
-    await userEvent.upload(container.querySelector('input[type=file]')!, file);
+    await uploadImage(file);
     await userEvent.type(await screen.findByLabelText('Alt text'), 'Sunset');
     await waitFor(() => expect(latest).toContain('Sunset'));
     expect(latest).toContain('![Sunset](/assets/a1)');
@@ -236,7 +241,7 @@ describe('MarkdownEditor', () => {
     const attach = vi.fn(async (_file: File) => attached);
     const { container } = render(<MarkdownEditor value={'Intro'} onChange={() => {}} attach={attach} />);
     const big = pngFileOfSize(MAX_ASSET_BYTES + 1);
-    await userEvent.upload(container.querySelector('input[type=file]')!, big);
+    await uploadImage(big);
     expect(await screen.findByRole('alert')).toHaveTextContent(/over the 10 MB limit/);
     expect(attach).not.toHaveBeenCalled();
   });
@@ -244,8 +249,16 @@ describe('MarkdownEditor', () => {
   it('refuses a wrong file type without sending it', async () => {
     const attach = vi.fn(async (_file: File) => attached);
     const { container } = render(<MarkdownEditor value={'Intro'} onChange={() => {}} attach={attach} />);
+    paste(container.querySelector('.ProseMirror')!, [new File([new Uint8Array([1, 2, 3])], 'fake.png', { type: 'image/png' })]);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/unrecognised file data/);
+    expect(attach).not.toHaveBeenCalled();
+  });
+
+  it('refuses an SVG it cannot convert to PNG without sending it', async () => {
+    const attach = vi.fn(async (_file: File) => attached);
+    const { container } = render(<MarkdownEditor value={'Intro'} onChange={() => {}} attach={attach} />);
     paste(container.querySelector('.ProseMirror')!, [svgFile()]);
-    expect(await screen.findByRole('alert')).toHaveTextContent(/SVG is not accepted/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/no viewBox/);
     expect(attach).not.toHaveBeenCalled();
   });
 
@@ -293,9 +306,10 @@ describe('MarkdownEditor', () => {
     expect(container.querySelector('img')?.getAttribute('src')).toBe('https://app.example.com/assets/abc123');
   });
 
-  it('has no document button unless an attachDocument function is supplied', () => {
+  it('has no file button unless an attachDocument function is supplied', async () => {
     render(<MarkdownEditor value={'hello'} onChange={() => {}} attach={async () => attached} />);
-    expect(screen.queryByRole('button', { name: 'Link a document' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Link' }));
+    expect(screen.queryByRole('button', { name: 'Link a file' })).toBeNull();
   });
 
   it('uploads a PDF and inserts a root-relative link named after it', async () => {
@@ -305,7 +319,9 @@ describe('MarkdownEditor', () => {
     const { container } = render(
       <MarkdownEditor value={'Intro'} onChange={(v) => (latest = v)} attachDocument={attachDocument} />,
     );
-    await userEvent.upload(container.querySelector('input[accept="application/pdf"]')!, pdfFile());
+    await userEvent.click(screen.getByRole('button', { name: 'Link' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Link a file' }));
+    await userEvent.upload(screen.getByLabelText('Upload files'), pdfFile());
     await waitFor(() => expect(latest).toContain('[Proposal](/assets/d1)'));
     expect(latest).not.toContain('app.example.com');
   });
@@ -313,8 +329,27 @@ describe('MarkdownEditor', () => {
   it('refuses a PDF where only images are attached', async () => {
     const attach = vi.fn(async (_file: File) => attached);
     const { container } = render(<MarkdownEditor value={'Intro'} onChange={() => {}} attach={attach} />);
-    await userEvent.upload(container.querySelector('input[type=file]')!, pdfFile(), { applyAccept: false });
+    await uploadImage(pdfFile(), { applyAccept: false });
     expect(screen.getByRole('alert')).toHaveTextContent(/AVIF only/);
     expect(attach).not.toHaveBeenCalled();
+  });
+
+  it('inserts an image chosen from the library', async () => {
+    let latest = '';
+    const library = vi.fn(() => async () => [{ value: 'x1', label: 'Cover' }]);
+    render(<MarkdownEditor value={'Intro'} onChange={(v) => (latest = v)} attach={async () => attached} library={library} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Insert image' }));
+    expect(library).toHaveBeenCalledWith('image');
+    await userEvent.click(await screen.findByRole('button', { name: /Cover/ }));
+    await waitFor(() => expect(latest).toContain('![](/assets/x1)'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('inserts a typed link where nothing is selected', async () => {
+    let latest = '';
+    render(<MarkdownEditor value={'Intro'} onChange={(v) => (latest = v)} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Link' }));
+    await userEvent.type(screen.getByLabelText('Link URL'), 'https://a.example{Enter}');
+    await waitFor(() => expect(latest).toContain('[https://a.example](https://a.example)'));
   });
 });

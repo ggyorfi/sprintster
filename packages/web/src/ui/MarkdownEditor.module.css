@@ -21,56 +21,14 @@
   box-shadow: 0 0 0 3px var(--ring);
 }
 
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1px;
-  padding: 4px 6px;
-  border-bottom: 1px solid var(--field-border);
-}
-
-.tbtn {
-  min-width: 26px;
-  height: 24px;
-  padding: 0 6px;
-  font-size: 12px;
-  line-height: 1;
-  border: 0;
-  border-radius: var(--radius);
-  background: transparent;
-  color: var(--text-2);
-  cursor: pointer;
-}
-
-.tbtn:hover:not(:disabled) {
-  background: var(--surface-2);
-  color: var(--text);
-}
-
-.tbtn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.tactive {
-  background: var(--accent-bg);
-  color: var(--accent);
-}
-
-.sep {
-  width: 1px;
-  align-self: stretch;
-  margin: 3px 4px;
-  background: var(--border-2);
-}
-
 .editor :global(.ProseMirror) {
   padding: var(--field-y) 9px;
   color: var(--text);
   font-size: 13px;
+  box-sizing: border-box;
   min-height: 66px;
-  max-height: 320px;
+  height: var(--editor-height, auto);
+  max-height: var(--editor-height, 320px);
   overflow: auto;
   outline: none;
 }
@@ -120,6 +78,11 @@
   color: var(--text-2);
 }
 
+.editor :global(.ProseMirror a) {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 .editor :global(.ProseMirror code) {
   background: var(--surface-2);
   padding: 1px 4px;
@@ -141,6 +104,8 @@
 .editor :global(.ProseMirror img) {
   display: block;
   max-width: 100%;
+  max-height: 240px;
+  width: auto;
   height: auto;
   margin: 0.5em 0;
   border-radius: var(--radius);
@@ -160,48 +125,9 @@
   font-size: 12px;
 }
 
-.altRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border-2);
-  background: var(--surface-2);
-}
-
-.altLabel {
-  color: var(--text-2);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-.altInput {
-  flex: 1;
-  min-width: 0;
-  border: 1px solid var(--field-border);
-  border-radius: var(--radius);
-  background: var(--field);
-  color: inherit;
-  font: inherit;
-  font-size: 12px;
-  padding: 2px 6px;
-}
-
-.altInput:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px var(--ring);
-}
-
-.fileInput {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
-}
-
 .error {
+  display: block;
+  padding: 4px 8px;
   color: var(--red);
   font-size: 12px;
-  align-self: center;
 }

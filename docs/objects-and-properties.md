@@ -198,10 +198,12 @@ ordinary CommonMark.
 ![A blue cover](/assets/a2a08d0b4b53676425...)
 ```
 
-Authors insert one with the toolbar's image button, or by pasting or dropping a
-file into the editor. Any of those uploads the file to
-[`POST /assets`](./cli.md#what-the-daemon-serves) and inserts the reference at
-the cursor. Content addressing means the same file uploaded twice is one blob,
+Authors insert one with the toolbar's image button, which opens the assets
+library to pick an existing image or upload a new one, or by pasting or dropping
+a file into the editor. An upload goes to
+[`POST /assets`](./cli.md#what-the-daemon-serves); either way the reference is
+inserted at the cursor. The library searches on the server when the assets
+object's list declares `search`, otherwise it filters one listing in the browser. Content addressing means the same file uploaded twice is one blob,
 so there is nothing to deduplicate. A newly inserted image is selected, and an
 Alt text field appears above the editor for describing it; alt text is stored in
 the markdown itself and left empty until written, which is correct for a
@@ -228,6 +230,8 @@ content hash and keep showing the old image until someone re-inserts it. For the
 same reason, when two records happen to hold the same file, a body cannot say
 which of them it meant.
 
+Source mode has the same toolbar as the rich editor; its buttons write the
+markdown syntax (the image button inserts `![](/assets/<id>)` on its own line).
 Editing markdown as text, in source mode or in the TUI, preserves images
 untouched. Inserting is a web-only affordance; the terminal has no image picker.
 
@@ -244,9 +248,12 @@ Example fields:
 
 ### Documents in a markdown body
 
-With `"documents": true` on a `markdown` property, the rich editor's PDF button
-uploads a PDF, creates an asset record for it, and inserts a link named after
-the file at the cursor:
+Every markdown editor has a Link button: it opens a row under the toolbar to
+type a URL, open the link or remove it, and the row also shows while the cursor
+is in a link. With `"documents": true` on a `markdown` property, the row offers
+Link a file, which picks a document from the assets library or uploads a PDF
+(creating an asset record for it). The selection becomes the link text, or the
+link is named after the record when nothing is selected:
 
 ```markdown
 [Annual report](/assets/<asset record id>)

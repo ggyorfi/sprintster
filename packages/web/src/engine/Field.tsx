@@ -1,12 +1,13 @@
 import { lazy, Suspense } from 'react';
 import type { PropertyConfig, ViewFieldSpec } from '@sprintster/engine';
 import { TextField, Select, RefPicker, RefCards, ImageField, type SelectOption } from '../ui/index.js';
-import { uploadAsset, assetUrl, attachAsset } from '../api/assets.js';
+import { uploadAsset, assetUrl, attachAsset, assetBrowser } from '../api/assets.js';
 import styles from './Field.module.css';
 
 // Lazy so the heavy editor dependencies (CodeMirror, TipTap) only load when a code/markdown field is actually rendered.
 const CodeEditor = lazy(() => import('../ui/CodeEditor.js').then((m) => ({ default: m.CodeEditor })));
 const MarkdownEditor = lazy(() => import('../ui/MarkdownEditor.js').then((m) => ({ default: m.MarkdownEditor })));
+const MarkdownSource = lazy(() => import('../ui/MarkdownSource.js').then((m) => ({ default: m.MarkdownSource })));
 const ComboEditor = lazy(() => import('../ui/ComboEditor.js').then((m) => ({ default: m.ComboEditor })));
 
 const uploadRecord = async (file: File): Promise<SelectOption> => {
@@ -102,14 +103,15 @@ export function Field({ spec, value, onChange, refOptions, refSearch, refVisual,
       // Images are opt in per property, and loadConfig has already refused the config if one asks without an assets object.
       const attach = property.images === true ? attachAsset : undefined;
       const attachDocument = property.documents === true ? attachAsset : undefined;
+      const library = attach !== undefined || attachDocument !== undefined ? assetBrowser : undefined;
       return (
         <Suspense fallback={<div className={styles.loading}>Loading editor…</div>}>
           {mode === 'source' ? (
-            <CodeEditor label={label} value={value} onChange={onChange} language="markdown" placeholder={placeholder} />
+            <MarkdownSource label={label} value={value} onChange={onChange} placeholder={placeholder} attach={attach} attachDocument={attachDocument} library={library} />
           ) : mode === 'wysiwyg' ? (
-            <MarkdownEditor label={label} value={value} onChange={onChange} attach={attach} attachDocument={attachDocument} />
+            <MarkdownEditor label={label} value={value} onChange={onChange} attach={attach} attachDocument={attachDocument} library={library} />
           ) : (
-            <ComboEditor label={label} value={value} onChange={onChange} attach={attach} attachDocument={attachDocument} />
+            <ComboEditor label={label} value={value} onChange={onChange} attach={attach} attachDocument={attachDocument} library={library} />
           )}
         </Suspense>
       );

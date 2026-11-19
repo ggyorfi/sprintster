@@ -1,6 +1,7 @@
-import { appConfig, assetFileProperty, isTranslated, objectRoute } from '@sprintster/engine';
+import { appConfig, assetFileProperty, displayText, fuzzyFilter, isTranslated, objectRoute, thumbnailHash } from '@sprintster/engine';
 import { resolveApiBaseUrl, type ApiEnv } from './config.js';
 import { authFetch } from './auth.js';
+import { createWebApiClient } from './client.js';
 
 export interface UploadedAsset {
   hash: string;
@@ -85,4 +86,44 @@ export async function attachAsset(file: File, opts: { titled?: boolean } = {}): 
     throw new Error(body?.message ?? `could not create the ${obj.name} record (${res.status})`);
   }
   return { id, title, thumb: assetUrl(asset.thumb ?? asset.hash) };
+}
+
+export type AssetKind = 'image' | 'file';
+
+export interface AssetChoice {
+  value: string;
+  label: string;
+  thumb?: string | undefined;
+}
+
+const BROWSE_PAGE = 50;
+
+// The media library as a picker: the server searches when the list declares search fields, else one listing is filtered here.
+export function assetBrowser(kind: AssetKind): (query: string) => Promise<AssetChoice[]> {
+  const obj = appConfig.objects.find((o) => o.name === appConfig.assets);
+  const file = assetFileProperty(obj);
+  if (obj === undefined || file === undefined) return async () => [];
+  const label = obj.properties.find((p) => p.type === 'text' && p.system !== true)?.name;
+  const fields = label === undefined ? [file.name] : [label, file.name];
+  const client = createWebApiClient().object<Record<string, unknown>>(obj.name);
+  const blob = (r: Record<string, unknown>) => (r[file.name] ?? null) as { filename?: string; contentType?: string } | null;
+  const choices = (rows: Record<string, unknown>[]) =>
+    rows
+      .filter((r) => kind === 'file' || blob(r)?.contentType?.startsWith('image/') === true)
+      .map((r): AssetChoice => {
+        const hash = thumbnailHash(r[file.name]);
+        const id = String(r['id']);
+        return { value: id, label: (label === undefined ? '' : displayText(r[label])) || blob(r)?.filename || id, thumb: hash === null ? undefined : assetUrl(hash) };
+      });
+  if (obj.lists[0]?.search !== undefined) {
+    return async (query) => {
+      const q = query.trim();
+      return choices((await client.page({ fields, limit: BROWSE_PAGE, ...(q === '' ? {} : { q }) })).rows);
+    };
+  }
+  let all: Promise<AssetChoice[]> | undefined;
+  return async (query) => {
+    all ??= client.listAll({ fields }).then(choices);
+    return fuzzyFilter(await all, query).map((hit) => hit.option);
+  };
 }
