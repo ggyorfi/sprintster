@@ -199,6 +199,15 @@ function checkPlaceholderFrom(obj: ObjectConfig, viewName: string, field: ViewFi
   if (!PLACEHOLDER_SOURCES.has(prop.type)) throw new Error(`${where}: a ${prop.type} property cannot be shown as a placeholder`);
 }
 
+function checkFillFrom(obj: ObjectConfig, viewName: string, field: ViewFieldConfig, propByName: Map<string, PropertyConfig>): void {
+  if (field.fillFrom === undefined) return;
+  const where = `view field '${obj.name}.${viewName}.${field.property}' fillFrom '${field.fillFrom}'`;
+  const target = propByName.get(field.property);
+  if (target?.type !== 'text' || target.translated === true) throw new Error(`${where}: only an untranslated text property can be filled`);
+  const source = propByName.get(field.fillFrom);
+  if (source?.type !== 'text' || source.name === target.name) throw new Error(`${where} must name another text property of '${obj.name}'`);
+}
+
 function checkViewField(
   obj: ObjectConfig,
   viewName: string,
@@ -207,6 +216,7 @@ function checkViewField(
   objectsByName: Map<string, ObjectConfig>,
 ): void {
   checkPlaceholderFrom(obj, viewName, field, objectsByName);
+  checkFillFrom(obj, viewName, field, propByName);
   checkColumnOptions(obj, viewName, field, propByName, objectsByName);
   checkFieldLabels(obj, viewName, field, propByName, objectsByName);
   checkVisibleWhen(`view field '${obj.name}.${viewName}.${field.property}'`, field.visibleWhen, propByName);

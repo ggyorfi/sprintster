@@ -712,3 +712,29 @@ describe('the live log (ADR 28)', () => {
     expect(sent).toHaveLength(1);
   });
 });
+
+describe('GET /<route>/_free', () => {
+  const page: ObjectConfig = {
+    name: 'page',
+    title: 'Page',
+    titlePlural: 'Pages',
+    route: 'pages',
+    lifecycle: { softDelete: 'removed' },
+    properties: [
+      { name: 'id', type: 'id', strategy: 'uuid', system: true },
+      { name: 'slug', type: 'text', validation: { required: true, unique: true, caseInsensitive: true } },
+      { name: 'removed', type: 'boolean', system: true },
+    ],
+    lists: [],
+  };
+
+  it('answers the first free value, and refuses a field that is not unique', async () => {
+    const store = new InMemoryEventStore();
+    const app = createApp({ apis: [{ obj: page, api: createObjectApi<{ id: string }>(store, page) }] });
+    await app.request('/pages', json({ id: ID_A, slug: 'Alma' }));
+    expect(await (await app.request('/pages/_free?field=slug&value=alma')).json()).toEqual({ value: 'alma-2' });
+    expect(await (await app.request(`/pages/_free?field=slug&value=alma&id=${ID_A}`)).json()).toEqual({ value: 'alma' });
+    expect((await app.request('/pages/_free?field=removed&value=x')).status).toBe(409);
+    expect((await app.request('/pages/_free?field=slug')).status).toBe(400);
+  });
+});

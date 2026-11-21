@@ -208,6 +208,9 @@ export const ViewFieldConfig = z
     placeholder: z.string().optional(),
     // `<singleton>.<property>`: the field shows that record's current value as its placeholder.
     placeholderFrom: z.string().optional(),
+    // A text property of the same record: when that field loses focus and this one is empty, this one takes its text
+    // made URL-safe, and free of other records' values when this property is `unique` (web GUI only).
+    fillFrom: z.string().optional(),
     visibleWhen: VisibleWhen.optional(),
     // For an array: one row per item with its sub-fields as columns.
     layout: z.enum(['stack', 'table']).optional(),

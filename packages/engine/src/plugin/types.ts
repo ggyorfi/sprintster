@@ -27,6 +27,7 @@ export interface PluginObjectApi<S extends { id: string }> {
   listAt?(at: { position: number; positions?: Readonly<Record<string, number>> }): Promise<S[]>;
   get(id: string): Promise<S | null>;
   requireGet(id: string): Promise<S>;
+  freeValue?(field: string, value: string, ownId?: string): Promise<string>;
   add?(input: unknown, actor?: string): Promise<S>;
   update?(id: string, input: unknown, actor?: string): Promise<S>;
   remove?(id: string, actor?: string): Promise<S>;

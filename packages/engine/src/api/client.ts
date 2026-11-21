@@ -32,6 +32,7 @@ export interface ObjectClient<T> {
   status(): Promise<ObjectStatus | null>;
   sync(): Promise<ObjectStatus>;
   refresh(id: string): Promise<T | null>;
+  freeValue(field: string, value: string, ownId?: string): Promise<string>;
 }
 
 export interface ApiClient {
@@ -63,6 +64,7 @@ function singletonClient<T>(base: string, call: Call): ObjectClient<T> {
     status: async () => null,
     sync: () => unsupported('sync'),
     refresh: async () => read(),
+    freeValue: async (_field, value) => value,
   };
 }
 
@@ -179,6 +181,10 @@ export function createApiClient(
           if (err instanceof ApiError && err.statusCode === 404) return null;
           throw err;
         }
+      },
+      freeValue: async (field, value, ownId) => {
+        const query = new URLSearchParams({ field, value, ...(ownId === undefined ? {} : { id: ownId }) });
+        return (await call<{ value: string }>({ method: 'GET', path: `${base}/_free?${query}` })).value;
       },
     };
   }

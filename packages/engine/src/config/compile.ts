@@ -38,6 +38,7 @@ function baseSchema(prop: PropertyConfig): z.ZodTypeAny {
       if (v?.minLength !== undefined) s = s.min(v.minLength);
       if (v?.maxLength !== undefined) s = s.max(v.maxLength);
       if (v?.format === 'email') s = s.email();
+      if (v?.required === true && prop.translated !== true) s = s.min(1);
       return prop.translated === true ? translatedSchema(s, v?.required === true) : s;
     }
     case 'code':
@@ -46,7 +47,9 @@ function baseSchema(prop: PropertyConfig): z.ZodTypeAny {
       const v = prop.validation;
       if (v?.minLength !== undefined) s = s.min(v.minLength);
       if (v?.maxLength !== undefined) s = s.max(v.maxLength);
-      return prop.type === 'markdown' && prop.translated === true ? translatedSchema(s, v?.required === true) : s;
+      const translated = prop.type === 'markdown' && prop.translated === true;
+      if (v?.required === true && !translated) s = s.min(1);
+      return translated ? translatedSchema(s, v?.required === true) : s;
     }
     case 'enum':
       return z.enum(prop.values as [string, ...string[]]);

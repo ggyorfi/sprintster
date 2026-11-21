@@ -90,7 +90,7 @@ export function isImageType(contentType: string): boolean {
   return (ACCEPTED_IMAGE_TYPES as readonly string[]).includes(contentType);
 }
 
-function looksLikeSvg(header: Uint8Array): boolean {
+export function looksLikeSvg(header: Uint8Array): boolean {
   const text = new TextDecoder().decode(header.subarray(0, ASSET_HEADER_BYTES)).trimStart().toLowerCase();
   return text.startsWith('<svg') || text.startsWith('<?xml');
 }

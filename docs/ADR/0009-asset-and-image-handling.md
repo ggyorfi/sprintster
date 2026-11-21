@@ -83,6 +83,13 @@ sandboxed origin. The exclusion is only worth anything because the check reads
 the bytes: an allow list applied to a self-declared label is advisory. Revisit
 only alongside a decision about how blobs are served.
 
+Where the web GUI expects an image, it turns a chosen SVG into a PNG
+`SVG_WIDTH` (1920) pixels wide before sending it, drawn through an `<img>` so
+the SVG runs no script and loads nothing. The daemon still refuses SVG bytes,
+so the store never holds one. Serving SVG itself was considered, with a
+sanitizer (Cloudflare's svg-hush, which has no WASM build yet) behind
+`attachment` and a sandboxing CSP, and left for when vector output is needed.
+
 **References are indexed as events.** An engine-side extractor maps a property
 value to the hashes it references, exhaustively over property types. Writes
 append `AssetReferenced` and `AssetDereferenced` facts to a stream keyed by the

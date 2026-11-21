@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import {
   appConfig,
   viewFields,
@@ -11,6 +11,7 @@ import {
   singletonId,
   isoToLocalInput,
   isVisible,
+  slugify,
   type ApiClient,
   type ObjectConfig,
   type ObjectResolver,
@@ -72,6 +73,8 @@ export interface ObjectFormState {
   setBusy: Dispatch<SetStateAction<boolean>>;
   locale: string | undefined;
   setLocale: Dispatch<SetStateAction<string | undefined>>;
+  // Called when the field at `path` loses focus: fills the empty fields that declare it as their fillFrom.
+  fill: (path: string) => void;
 }
 
 export function useObjectForm(
@@ -263,6 +266,21 @@ export function useObjectForm(
     setInputs((prev) => ({ ...prev, [path]: value }));
   }
 
+  function fill(path: string) {
+    const source = specs.find((s) => s.path === path);
+    const fallback = appConfig.locales?.[0];
+    const text = source !== undefined && isTranslated(source.property) && fallback !== undefined ? inputs[localeInputKey(path, fallback)] : inputs[path];
+    for (const target of specs.filter((s) => s.fillFrom === path && s.editable && (inputs[s.path] ?? '').trim() === '')) {
+      const validation = target.property.type === 'text' ? target.property.validation : undefined;
+      const max = validation?.maxLength;
+      const value = (max === undefined ? slugify(text ?? '') : slugify(text ?? '').slice(0, max)).replace(/-+$/, '');
+      if (value === '') continue;
+      const ownId = typeof row?.['id'] === 'string' ? row['id'] : undefined;
+      const free = validation?.unique === true ? api.object(obj.name).freeValue(target.path, value, ownId).catch(() => value) : Promise.resolve(value);
+      void free.then((v) => setInputs((prev) => ((prev[target.path] ?? '').trim() === '' ? { ...prev, [target.path]: v } : prev)));
+    }
+  }
+
   function displayFor(spec: ViewFieldSpec): string {
     if (spec.derivedFromRef !== null) {
       const rd = refData[spec.derivedFromRef];
@@ -297,7 +315,7 @@ export function useObjectForm(
     return formatCell(spec.property, raw, '');
   }
 
-  return { viewName, specs, inputs, setInputs, setField, refData, placeholderValues, columnChoices, liveLabels, displayFor, error, setError, busy, setBusy, locale, setLocale };
+  return { viewName, specs, inputs, setInputs, setField, refData, placeholderValues, columnChoices, liveLabels, displayFor, error, setError, busy, setBusy, locale, setLocale, fill };
 }
 
 function sections(specs: ViewFieldSpec[]): Array<{ title: string | null; specs: ViewFieldSpec[] }> {
@@ -360,8 +378,17 @@ export function FormLocales({ form }: { form: ObjectFormState }) {
 }
 
 export function ObjectFields({ form, locales = true }: { form: ObjectFormState; locales?: boolean }) {
-  const { specs, inputs, setInputs, setField, refData, placeholderValues, columnChoices, liveLabels, displayFor, locale, setLocale } = form;
+  const { specs, inputs, setInputs, setField, refData, placeholderValues, columnChoices, liveLabels, displayFor, locale, setLocale, fill } = form;
   const translated = locale !== undefined && hasTranslated(form);
+  const fillSources = new Set(specs.flatMap((s) => (s.fillFrom === undefined ? [] : [s.fillFrom])));
+  const filling = (path: string, field: ReactNode) =>
+    fillSources.has(path) ? (
+      <div key={path} className={styles.contents} onBlur={() => fill(path)}>
+        {field}
+      </div>
+    ) : (
+      field
+    );
   return (
     <>
       {locales && translated && (appConfig.locales ?? []).length > 1 && <LocaleSwitch locale={locale} setLocale={setLocale} />}
@@ -393,25 +420,31 @@ export function ObjectFields({ form, locales = true }: { form: ObjectFormState; 
                   columnVisibleWhen={spec.columnVisibleWhen}
                 />
               ) : translated && spec.derivedFromRef === null && isTranslated(spec.property) ? (
-                <Field
-                  key={localeInputKey(spec.path, locale)}
-                  spec={translatedSpec(sourcedSpec(spec, placeholderValues, locale), inputs, locale)}
-                  value={inputs[localeInputKey(spec.path, locale)] ?? ''}
-                  onChange={(v) => setField(localeInputKey(spec.path, locale), v)}
-                  display={displayFor(spec)}
-                />
+                filling(
+                  spec.path,
+                  <Field
+                    key={localeInputKey(spec.path, locale)}
+                    spec={translatedSpec(sourcedSpec(spec, placeholderValues, locale), inputs, locale)}
+                    value={inputs[localeInputKey(spec.path, locale)] ?? ''}
+                    onChange={(v) => setField(localeInputKey(spec.path, locale), v)}
+                    display={displayFor(spec)}
+                  />,
+                )
               ) : (
-                <Field
-                  key={spec.path}
-                  spec={sourcedSpec(spec, placeholderValues, locale)}
-                  value={inputs[spec.path] ?? ''}
-                  onChange={(v) => setField(spec.path, v)}
-                  refOptions={refData[spec.path]?.options}
-                  refSearch={refData[spec.path]?.search}
-                  refVisual={refData[spec.path]?.visual === true}
-                  refUpload={(spec.property.type === 'ref' || spec.property.type === 'refs') && spec.property.target === appConfig.assets}
-                  display={displayFor(spec)}
-                />
+                filling(
+                  spec.path,
+                  <Field
+                    key={spec.path}
+                    spec={sourcedSpec(spec, placeholderValues, locale)}
+                    value={inputs[spec.path] ?? ''}
+                    onChange={(v) => setField(spec.path, v)}
+                    refOptions={refData[spec.path]?.options}
+                    refSearch={refData[spec.path]?.search}
+                    refVisual={refData[spec.path]?.visual === true}
+                    refUpload={(spec.property.type === 'ref' || spec.property.type === 'refs') && spec.property.target === appConfig.assets}
+                    display={displayFor(spec)}
+                  />,
+                )
               ),
             )}
           </div>

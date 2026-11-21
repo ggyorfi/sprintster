@@ -473,6 +473,25 @@ describe('createObjectApi: field-level unique validation', () => {
     return { store, api };
   }
 
+  it("answers the first value no live record holds, counting a record's own value as free", async () => {
+    const { api } = buildPages();
+    await api.add({ id: ID_A, slug: 'home', code: null, title: 'Home' });
+    await api.add({ id: ID_B, slug: 'home-2', code: null, title: 'Home' });
+    expect(await api.freeValue('slug', 'about')).toBe('about');
+    expect(await api.freeValue('slug', 'home')).toBe('home-3');
+    expect(await api.freeValue('slug', 'home', ID_A)).toBe('home');
+    await api.remove!(ID_A);
+    expect(await api.freeValue('slug', 'home')).toBe('home');
+    await expect(api.freeValue('title', 'Home')).rejects.toThrow(/not unique/);
+  });
+
+  it('keeps a numbered value within the maximum length', async () => {
+    const short: ObjectConfig = { ...pageObject, properties: pageObject.properties.map((p) => (p.name === 'slug' ? { ...p, validation: { required: true, unique: true, maxLength: 5 } } : p)) };
+    const api = createObjectApi<Record<string, unknown> & { id: string }>(new InMemoryEventStore(), short);
+    await api.add({ id: ID_A, slug: 'abcde', code: null, title: null });
+    expect(await api.freeValue('slug', 'abcde')).toBe('abc-2');
+  });
+
   it('accepts distinct values for a unique field', async () => {
     const { api } = buildPages();
     await api.add({ id: ID_A, slug: 'home', code: null, title: 'Home' });

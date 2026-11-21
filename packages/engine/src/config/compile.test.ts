@@ -39,6 +39,12 @@ describe('compileProperty: text', () => {
     expect(schema.parse('a@b.com')).toBe('a@b.com');
     expect(() => schema.parse('not-an-email')).toThrow();
   });
+
+  it('rejects an empty string when required', () => {
+    expect(() => compileProperty({ name: 'slug', type: 'text', validation: { required: true } }).parse('')).toThrow();
+    expect(() => compileProperty({ name: 'body', type: 'markdown', validation: { required: true } }).parse('')).toThrow();
+    expect(compileProperty({ name: 'note', type: 'text' }).parse('')).toBe('');
+  });
 });
 
 describe('compileProperty: enum', () => {

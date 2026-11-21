@@ -86,6 +86,20 @@ export function createObjectRoute(
     });
   }
 
+  const freeValue = api.freeValue;
+  if (freeValue !== undefined) {
+    route.get('/_free', async (c) => {
+      const field = c.req.query('field');
+      const value = c.req.query('value');
+      if (field === undefined || value === undefined) return c.json({ code: 'bad_request', message: 'field and value are required' }, 400);
+      try {
+        return c.json({ value: await freeValue(field, value, c.req.query('id')) });
+      } catch (err) {
+        return apiErrorResponse(c, err);
+      }
+    });
+  }
+
   route.get('/:id', async (c) => {
     const id = c.req.param('id');
     const row = await api.get(id);

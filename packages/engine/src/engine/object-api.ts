@@ -42,6 +42,8 @@ export interface ObjectApi<State extends { id: string }> {
   unpin(set: string, id: string): Promise<void>;
   queryPinned(set: string, params: ListParams): Promise<ListPage>;
   requireGet(id: string): Promise<State>;
+  // `value`, or the first of `value-2`, `value-3`, ... that no live record holds in a `unique` field; `ownId`'s current value counts as free.
+  freeValue(field: string, value: string, ownId?: string): Promise<string>;
   createSchema: z.ZodTypeAny;
   updateSchema: z.ZodTypeAny;
   commands: ReadonlyArray<CommandConfig>;
@@ -286,6 +288,19 @@ export function createObjectApi<State extends { id: string }>(
       throw new InvalidStateError(`${obj.name} '${id}' has been removed`);
     }
     return state;
+  }
+
+  async function freeValue(field: string, value: string, ownId?: string): Promise<string> {
+    if (!uniqueByName.has(field)) throw new InvalidStateError(`'${obj.name}.${field}' is not unique`);
+    const max = obj.properties.find((p) => p.name === field)?.validation?.maxLength;
+    const own = ownId === undefined ? undefined : ((await base.findOneById(ownId)) as Record<string, unknown> | null)?.[field];
+    for (let n = 1; ; n++) {
+      const suffix = n === 1 ? '' : `-${n}`;
+      const candidate = `${max === undefined ? value : value.slice(0, max - suffix.length)}${suffix}`;
+      if (own !== undefined && normalizeUnique(field, candidate) === normalizeUnique(field, own)) return candidate;
+      const head = await store.streamHead(partitionId, UNIQUE_STREAM_TYPE, uniqueStreamId(field, candidate));
+      if (head % 2 === 0) return candidate;
+    }
   }
 
   async function add(input: unknown, actor: string = defaultActor): Promise<State> {
@@ -565,6 +580,7 @@ export function createObjectApi<State extends { id: string }>(
     unpin,
     queryPinned,
     requireGet,
+    freeValue,
     createSchema,
     updateSchema,
     commands: obj.commands ?? [],

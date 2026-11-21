@@ -16,6 +16,8 @@ export interface ViewFieldSpec {
   placeholder: string;
   // Read live by a frontend: the singleton record and property whose value stands in as the placeholder.
   placeholderFrom: { object: string; property: string } | null;
+  // The property whose field fills this empty one when it loses focus.
+  fillFrom?: string;
   // From the field or its fieldset; the frontends hide the field while the condition does not hold.
   visibleWhen: VisibleWhen | null;
   layout: 'stack' | 'table';
@@ -254,6 +256,7 @@ function processField(
       label: field.label ?? root.title ?? root.name,
       placeholder: field.placeholder ?? '',
       placeholderFrom: placeholderSource(field),
+      ...(field.fillFrom === undefined ? {} : { fillFrom: field.fillFrom }),
       visibleWhen: field.visibleWhen ?? null,
       layout: field.layout ?? 'stack',
       ...columnSources(field),

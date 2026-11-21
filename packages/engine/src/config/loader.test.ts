@@ -575,6 +575,45 @@ describe('loadConfig: auth', () => {
   });
 });
 
+describe('loadConfig: fillFrom', () => {
+  function raw(field: Record<string, unknown>, titleType = 'text'): unknown {
+    return {
+      version: '1',
+      objects: [
+        {
+          name: 'post',
+          title: 'Post',
+          titlePlural: 'Posts',
+          route: 'posts',
+          lifecycle: { softDelete: 'removed' },
+          properties: [
+            { name: 'id', type: 'id', strategy: 'uuid', system: true },
+            { name: 'title', type: titleType, ...(titleType === 'enum' ? { values: ['a'] } : {}) },
+            { name: 'slug', type: 'text' },
+            { name: 'removed', type: 'boolean', system: true },
+          ],
+          lists: [{ name: 'default', title: 'Posts', columns: [{ property: 'slug' }] }],
+          views: [{ name: 'default', title: 'Post', fields: [{ property: 'title' }, field] }],
+        },
+      ],
+    };
+  }
+
+  it('accepts a text field filled from another text property', () => {
+    expect(() => loadConfig(raw({ property: 'slug', fillFrom: 'title' }))).not.toThrow();
+  });
+
+  it('refuses a source that is missing, not text, or the field itself', () => {
+    expect(() => loadConfig(raw({ property: 'slug', fillFrom: 'name' }))).toThrow(/must name another text property/);
+    expect(() => loadConfig(raw({ property: 'slug', fillFrom: 'title' }, 'enum'))).toThrow(/must name another text property/);
+    expect(() => loadConfig(raw({ property: 'slug', fillFrom: 'slug' }))).toThrow(/must name another text property/);
+  });
+
+  it('refuses a target that is not untranslated text', () => {
+    expect(() => loadConfig(raw({ property: 'id', fillFrom: 'title' }))).toThrow(/only an untranslated text property/);
+  });
+});
+
 describe('loadConfig: placeholderFrom', () => {
   function raw(placeholderFrom: string, settings: Record<string, unknown> = { singleton: true }, sourceType = 'text'): unknown {
     return {
